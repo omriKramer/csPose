@@ -8,19 +8,14 @@ from PIL import Image
 from pycocotools.coco import COCO
 from torch.utils.data import Dataset
 
+from coco_utils import decode_keypoints
+
 
 def fix_kps(kps, bbox):
-    x, y, v = decode_kps(kps)
+    x, y, v = decode_keypoints(kps)
     x[v > 0] -= bbox[0]
     y[v > 0] -= bbox[1]
     return kps
-
-
-def decode_kps(kps):
-    x = kps[::3]
-    y = kps[1::3]
-    v = kps[2::3]
-    return x, y, v
 
 
 def make_bbox(bbox, segmentation, kps):
@@ -28,7 +23,7 @@ def make_bbox(bbox, segmentation, kps):
     seg_x = segmentation[::2]
     seg_y = segmentation[1::2]
 
-    kps_x, kps_y, v = decode_kps(kps)
+    kps_x, kps_y, v = decode_keypoints(kps)
     kps_x = kps_x[v > 0]
     kps_y = kps_y[v > 0]
 
@@ -43,7 +38,7 @@ def make_bbox(bbox, segmentation, kps):
 
 class CocoSingleKPS(Dataset):
 
-    def __init__(self, root, ann_file):
+    def __init__(self, root, ann_file, transofrms=None):
         coco = COCO(ann_file)
         cat_ids = coco.getCatIds()
         img_ids = coco.getImgIds(catIds=cat_ids)
@@ -53,6 +48,7 @@ class CocoSingleKPS(Dataset):
         self.annotations = annotations
         self.coco = coco
         self.root = Path(root)
+        self.transforms = transofrms
 
     def __len__(self):
         return len(self.annotations)
@@ -68,6 +64,10 @@ class CocoSingleKPS(Dataset):
 
         img = img.crop(bbox)
         kps = fix_kps(kps, bbox)
+
+        if self.transforms is not None:
+            img, kps = self.transforms(img, kps)
+
         return img, kps
 
     def show_item(self, index):
