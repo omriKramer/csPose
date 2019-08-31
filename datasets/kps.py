@@ -1,24 +1,20 @@
 import itertools
 import math
-from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
-from PIL import Image
-from pycocotools.coco import COCO
-from torch.utils.data import Dataset
+import torchvision
 
-from coco_utils import decode_keypoints
+from coco_utils import decode_keypoints, Coco
 
 
-def fix_kps(kps, bbox):
+def fix_kps(kps, frame):
     x, y, v = decode_keypoints(kps)
-    x[v > 0] -= bbox[0]
-    y[v > 0] -= bbox[1]
+    x[v > 0] -= frame[0]
+    y[v > 0] -= frame[1]
     return kps
 
 
-def make_bbox(bbox, segmentation, kps):
+def make_frame(bbox, segmentation, kps):
     segmentation = list(itertools.chain.from_iterable(segmentation))
     seg_x = segmentation[::2]
     seg_y = segmentation[1::2]
@@ -36,10 +32,19 @@ def make_bbox(bbox, segmentation, kps):
     return left, upper, right, lower
 
 
-class CocoSingleKPS(Dataset):
+def fix_bbox(bbox, frame):
+    new_bbox = bbox.copy()
+    new_bbox[0] -= frame[0]
+    new_bbox[1] -= frame[1]
+    return new_bbox
 
-    def __init__(self, root, ann_file, transofrms=None):
-        coco = COCO(ann_file)
+
+class CocoSingleKPS(torchvision.datasets.VisionDataset):
+
+    def __init__(self, root, ann_file, transform=None, target_transform=None, transforms=None):
+        super().__init__(root, transforms, transform, target_transform)
+
+        coco = Coco(root, ann_file)
         cat_ids = coco.getCatIds()
         img_ids = coco.getImgIds(catIds=cat_ids)
         ann_ids = coco.getAnnIds(imgIds=img_ids)
@@ -47,8 +52,6 @@ class CocoSingleKPS(Dataset):
         annotations = [an for an in annotations if not an['iscrowd'] and an['num_keypoints'] >= 10]
         self.annotations = annotations
         self.coco = coco
-        self.root = Path(root)
-        self.transforms = transofrms
 
     def __len__(self):
         return len(self.annotations)
@@ -56,22 +59,22 @@ class CocoSingleKPS(Dataset):
     def __getitem__(self, index):
         annotation = self.annotations[index]
         kps = np.array(annotation['keypoints'])
-        bbox = make_bbox(annotation['bbox'], annotation['segmentation'], kps)
+        frame = make_frame(annotation['bbox'], annotation['segmentation'], kps)
 
-        imag_details = self.coco.loadImgs(annotation['image_id'])[0]
-        path = self.root / imag_details['file_name']
-        img = Image.open(path).convert('RGB')
+        img = self.coco.get_img(annotation['image_id'])
+        img = img.crop(frame)
 
-        img = img.crop(bbox)
-        kps = fix_kps(kps, bbox)
+        target = {
+            'id': annotation['id'],
+            'image_id': annotation['image_id'],
+            'category_id': annotation['category_id'],
+            'area': annotation['area'],
+            'bbox': fix_bbox(annotation['bbox'], frame),
+            'keypoints': list(fix_kps(kps, frame)),
+            'num_keypoints': annotation['num_keypoints'],
+        }
 
         if self.transforms is not None:
-            img, kps = self.transforms(img, kps)
+            img, target = self.transforms(img, target)
 
-        return img, kps
-
-    def show_item(self, index):
-        img, kps = self[index]
-        plt.imshow(np.asarray(img))
-        plt.axis('off')
-        self.coco.showAnns([{'keypoints': list(kps), 'category_id': 1}])
+        return img, target
