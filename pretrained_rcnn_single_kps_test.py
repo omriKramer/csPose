@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 
 import coco_utils
 from datasets import CocoSingleKPS
-from mycoco import *
+from engine import *
 
 # %%
 
@@ -32,12 +32,13 @@ img_tensor = [to_tensor(oimg) for oimg in orig_images]
 orig_outputs = model(img_tensor)
 
 # %%
-i = 2
-coco_utils.show_image_with_kps(image[i], outputs[i]['keypoints'][0])
+i = 3
+gt = targets[i]
+coco_utils.show_image_with_kps(image[i], outputs[i]['keypoints'][0], visible=gt['keypoints'])
 
 # %%
-coco_utils.show_image_with_kps(orig_images[i], orig_outputs[i]['keypoints'][0])
+coco_utils.show_image_with_kps(orig_images[i], orig_outputs[i]['keypoints'][0], visible=gt['keypoints'])
 
 #%%
-coco.coco.show_by_id(targets[i]['image_id'])
+coco.coco.show_by_id(gt['image_id'])
 #%%

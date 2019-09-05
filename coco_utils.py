@@ -6,13 +6,15 @@ import torch
 from PIL import Image
 from pycocotools.coco import COCO
 
+KEYPOINTS = ['nose', 'left_eye', 'right_eye', 'left_ear', 'right_ear',
+             'left_shoulder', 'right_shoulder', 'left_elbow',
+             'right_elbow', 'left_wrist', 'right_wrist', 'left_hip',
+             'right_hip', 'left_knee', 'right_knee', 'left_ankle',
+             'right_ankle']
+
 _coco_helper = COCO()
 _coco_helper.cats = {1: {'id': 1,
-                         'keypoints': ['nose', 'left_eye', 'right_eye', 'left_ear', 'right_ear',
-                                       'left_shoulder', 'right_shoulder', 'left_elbow',
-                                       'right_elbow', 'left_wrist', 'right_wrist', 'left_hip',
-                                       'right_hip', 'left_knee', 'right_knee', 'left_ankle',
-                                       'right_ankle'],
+                         'keypoints': KEYPOINTS,
                          'name': 'person',
                          'skeleton': [[16, 14], [14, 12], [17, 15], [15, 13], [12, 13], [6, 12],
                                       [7, 13], [6, 7], [6, 8], [7, 9], [8, 10], [9, 11], [2, 3],
@@ -58,7 +60,7 @@ def collate_fn(batch):
     return tuple(zip(*batch))
 
 
-def show_image_with_kps(img, keypoints):
+def show_image_with_kps(img, keypoints, visible=None):
     if isinstance(img, Image.Image):
         img = np.asarray(img)
     elif isinstance(img, torch.Tensor):
@@ -66,6 +68,9 @@ def show_image_with_kps(img, keypoints):
 
     if not isinstance(keypoints, list):
         keypoints = list(keypoints.reshape((-1,)))
+
+    if visible is not None:
+        keypoints[2::3] = visible[2::3]
 
     plt.imshow(img)
     plt.axis('off')
