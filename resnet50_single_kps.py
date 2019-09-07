@@ -94,7 +94,7 @@ def main(args):
 
 
 def setup_output(output_dir):
-    output_dir = Path(output_dir.output_dir)
+    output_dir = Path(output_dir)
     output_dir.mkdir(exist_ok=True)
 
     checkpoint_dir = output_dir / 'checkpoints'
