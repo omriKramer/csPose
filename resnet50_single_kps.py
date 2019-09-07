@@ -79,7 +79,7 @@ def main(args):
 
     start_time = time.time()
     for epoch in range(args.epochs):
-        print('Epoch {}'.format(epoch))
+        print(f'Epoch {epoch}')
         print('-' * 10)
         one_epoch(model, train_loader, device, train=True, optimizer=optimizer, criterion=criterion)
         one_epoch(model, val_loader, device)
@@ -90,7 +90,7 @@ def main(args):
         'epoch': args.epochs - 1,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
-    }, checkpoint_dir)
+    }, checkpoint_dir / f'checkpoint{args.epochs - 1:04}')
 
 
 def setup_output(output_dir):
