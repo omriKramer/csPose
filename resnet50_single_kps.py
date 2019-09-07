@@ -1,6 +1,7 @@
 import math
 import sys
 import time
+from pathlib import Path
 
 import torch
 import torchvision
@@ -57,6 +58,8 @@ def one_epoch(model, data_loader, device, train=False, optimizer=None, criterion
 
 
 def main(args):
+    checkpoint_dir = setup_output(args.output_dir)
+
     composed = transform.Compose([transform.ResizeKPS((80, 150)), transform.ToTensor()])
     coco_train = engine.engine.get_dataset(args.data_path, train=True, transforms=composed)
     coco_val = engine.engine.get_dataset(args.data_path, train=False, transforms=composed)
@@ -83,6 +86,20 @@ def main(args):
 
     total_time = time.time() - start_time
     print(f'Total time {total_time // 60:.f}m {total_time % 60:.f}s')
+    torch.save({
+        'epoch': args.epochs - 1,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+    }, checkpoint_dir)
+
+
+def setup_output(output_dir):
+    output_dir = Path(output_dir.output_dir)
+    output_dir.mkdir(exist_ok=True)
+
+    checkpoint_dir = output_dir / 'checkpoints'
+    checkpoint_dir.mkdir(exist_ok=True)
+    return checkpoint_dir
 
 
 if __name__ == '__main__':

@@ -22,5 +22,7 @@ def get_args():
     parser.add_argument('-g', '--num-gpu', default=1, type=int, metavar='N', help='number of GPUs to use')
     parser.add_argument('-b', '--batch-size', default=2, type=int,
                         help='images per gpu, the total batch size is $NGPU x batch_size')
+    parser.add_argument('--output-dir', default='/home/labs/waic/omrik', help='path where to save')
+
     args = parser.parse_args()
     return args
