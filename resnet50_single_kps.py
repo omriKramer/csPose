@@ -15,7 +15,8 @@ from coco_eval import CocoEval
 evaluator = CocoEval()
 
 
-def one_epoch(model, data_loader, device, train=False, optimizer=None, criterion=None):
+def one_epoch(model, data_loader, criterion, device, optimizer=None):
+    train = optimizer is not None
     if train:
         model.train()
     else:
@@ -81,8 +82,8 @@ def main(args):
     for epoch in range(args.epochs):
         print(f'Epoch {epoch}')
         print('-' * 10)
-        one_epoch(model, train_loader, device, train=True, optimizer=optimizer, criterion=criterion)
-        one_epoch(model, val_loader, device)
+        one_epoch(model, train_loader, criterion, device, optimizer=optimizer)
+        one_epoch(model, val_loader, criterion, device)
 
     total_time = time.time() - start_time
     print(f'Total time {total_time // 60:.f}m {total_time % 60:.f}s')
