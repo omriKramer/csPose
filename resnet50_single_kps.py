@@ -86,7 +86,7 @@ def main(args):
         one_epoch(model, val_loader, criterion, device)
 
     total_time = time.time() - start_time
-    print(f'Total time {total_time // 60:.f}m {total_time % 60:.f}s')
+    print(f'Total time {total_time // 60:.0f}m {total_time % 60:.0f}s')
     torch.save({
         'epoch': args.epochs - 1,
         'model_state_dict': model.state_dict(),
