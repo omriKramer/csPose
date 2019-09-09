@@ -48,14 +48,13 @@ def one_epoch(model, data_loader, criterion, device, optimizer=None):
         for gt, dt, area in zip(keypoints, outputs, areas):
             running_oks += evaluator.compute_oks(gt, dt, area, device=device).item()
 
-        epoch_loss = running_loss / len(data_loader.dataset)
-        epoch_oks = running_oks / len(data_loader.dataset)
-
-        time_elapsed = time.time() - start_time
-        phase = 'Train' if train else 'Val'
-        print(f'{phase} Loss: {epoch_loss:.4f}, OKS: {epoch_oks:.4f}')
-        print('Epoch complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
-        print()
+    time_elapsed = time.time() - start_time
+    epoch_loss = running_loss / len(data_loader.dataset)
+    epoch_oks = running_oks / len(data_loader.dataset)
+    phase = 'Train' if train else 'Val'
+    print(f'{phase} Loss: {epoch_loss:.4f}, OKS: {epoch_oks:.4f}')
+    print('Epoch complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
+    print()
 
 
 def main(args):
@@ -91,7 +90,7 @@ def main(args):
         'epoch': args.epochs - 1,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
-    }, checkpoint_dir / f'checkpoint{args.epochs - 1:04}')
+    }, checkpoint_dir / f'checkpoint{args.epochs - 1:03}.tar')
 
 
 def setup_output(output_dir):
