@@ -1,6 +1,8 @@
 import argparse
 from pathlib import Path
 
+import torch
+
 from datasets import CocoSingleKPS
 
 SMOOTH = 1e-6
@@ -23,6 +25,26 @@ def get_args():
     parser.add_argument('-b', '--batch-size', default=2, type=int,
                         help='images per gpu, the total batch size is $NGPU x batch_size')
     parser.add_argument('--output-dir', default='/home/labs/waic/omrik', help='path where to save')
+    parser.add_argument('--resume', default='')
 
     args = parser.parse_args()
     return args
+
+
+def setup_output(output_dir):
+    output_dir = Path(output_dir)
+    output_dir.mkdir(exist_ok=True)
+
+    checkpoint_dir = output_dir / 'checkpoints'
+    checkpoint_dir.mkdir(exist_ok=True)
+    return checkpoint_dir
+
+
+def load_from_checkpoint(checkpoint, device, model, optimizer=None):
+    checkpoint = torch.load(checkpoint, map_location=device)
+    model.load_state_dict(checkpoint['model'])
+    if optimizer:
+        optimizer.load_state_dict(checkpoint['optimizer'])
+
+    start_epoch = checkpoint['epoch'] + 1
+    return start_epoch

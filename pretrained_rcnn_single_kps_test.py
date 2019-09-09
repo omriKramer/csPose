@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 
 import coco_utils
 from datasets import CocoSingleKPS
-from engine import *
+from engine.engine import *
 
 # %%
 

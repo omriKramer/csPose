@@ -1,14 +1,13 @@
 import math
 import sys
 import time
-from pathlib import Path
 
 import torch
 import torchvision
 from torch.utils.data import DataLoader
 
 import coco_utils
-import engine.engine
+import engine.engine as eng
 import transform
 from coco_eval import CocoEval
 
@@ -58,27 +57,32 @@ def one_epoch(model, data_loader, criterion, device, optimizer=None):
 
 
 def main(args):
-    checkpoint_dir = setup_output(args.output_dir)
+    checkpoint_dir = eng.setup_output(args.output_dir)
 
     composed = transform.Compose([transform.ResizeKPS((80, 150)), transform.ToTensor()])
-    coco_train = engine.engine.get_dataset(args.data_path, train=True, transforms=composed)
-    coco_val = engine.engine.get_dataset(args.data_path, train=False, transforms=composed)
+    coco_train = eng.get_dataset(args.data_path, train=True, transforms=composed)
+    coco_val = eng.get_dataset(args.data_path, train=False, transforms=composed)
 
     batch_size = args.batch_size * args.num_gpu
     train_loader = DataLoader(coco_train, batch_size=batch_size, num_workers=4, shuffle=True)
     val_loader = DataLoader(coco_val, batch_size=batch_size, num_workers=4)
 
-    model = torchvision.models.resnet50(progress=False, num_classes=3 * len(coco_utils.KEYPOINTS))
     device = torch.device(args.device)
+    model = torchvision.models.resnet50(progress=False, num_classes=3 * len(coco_utils.KEYPOINTS))
     model.to(device)
-    if args.num_gpu > 1:
-        model = torch.nn.DataParallel(model, device_ids=list(range(args.num_gpu)))
-
     optimizer = torch.optim.Adam(model.parameters())
     criterion = torch.nn.MSELoss()
 
+    start_epoch = 0
+    if args.resume:
+        start_epoch = eng.load_from_checkpoint(args.resume, device, model, optimizer)
+
+    if args.num_gpu > 1:
+        model = torch.nn.DataParallel(model, device_ids=list(range(args.num_gpu)))
+
+    end_epoch = start_epoch + args.epochs
     start_time = time.time()
-    for epoch in range(args.epochs):
+    for epoch in range(start_epoch, end_epoch):
         print(f'Epoch {epoch}')
         print('-' * 10)
         one_epoch(model, train_loader, criterion, device, optimizer=optimizer)
@@ -86,21 +90,13 @@ def main(args):
 
     total_time = time.time() - start_time
     print(f'Total time {total_time // 60:.0f}m {total_time % 60:.0f}s')
+
     torch.save({
-        'epoch': args.epochs - 1,
+        'epoch': end_epoch - 1,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
-    }, checkpoint_dir / f'checkpoint{args.epochs - 1:03}.tar')
-
-
-def setup_output(output_dir):
-    output_dir = Path(output_dir)
-    output_dir.mkdir(exist_ok=True)
-
-    checkpoint_dir = output_dir / 'checkpoints'
-    checkpoint_dir.mkdir(exist_ok=True)
-    return checkpoint_dir
+    }, checkpoint_dir / f'checkpoint{end_epoch - 1:03}.tar')
 
 
 if __name__ == '__main__':
-    main(engine.engine.get_args())
+    main(eng.get_args())
