@@ -55,6 +55,8 @@ def one_epoch(model, data_loader, criterion, device, optimizer=None):
     print('Epoch complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
     print()
 
+    return epoch_loss
+
 
 def main(args):
     checkpoint_dir = eng.setup_output(args.output_dir)
@@ -85,17 +87,19 @@ def main(args):
     for epoch in range(start_epoch, end_epoch):
         print(f'Epoch {epoch}')
         print('-' * 10)
-        one_epoch(model, train_loader, criterion, device, optimizer=optimizer)
-        one_epoch(model, val_loader, criterion, device)
+        train_loss = one_epoch(model, train_loader, criterion, device, optimizer=optimizer)
+        val_loss = one_epoch(model, val_loader, criterion, device)
+
+        torch.save({
+            'epoch':  epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'train_loss': train_loss,
+            'val_loss': val_loss,
+        }, checkpoint_dir / f'checkpoint{epoch:03}.tar')
 
     total_time = time.time() - start_time
     print(f'Total time {total_time // 60:.0f}m {total_time % 60:.0f}s')
-
-    torch.save({
-        'epoch': end_epoch - 1,
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-    }, checkpoint_dir / f'checkpoint{end_epoch - 1:03}.tar')
 
 
 if __name__ == '__main__':
