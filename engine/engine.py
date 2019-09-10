@@ -42,9 +42,9 @@ def setup_output(output_dir):
 
 def load_from_checkpoint(checkpoint, device, model, optimizer=None):
     checkpoint = torch.load(checkpoint, map_location=device)
-    model.load_state_dict(checkpoint['model'])
+    model.load_state_dict(checkpoint['model_state_dict'])
     if optimizer:
-        optimizer.load_state_dict(checkpoint['optimizer'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
     start_epoch = checkpoint['epoch'] + 1
     return start_epoch

@@ -82,6 +82,7 @@ def main(args):
 
     start_epoch = 0
     if args.resume:
+        print(f'Loading checkpoint {args.resume}')
         start_epoch = eng.load_from_checkpoint(args.resume, device, model, optimizer)
 
     if args.num_gpu > 1:
