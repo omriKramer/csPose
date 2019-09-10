@@ -3,6 +3,7 @@ import sys
 import time
 
 import torch
+from torch import nn
 import torchvision
 from torch.utils.data import DataLoader
 
@@ -78,7 +79,7 @@ def main(args):
     model = torchvision.models.resnet50(progress=False, num_classes=3 * len(coco_utils.KEYPOINTS))
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters())
-    criterion = torch.nn.MSELoss()
+    criterion = nn.MSELoss()
 
     start_epoch = 0
     if args.resume:
@@ -86,7 +87,7 @@ def main(args):
         start_epoch = eng.load_from_checkpoint(args.resume, device, model, optimizer)
 
     if args.num_gpu > 1:
-        model = torch.nn.DataParallel(model, device_ids=list(range(args.num_gpu)))
+        model = nn.DataParallel(model, device_ids=list(range(args.num_gpu)))
 
     end_epoch = start_epoch + args.epochs
     start_time = time.time()
@@ -96,9 +97,10 @@ def main(args):
         train_loss = one_epoch(model, train_loader, criterion, device, optimizer=optimizer)
         val_loss = one_epoch(model, val_loader, criterion, device)
 
+        model_state_dict = model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict()
         torch.save({
             'epoch':  epoch,
-            'model_state_dict': model.state_dict(),
+            'model_state_dict': model_state_dict,
             'optimizer_state_dict': optimizer.state_dict(),
             'train_loss': train_loss,
             'val_loss': val_loss,
