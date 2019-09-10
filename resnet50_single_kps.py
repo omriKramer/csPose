@@ -64,6 +64,11 @@ def main(args):
     composed = transform.Compose([transform.ResizeKPS((80, 150)), transform.ToTensor()])
     coco_train = eng.get_dataset(args.data_path, train=True, transforms=composed)
     coco_val = eng.get_dataset(args.data_path, train=False, transforms=composed)
+    print('Dataset Info')
+    print('-' * 10)
+    print(f'Train: {coco_train}')
+    print(f'Validation: {coco_val}')
+    print()
 
     batch_size = args.batch_size * args.num_gpu
     train_loader = DataLoader(coco_train, batch_size=batch_size, num_workers=4, shuffle=True)
