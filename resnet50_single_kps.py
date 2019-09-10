@@ -3,8 +3,8 @@ import sys
 import time
 
 import torch
-from torch import nn
 import torchvision
+from torch import nn
 from torch.utils.data import DataLoader
 
 import coco_utils
@@ -94,17 +94,10 @@ def main(args):
     for epoch in range(start_epoch, end_epoch):
         print(f'Epoch {epoch}')
         print('-' * 10)
+
         train_loss = one_epoch(model, train_loader, criterion, device, optimizer=optimizer)
         val_loss = one_epoch(model, val_loader, criterion, device)
-
-        model_state_dict = model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict()
-        torch.save({
-            'epoch':  epoch,
-            'model_state_dict': model_state_dict,
-            'optimizer_state_dict': optimizer.state_dict(),
-            'train_loss': train_loss,
-            'val_loss': val_loss,
-        }, checkpoint_dir / f'checkpoint{epoch:03}.tar')
+        eng.create_checkpoint(checkpoint_dir, model, optimizer, epoch, train_loss, val_loss)
 
     total_time = time.time() - start_time
     print(f'Total time {total_time // 60:.0f}m {total_time % 60:.0f}s')

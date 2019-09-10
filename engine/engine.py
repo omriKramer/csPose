@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 
 import torch
+from torch import nn
 
 from datasets import CocoSingleKPS
 
@@ -48,3 +49,14 @@ def load_from_checkpoint(checkpoint, device, model, optimizer=None):
 
     start_epoch = checkpoint['epoch'] + 1
     return start_epoch
+
+
+def create_checkpoint(checkpoint_dir, model, optimizer, epoch, train_loss, val_loss):
+    model_state_dict = model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict()
+    torch.save({
+        'epoch': epoch,
+        'model_state_dict': model_state_dict,
+        'optimizer_state_dict': optimizer.state_dict(),
+        'train_loss': train_loss,
+        'val_loss': val_loss,
+    }, checkpoint_dir / f'checkpoint{epoch:03}.tar')
