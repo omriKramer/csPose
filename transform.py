@@ -41,6 +41,9 @@ class ResizeKPS:
     def __call__(self, img, target):
         return resize(img, target, self.size)
 
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.size})'
+
 
 class ToTensor:
 
@@ -56,6 +59,9 @@ class ToTensor:
 
         return img, target
 
+    def __repr__(self):
+        return f'{self.__class__.__name__}()'
+
 
 class Compose:
     def __init__(self, transforms):
@@ -65,3 +71,7 @@ class Compose:
         for t in self.transforms:
             image, target = t(image, target)
         return image, target
+
+    def __repr__(self):
+        rep = f'{self.__class__.__name__}({self.transforms})'
+        return rep
