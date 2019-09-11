@@ -38,8 +38,8 @@ def setup_output(output_dir):
     return output_dir
 
 
-def load_from_checkpoint(checkpoint, device, model, optimizer=None):
-    checkpoint = torch.load(checkpoint, map_location=device)
+def load_from_checkpoint(checkpoint, model, map_location=None, optimizer=None):
+    checkpoint = torch.load(checkpoint, map_location=map_location)
     model.load_state_dict(checkpoint['model_state_dict'])
     if optimizer:
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])

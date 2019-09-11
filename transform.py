@@ -52,11 +52,6 @@ class ToTensor:
 
     def __call__(self, img, target):
         img = self.to_tensor(img)
-
-        for t in ('keypoints', 'area'):
-            if t in target:
-                target[t] = torch.tensor(target[t], dtype=torch.float)
-
         return img, target
 
     def __repr__(self):
