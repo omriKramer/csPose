@@ -25,7 +25,7 @@ def get_args():
     parser.add_argument('-g', '--num-gpu', default=1, type=int, metavar='N', help='number of GPUs to use')
     parser.add_argument('-b', '--batch-size', default=2, type=int,
                         help='images per gpu, the total batch size is $NGPU x batch_size')
-    parser.add_argument('--output-dir', default='/home/labs/waic/omrik', help='path where to save')
+    parser.add_argument('--output-dir', default='.', help='path where to save')
     parser.add_argument('--resume', default='')
 
     args = parser.parse_args()
@@ -35,10 +35,7 @@ def get_args():
 def setup_output(output_dir):
     output_dir = Path(output_dir)
     output_dir.mkdir(exist_ok=True)
-
-    checkpoint_dir = output_dir / 'checkpoints'
-    checkpoint_dir.mkdir(exist_ok=True)
-    return checkpoint_dir
+    return output_dir
 
 
 def load_from_checkpoint(checkpoint, device, model, optimizer=None):
@@ -51,12 +48,17 @@ def load_from_checkpoint(checkpoint, device, model, optimizer=None):
     return start_epoch
 
 
-def create_checkpoint(checkpoint_dir, model, optimizer, epoch, train_loss, val_loss):
+def create_checkpoint(path, model, optimizer, epoch, train_loss, val_metrics):
     model_state_dict = model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict()
     torch.save({
         'epoch': epoch,
         'model_state_dict': model_state_dict,
         'optimizer_state_dict': optimizer.state_dict(),
-        'train_loss': train_loss,
-        'val_loss': val_loss,
-    }, checkpoint_dir / f'checkpoint{epoch:03}.tar')
+        'train_metrics': train_loss,
+        'val_metrics': val_metrics,
+    }, path / f'checkpoint{epoch:03}.tar')
+
+
+def write_metrics(writer, metrics, global_step):
+    for metric, value in metrics.items():
+        writer.add_scalar(metric, value, global_step)

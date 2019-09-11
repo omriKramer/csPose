@@ -6,6 +6,7 @@ import torch
 import torchvision
 from torch import nn
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 
 import coco_utils
 import engine.engine as eng
@@ -56,11 +57,16 @@ def one_epoch(model, data_loader, criterion, device, optimizer=None):
     print('Epoch complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
     print()
 
-    return epoch_loss
+    return {
+        'loss': epoch_loss,
+        'oks': epoch_oks,
+    }
 
 
 def main(args):
-    checkpoint_dir = eng.setup_output(args.output_dir)
+    output_dir = eng.setup_output(args.output_dir)
+    train_writer = SummaryWriter(output_dir / 'train')
+    val_writer = SummaryWriter(output_dir / 'test')
 
     composed = transform.Compose([transform.ResizeKPS((80, 150)), transform.ToTensor()])
     coco_train = eng.get_dataset(args.data_path, train=True, transforms=composed)
@@ -95,9 +101,12 @@ def main(args):
         print(f'Epoch {epoch}')
         print('-' * 10)
 
-        train_loss = one_epoch(model, train_loader, criterion, device, optimizer=optimizer)
-        val_loss = one_epoch(model, val_loader, criterion, device)
-        eng.create_checkpoint(checkpoint_dir, model, optimizer, epoch, train_loss, val_loss)
+        train_metrics = one_epoch(model, train_loader, criterion, device, optimizer=optimizer)
+        val_metrics = one_epoch(model, val_loader, criterion, device)
+
+        eng.write_metrics(train_writer, train_metrics, epoch)
+        eng.write_metrics(val_writer, val_metrics, epoch)
+        eng.create_checkpoint(output_dir, model, optimizer, epoch, train_metrics, val_metrics)
 
     total_time = time.time() - start_time
     print(f'Total time {total_time // 60:.0f}m {total_time % 60:.0f}s')
