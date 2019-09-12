@@ -1,10 +1,8 @@
 # %%
 import torchvision
 import torchvision.transforms as T
-from torch.utils.data import DataLoader
 
 import coco_utils
-from datasets import CocoSingleKPS
 from engine.engine import *
 
 # %%

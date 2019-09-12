@@ -24,6 +24,15 @@ epoch = eng.load_from_checkpoint('results/simple_resnet50/checkpoint039.tar', mo
 #%%
 data_iter = iter(val_loader)
 images, targets = next(data_iter)
+#%%
+output = model(images)
 
 #%%
-coco_val.coco.show_by_id(targets['id'][0].item())
+i = 2
+coco_val.coco.show_by_id(targets['image_id'][i].item())
+coco_utils.show_image_with_kps(images[i], targets['keypoints'][i])
+
+#%%
+coco_utils.show_image_with_kps(images[i], output[0], visible=targets['keypoints'][i])
+
+#%%
