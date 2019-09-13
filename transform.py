@@ -7,7 +7,7 @@ from coco_utils import decode_keypoints
 
 def resize_keypoints(keypoints, ratios):
     ratio_h, ratio_w = ratios
-    new_keypoints = np.array(keypoints, dtype=np.float)
+    new_keypoints = np.array(keypoints, dtype=np.float32)
     x, y, v = decode_keypoints(new_keypoints)
     x[v > 0] *= ratio_h
     y[v > 0] *= ratio_w
@@ -47,15 +47,20 @@ class ResizeKPS:
 
 class ToTensor:
 
-    def __init__(self):
+    def __init__(self, keys=None):
+        self.keys = keys
         self.to_tensor = T.ToTensor()
 
     def __call__(self, img, target):
         img = self.to_tensor(img)
+        if self.keys:
+            for key in self.keys:
+                target[key] = torch.tensor(target[key])
+
         return img, target
 
     def __repr__(self):
-        return f'{self.__class__.__name__}()'
+        return f'{self.__class__.__name__}(keys={self.keys})'
 
 
 class Compose:
@@ -68,5 +73,4 @@ class Compose:
         return image, target
 
     def __repr__(self):
-        rep = f'{self.__class__.__name__}({self.transforms})'
-        return rep
+        return f'{self.__class__.__name__}({self.transforms})'

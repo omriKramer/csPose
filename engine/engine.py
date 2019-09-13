@@ -1,7 +1,7 @@
 import argparse
-import math
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 
 import torch
@@ -9,7 +9,6 @@ from torch import nn
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-from coco_eval import CocoEval
 from datasets import CocoSingleKPS
 
 
@@ -23,7 +22,7 @@ def get_dataset(data_path, train=True, transform=None, target_transform=None, tr
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data-path', default='/Volumes/waic/shared/coco', help='dataset location')
+    parser.add_argument('--data-path', default='~/weizmann/coco/dev', help='dataset location')
     parser.add_argument('-e', '--epochs', default=13, type=int, metavar='N', help='number of total epochs to run')
     parser.add_argument('-d', '--device', default='cuda', choices=['cuda', 'cpu'], help='device')
     parser.add_argument('-g', '--num-gpu', default=1, type=int, metavar='N', help='number of GPUs to use')
@@ -57,14 +56,14 @@ def write_metrics(writer, metrics, global_step):
         writer.add_scalar(metric, value, global_step)
 
 
-evaluator = CocoEval()
+def default_model_feeder(model, images, _):
+    return model(images)
 
 
 class Engine:
 
-    def __init__(self, model, data_path='.', output_dir='.', batch_size=32, device='cpu', epochs=10, num_gpu=1,
-                 resume='',
-                 optimizer=None):
+    def __init__(self, model, data_path='.', output_dir='.', batch_size=32, device='cpu', epochs=1,
+                 num_gpu=1, resume='', optimizer=None, model_feeder=None):
         self.epochs = epochs
         self.data_path = data_path
         self.num_gpu = num_gpu
@@ -85,38 +84,41 @@ class Engine:
         else:
             self.model = model
 
+        if model_feeder:
+            self.model_feeder = model_feeder
+        else:
+            self.model_feeder = default_model_feeder
+
         self.train_writer = SummaryWriter(self.output_dir / 'train')
         self.val_writer = SummaryWriter(self.output_dir / 'test')
 
     @classmethod
-    def from_command_line(cls, model, optimizer=None):
+    def command_line_init(cls, model, optimizer=None):
         args = get_args()
         engine = cls(model, **vars(args), optimizer=optimizer)
         return engine
 
-    def run(self, transforms=None):
-
+    def run(self, metrics, transforms=None):
         coco_train = get_dataset(self.data_path, train=True, transforms=transforms)
         coco_val = get_dataset(self.data_path, train=False, transforms=transforms)
         print('Dataset Info')
         print('-' * 10)
         print(f'Train: {coco_train}')
+        print()
         print(f'Validation: {coco_val}')
         print()
 
         batch_size = self.batch_size * self.num_gpu
-        train_loader = DataLoader(coco_train, batch_size=batch_size, num_workers=4, shuffle=True)
-        val_loader = DataLoader(coco_val, batch_size=batch_size, num_workers=4)
-
-        criterion = nn.MSELoss()
+        train_loader = DataLoader(coco_train, batch_size=batch_size, num_workers=1, shuffle=True)
+        val_loader = DataLoader(coco_val, batch_size=batch_size, num_workers=1)
 
         start_time = time.time()
         for epoch in range(self.start_epoch, self.start_epoch + self.epochs):
             print(f'Epoch {epoch}')
             print('-' * 10)
 
-            train_metrics = self.one_epoch(train_loader, criterion, train=True)
-            val_metrics = self.one_epoch(val_loader, criterion)
+            train_metrics = self.one_epoch(train_loader, metrics, train=True)
+            val_metrics = self.one_epoch(val_loader, metrics)
 
             write_metrics(self.train_writer, train_metrics, epoch)
             write_metrics(self.val_writer, val_metrics, epoch)
@@ -125,50 +127,55 @@ class Engine:
         total_time = time.time() - start_time
         print(f'Total time {total_time // 60:.0f}m {total_time % 60:.0f}s')
 
-    def one_epoch(self, data_loader, criterion, train=False):
+    def one_epoch(self, data_loader, metrics, train=False):
         if train:
             self.model.train()
         else:
             self.model.eval()
 
-        running_loss = 0.0
-        running_oks = 0.0
-
+        running_metrics = Counter()
         start_time = time.time()
+
         for images, targets in data_loader:
-            images = images.to(self.device)
-            keypoints = targets['keypoints'].to(self.device)
-            areas = targets['area'].to(self.device)
+            images, targets = self.to_device(images, targets)
 
             with torch.set_grad_enabled(train):
-                outputs = self.model(images)
+                outputs = self.model_feeder(self.model, images, targets)
+                metric_values = {name: metric(outputs, targets) for name, metric in metrics.items()}
 
-                loss = criterion(outputs, keypoints)
-                if not math.isfinite(loss):
-                    print("Loss is {}, stopping training".format(loss))
-                    sys.exit(1)
+                for name, value in metric_values.items():
+                    if not torch.isfinite(value):
+                        print(f'{name} is {value}, stopping training')
+                        sys.exit(1)
 
+                running_metrics += metric_values
                 if train:
+                    loss = metric_values['loss']
                     self.optimizer.zero_grad()
                     loss.backward()
                     self.optimizer.step()
 
-            running_loss += loss.item()
-            for gt, dt, area in zip(keypoints, outputs, areas):
-                running_oks += evaluator.compute_oks(gt, dt, area, device=self.device).item()
-
         time_elapsed = time.time() - start_time
-        epoch_loss = running_loss / len(data_loader.dataset)
-        epoch_oks = running_oks / len(data_loader.dataset)
+        epoch_metrics = {name: value.item() / len(data_loader.dataset) in running_metrics.items()}
+
         phase = 'Train' if train else 'Val'
-        print(f'{phase} Loss: {epoch_loss:.4f}, OKS: {epoch_oks:.4f}')
+        metric_string = ', '.join((f'{name}: {value}' for name, value in epoch_metrics.items()))
+        print(f'{phase} - {metric_string}')
         print('Epoch complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
         print()
 
-        return {
-            'loss': epoch_loss,
-            'oks': epoch_oks,
-        }
+        return epoch_metrics
+
+    def to_device(self, images, targets):
+        if torch.is_tensor(images):
+            images = images.to(self.device)
+        elif isinstance(images, list):
+            images = [img.to(self.device) for img in images]
+        else:
+            raise TypeError(f'images should be be tensor or list got {type(images)}')
+
+        targets = {k: v.to(self.device) for k, v in targets.items()}
+        return images, targets
 
     def create_checkpoint(self, epoch, train_metrics, val_metrics):
         if isinstance(self.model, nn.DataParallel):

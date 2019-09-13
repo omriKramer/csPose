@@ -13,8 +13,8 @@ class CocoEval:
 
         self.sigmas = sigmas
 
-    def compute_oks(self, gt, dt, area, device=None):
-        var = (self.sigmas.to(device) * 2) ** 2
+    def compute_oks(self, gt, dt, area):
+        var = (self.sigmas * 2) ** 2
         gx, gy, v = decode_keypoints(gt)
         dx, dy, _ = decode_keypoints(dt)
 
@@ -23,3 +23,11 @@ class CocoEval:
         e = e[v > 0]
         oks = torch.sum(torch.exp(-e)) / e.shape[0]
         return oks
+
+
+evaluator = CocoEval()
+
+
+def batch_oks(outputs, targets):
+    oks = [evaluator.compute_oks(gt, dt, area) for gt, dt, area in zip(targets['keypoints'], outputs, targets['area'])]
+    return torch.tensor(oks).mean()
