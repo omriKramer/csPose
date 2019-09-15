@@ -39,6 +39,16 @@ def fix_bbox(bbox, frame):
     return new_bbox
 
 
+def fix_segmentation(segmentation, frame):
+    fixed_segmentation = []
+    for seg in segmentation:
+        seg = np.array(seg, dtype=np.float32)
+        seg[::2] -= frame[0]
+        seg[1::2] -= frame[1]
+        fixed_segmentation.append(seg.tolist())
+    return fixed_segmentation
+
+
 class CocoSingleKPS(torchvision.datasets.VisionDataset):
 
     def __init__(self, root, ann_file, transform=None, target_transform=None, transforms=None):
@@ -72,6 +82,8 @@ class CocoSingleKPS(torchvision.datasets.VisionDataset):
             'bbox': fix_bbox(annotation['bbox'], frame),
             'keypoints': list(fix_kps(kps, frame)),
             'num_keypoints': annotation['num_keypoints'],
+            'iscrowd': annotation['iscrowd'],
+            'segmentation': fix_segmentation(annotation['segmentation'], frame)
         }
 
         if self.transforms is not None:

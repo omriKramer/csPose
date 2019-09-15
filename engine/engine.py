@@ -26,6 +26,7 @@ def get_args():
     parser.add_argument('-e', '--epochs', default=13, type=int, metavar='N', help='number of total epochs to run')
     parser.add_argument('-d', '--device', default='cuda', choices=['cuda', 'cpu'], help='device')
     parser.add_argument('-g', '--num-gpu', default=1, type=int, metavar='N', help='number of GPUs to use')
+    parser.add_argument('--num-workers', default=0, type=int, metavar='N', help='number of workers to use')
     parser.add_argument('-b', '--batch-size', default=2, type=int,
                         help='images per gpu, the total batch size is $NGPU x batch_size')
     parser.add_argument('--output-dir', default='.', help='path where to save')
@@ -60,16 +61,21 @@ def default_model_feeder(model, images, _):
     return model(images)
 
 
+def feed_images_and_targets(model, images, targets):
+    return model(images, targets)
+
+
 class Engine:
 
     def __init__(self, model, data_path='.', output_dir='.', batch_size=32, device='cpu', epochs=1,
-                 num_gpu=1, resume='', optimizer=None, model_feeder=None):
+                 num_gpu=1, resume='', optimizer=None, model_feeder=None, num_workers=0):
         self.epochs = epochs
         self.data_path = data_path
         self.num_gpu = num_gpu
         self.batch_size = batch_size
         self.output_dir = setup_output(output_dir)
         self.device = torch.device(device)
+        self.num_workers = num_workers
 
         model.to(device)
         if optimizer:
@@ -93,36 +99,38 @@ class Engine:
         self.val_writer = SummaryWriter(self.output_dir / 'test')
 
     @classmethod
-    def command_line_init(cls, model, optimizer=None):
+    def command_line_init(cls, model, **kwargs):
         args = get_args()
-        engine = cls(model, **vars(args), optimizer=optimizer)
+        engine = cls(model, **vars(args), **kwargs)
         return engine
 
-    def run(self, metrics, transforms=None):
-        coco_train = get_dataset(self.data_path, train=True, transforms=transforms)
-        coco_val = get_dataset(self.data_path, train=False, transforms=transforms)
+    def run(self, train_ds, val_ds, metrics, val_metrics=None, collate_fn=None):
+        if not val_metrics:
+            val_metrics = metrics
+
         print('Dataset Info')
         print('-' * 10)
-        print(f'Train: {coco_train}')
+        print(f'Train: {train_ds}')
         print()
-        print(f'Validation: {coco_val}')
+        print(f'Validation: {val_ds}')
         print()
 
         batch_size = self.batch_size * self.num_gpu
-        train_loader = DataLoader(coco_train, batch_size=batch_size, num_workers=1, shuffle=True)
-        val_loader = DataLoader(coco_val, batch_size=batch_size, num_workers=1)
+        train_loader = DataLoader(train_ds, batch_size=batch_size, num_workers=self.num_workers, collate_fn=collate_fn,
+                                  shuffle=True)
+        val_loader = DataLoader(val_ds, batch_size=batch_size, num_workers=self.num_workers, collate_fn=collate_fn)
 
         start_time = time.time()
         for epoch in range(self.start_epoch, self.start_epoch + self.epochs):
             print(f'Epoch {epoch}')
             print('-' * 10)
 
-            train_metrics = self.one_epoch(train_loader, metrics, train=True)
-            val_metrics = self.one_epoch(val_loader, metrics)
+            train_results = self.one_epoch(train_loader, metrics, train=True)
+            val_results = self.one_epoch(val_loader, val_metrics)
 
-            write_metrics(self.train_writer, train_metrics, epoch)
-            write_metrics(self.val_writer, val_metrics, epoch)
-            self.create_checkpoint(epoch, train_metrics, val_metrics)
+            write_metrics(self.train_writer, train_results, epoch)
+            write_metrics(self.val_writer, val_results, epoch)
+            self.create_checkpoint(epoch, train_results, val_results)
 
         total_time = time.time() - start_time
         print(f'Total time {total_time // 60:.0f}m {total_time % 60:.0f}s')
@@ -156,7 +164,7 @@ class Engine:
                     self.optimizer.step()
 
         time_elapsed = time.time() - start_time
-        epoch_metrics = {name: value.item() / len(data_loader.dataset) in running_metrics.items()}
+        epoch_metrics = {name: value.item() / len(data_loader.dataset) for name, value in running_metrics.items()}
 
         phase = 'Train' if train else 'Val'
         metric_string = ', '.join((f'{name}: {value}' for name, value in epoch_metrics.items()))
@@ -169,12 +177,14 @@ class Engine:
     def to_device(self, images, targets):
         if torch.is_tensor(images):
             images = images.to(self.device)
-        elif isinstance(images, list):
-            images = [img.to(self.device) for img in images]
         else:
-            raise TypeError(f'images should be be tensor or list got {type(images)}')
+            images = [img.to(self.device) for img in images]
 
-        targets = {k: v.to(self.device) for k, v in targets.items()}
+        if isinstance(targets, dict):
+            targets = {k: v.to(self.device) for k, v in targets.items()}
+        else:
+            targets = [{k: v.to(self.device) for k, v in d.items()} for d in targets]
+
         return images, targets
 
     def create_checkpoint(self, epoch, train_metrics, val_metrics):
@@ -190,3 +200,7 @@ class Engine:
             'train_metrics': train_metrics,
             'val_metrics': val_metrics,
         }, self.output_dir / f'checkpoint{epoch:03}.tar')
+
+    def get_dataset(self, train=True, transform=None, target_transform=None, transforms=None):
+        return get_dataset(self.data_path, train=train, transform=transform, target_transform=target_transform,
+                           transforms=transforms)
