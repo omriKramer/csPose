@@ -16,11 +16,14 @@ class WrapInList:
         return f'{self.__class__.__name__}()'
 
 
+cpu_device = torch.device('cpu')
+
+
 def target_to_coco_format(list_of_dict):
     batch = {'area': [], 'keypoints': []}
     for d in list_of_dict:
-        batch['keypoints'].append(d['keypoints'][0].reshape(-1))
-        batch['area'].append(d['area'])
+        batch['keypoints'].append(d['keypoints'][0].reshape(-1)).to(cpu_device)
+        batch['area'].append(d['area']).to(cpu_device)
 
     return batch
 
@@ -32,7 +35,7 @@ def output_to_single_kps(list_of_dict):
         if keypoints.nelement() > 0:
             keypoints = keypoints[0].reshape(-1)
 
-        batch.append(keypoints)
+        batch.append(keypoints.to(cpu_device))
 
     return batch
 
