@@ -76,19 +76,20 @@ class Engine:
         self.output_dir = setup_output(output_dir)
         self.device = torch.device(device)
         self.num_workers = num_workers
-
-        model.to(device)
-        if optimizer:
-            self.optimizer = optimizer(model.parameters())
-
+        self.model = model
         self.start_epoch = 0
-        if resume:
-            self.start_epoch = load_from_checkpoint(resume, model, self.device, optimizer=self.optimizer)
+        self.optimizer = None
 
         if self.num_gpu > 1:
-            self.model = nn.DataParallel(model, device_ids=list(range(self.num_gpu)))
-        else:
-            self.model = model
+            self.model = nn.DataParallel(self.model, device_ids=list(range(self.num_gpu)))
+
+        self.model.to(device)
+
+        if optimizer:
+            self.optimizer = optimizer(self.model.parameters())
+
+        if resume:
+            load_from_checkpoint(resume, self.model, self.device, self.optimizer)
 
         if model_feeder:
             self.model_feeder = model_feeder
