@@ -23,7 +23,7 @@ def target_to_coco_format(list_of_dict):
     batch = {'area': [], 'keypoints': []}
     for d in list_of_dict:
         batch['keypoints'].append(d['keypoints'][0].reshape(-1).to(cpu_device))
-        batch['area'].append(d['area']).to(cpu_device)
+        batch['area'].append(d['area'].to(cpu_device))
 
     return batch
 
