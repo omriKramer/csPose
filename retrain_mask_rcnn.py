@@ -23,8 +23,8 @@ cpu_device = torch.device('cpu')
 def target_to_coco_format(list_of_dict):
     batch = {'area': [], 'keypoints': []}
     for d in list_of_dict:
-        batch['keypoints'].append(d['keypoints'][0].reshape(-1).to(cpu_device))
-        batch['area'].append(d['area'].to(cpu_device))
+        batch['keypoints'].append(d['keypoints'][0].reshape(-1))
+        batch['area'].append(d['area'])
 
     return batch
 
@@ -45,12 +45,6 @@ def train_metrics(_, loss_dict):
     return loss_dict
 
 
-def val_metrics(targets, outputs):
-    return {
-        'OKS': coco_eval.batch_oks(output_to_single_kps(outputs), target_to_coco_format(targets))
-    }
-
-
 def loss_fn(loss_dict, _):
     return sum(loss for loss in loss_dict.values())
 
@@ -64,6 +58,15 @@ if __name__ == '__main__':
     val_transform = transform.Compose((WrapInList(), transform.ConvertCocoPolysToMask(), transform.ToTensor()))
     coco_train = engine.get_dataset(train=True, transforms=train_transform)
     coco_val = engine.get_dataset(train=False, transforms=val_transform)
+
+    coco_evaluator = coco_eval.CocoEval(device=engine.device)
+
+
+    def val_metrics(targets, outputs):
+        return {
+            'OKS': coco_evaluator.batch_oks(output_to_single_kps(outputs), target_to_coco_format(targets)),
+        }
+
 
     train_evaluator = MetricLogger(train_metrics)
     val_evaluator = MetricLogger(val_metrics, train=False)
