@@ -88,10 +88,9 @@ class MetricLogger(object):
             self.meters[k].update(v)
 
     def eval(self, targets, outputs):
-        print('calculating batch metrics')
         batch_results = self.metrics(targets, outputs)
-        batch_metrics_reduces = utils.reduce_dict(batch_results)
-        self.update(**batch_metrics_reduces)
+        batch_metrics_reduced = utils.reduce_dict(batch_results)
+        self.update(**batch_metrics_reduced)
 
     def __getattr__(self, attr):
         if attr in self.meters:
