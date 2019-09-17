@@ -66,6 +66,6 @@ if __name__ == '__main__':
     coco_val = engine.get_dataset(train=False, transforms=val_transform)
 
     train_evaluator = MetricLogger(train_metrics)
-    val_evaluator = MetricLogger(val_metrics)
+    val_evaluator = MetricLogger(val_metrics, train=False)
 
     engine.run(coco_train, coco_val, train_evaluator, val_evaluator, loss_fn, collate_fn=coco_utils.collate_fn)

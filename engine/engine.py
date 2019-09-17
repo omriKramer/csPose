@@ -122,6 +122,7 @@ class Engine:
         print(f'Validation: {val_ds}')
         print()
 
+        print("Creating data loaders")
         train_loader, val_loader = self.create_loaders(train_ds, val_ds, collate_fn)
 
         print('Start training')
@@ -139,7 +140,6 @@ class Engine:
         print(f'Total time {total_time // 60:.0f}m {total_time % 60:.0f}s')
 
     def create_loaders(self, train_ds, val_ds, collate_fn):
-        print("Creating data loaders")
         if self.distributed:
             train_sampler = torch.utils.data.distributed.DistributedSampler(train_ds)
             val_sampler = torch.utils.data.distributed.DistributedSampler(val_ds)
