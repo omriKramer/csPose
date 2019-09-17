@@ -36,7 +36,7 @@ def output_to_single_kps(list_of_dict):
         if keypoints.nelement() > 0:
             keypoints = keypoints[0].reshape(-1)
 
-        batch.append(keypoints.to(cpu_device))
+        batch.append(keypoints)
 
     return batch
 
