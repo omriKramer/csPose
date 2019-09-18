@@ -17,9 +17,6 @@ class WrapInList:
         return f'{self.__class__.__name__}()'
 
 
-cpu_device = torch.device('cpu')
-
-
 def target_to_coco_format(list_of_dict):
     batch = {'area': [], 'keypoints': []}
     for d in list_of_dict:

@@ -174,7 +174,7 @@ class ConvertCocoPolysToMask(object):
         # for conversion to coco api
         area = torch.tensor([obj["area"] for obj in anno])
         iscrowd = torch.tensor([obj["iscrowd"] for obj in anno])
-        target["area"] = area
+        target["area"] = area.to(dtype=torch.float32)
         target["iscrowd"] = iscrowd
 
         return image, target
