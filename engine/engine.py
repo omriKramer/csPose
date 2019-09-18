@@ -139,21 +139,6 @@ class Engine:
         total_time = time.time() - start_time
         print(f'Total time {total_time // 60:.0f}m {total_time % 60:.0f}s')
 
-    def create_loaders(self, train_ds, val_ds, collate_fn):
-        if self.distributed:
-            train_sampler = torch.utils.data.distributed.DistributedSampler(train_ds)
-            val_sampler = torch.utils.data.distributed.DistributedSampler(val_ds)
-        else:
-            train_sampler = torch.utils.data.RandomSampler(train_ds)
-            val_sampler = torch.utils.data.SequentialSampler(val_ds)
-
-        train_batch_sampler = torch.utils.data.BatchSampler(train_sampler, self.batch_size, drop_last=True)
-        train_loader = DataLoader(train_ds, batch_sampler=train_batch_sampler, num_workers=self.num_workers,
-                                  collate_fn=collate_fn)
-        val_loader = DataLoader(val_ds, batch_size=self.batch_size, sampler=val_sampler, num_workers=self.num_workers,
-                                collate_fn=collate_fn)
-        return train_loader, val_loader
-
     def one_epoch(self, data_loader, evaluator, loss_fn=None):
         train = bool(loss_fn)
         if train:
@@ -188,6 +173,21 @@ class Engine:
             targets = [{k: v.to(self.device) for k, v in d.items()} for d in targets]
 
         return images, targets
+
+    def create_loaders(self, train_ds, val_ds, collate_fn):
+        if self.distributed:
+            train_sampler = torch.utils.data.distributed.DistributedSampler(train_ds)
+            val_sampler = torch.utils.data.distributed.DistributedSampler(val_ds)
+        else:
+            train_sampler = torch.utils.data.RandomSampler(train_ds)
+            val_sampler = torch.utils.data.SequentialSampler(val_ds)
+
+        train_batch_sampler = torch.utils.data.BatchSampler(train_sampler, self.batch_size, drop_last=True)
+        train_loader = DataLoader(train_ds, batch_sampler=train_batch_sampler, num_workers=self.num_workers,
+                                  collate_fn=collate_fn)
+        val_loader = DataLoader(val_ds, batch_size=self.batch_size, sampler=val_sampler, num_workers=self.num_workers,
+                                collate_fn=collate_fn)
+        return train_loader, val_loader
 
     def create_checkpoint(self, epoch, train_metrics, val_metrics):
         if not utils.is_main_process():

@@ -1,9 +1,8 @@
 import datetime
 import time
-from collections import deque, defaultdict
+from collections import deque, Counter
 
 import torch
-from torch import distributed as dist
 
 import utils
 
@@ -28,18 +27,10 @@ class SmoothedValue(object):
         self.count += n
         self.total += value * n
 
-    def synchronize_between_processes(self):
-        """
-        Warning: does not synchronize the deque!
-        """
-        if not utils.is_dist_avail_and_initialized():
-            return
-        t = torch.tensor([self.count, self.total], dtype=torch.float64, device='cuda')
-        dist.barrier()
-        dist.all_reduce(t)
-        t = t.tolist()
-        self.count = int(t[0])
-        self.total = t[1]
+    def reset(self):
+        self.total = 0.0
+        self.count = 0
+        self.deque.clear()
 
     @property
     def median(self):
@@ -73,19 +64,16 @@ class SmoothedValue(object):
 
 
 class MetricLogger(object):
-    def __init__(self, metrics, print_freq, delimiter="  ", epoch=0):
+    def __init__(self, metrics, print_freq, epoch=0, name=''):
+        self.header = name
         self.metrics = metrics
-        self.meters = defaultdict(SmoothedValue)
-        self.delimiter = delimiter
+        self.meters = None
         self.epoch = epoch
         self.print_freq = print_freq
 
     def update(self, **kwargs):
-        for k, v in kwargs.items():
-            if isinstance(v, torch.Tensor):
-                v = v.item()
-            assert isinstance(v, (float, int))
-            self.meters[k].update(v)
+        results = {k: v.item() if torch.is_tensor(v) else v for k, v in kwargs.items()}
+        self.meters.update(results)
 
     def eval(self, targets, outputs):
         batch_results = self.metrics(targets, outputs)
@@ -101,75 +89,61 @@ class MetricLogger(object):
             type(self).__name__, attr))
 
     def __str__(self):
+        if self.meters is None:
+            return 'No metrics were logged'
+
         loss_str = []
         for name, meter in self.meters.items():
             loss_str.append(
-                "{}: {}".format(name, str(meter))
+                "{}: {}".format(name, str(meter / self.print_freq))
             )
-        return self.delimiter.join(loss_str)
+        return ' '.join(loss_str)
 
-    @torch.no_grad()
-    def synchronize_between_processes(self):
-        for meter in self.meters.values():
-            meter.synchronize_between_processes()
-
-    def add_meter(self, name, meter):
-        self.meters[name] = meter
-
-    def iter_and_log(self, iterable, header=None):
-        i = 0
+    def iteration_header(self):
         epoch_header = f'Epoch: [{self.epoch}]'
-        if header:
-            header = f'{header} - {epoch_header}'
+        if self.name:
+            header = f'{self.name} - {epoch_header}'
         else:
             header = epoch_header
+        return header
 
+    def iter_and_log(self, iterable):
         start_time = time.time()
         end = time.time()
+
         iter_time = SmoothedValue(fmt='{avg:.4f}')
         data_time = SmoothedValue(fmt='{avg:.4f}')
-        space_fmt = ':' + str(len(str(len(iterable)))) + 'd'
-        if torch.cuda.is_available():
-            log_msg = self.delimiter.join([
-                header,
-                '[{0' + space_fmt + '}/{1}]',
-                'eta: {eta}',
-                '{meters}',
-                'time: {time}',
-                'data: {data}',
-                'max mem: {memory:.0f}'
-            ])
-        else:
-            log_msg = self.delimiter.join([
-                header,
-                '[{0' + space_fmt + '}/{1}]',
-                'eta: {eta}',
-                '{meters}',
-                'time: {time}',
-                'data: {data}'
-            ])
+
+        self.meters = Counter()
+        header = self.iteration_header()
+        nspace = str(len(str(len(iterable))))
+
+        i = 0
         for obj in iterable:
             data_time.update(time.time() - end)
             yield obj
             iter_time.update(time.time() - end)
-            if (self.print_freq and i % self.print_freq == 0) or i == len(iterable) - 1:
+            if self.print_freq and i % self.print_freq == self.print_freq - 1:
                 eta_seconds = iter_time.global_avg * (len(iterable) - i)
-                eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
+                eta = datetime.timedelta(seconds=int(eta_seconds))
+
+                msg = f'{header} [{i:{nspace}d}/{len(iterable)}] eta: {eta} {self} time: {iter_time} data: {data_time}'
                 if torch.cuda.is_available():
-                    print(log_msg.format(
-                        i, len(iterable), eta=eta_string,
-                        meters=str(self),
-                        time=str(iter_time), data=str(data_time),
-                        memory=torch.cuda.max_memory_allocated() / MB))
-                else:
-                    print(log_msg.format(
-                        i, len(iterable), eta=eta_string,
-                        meters=str(self),
-                        time=str(iter_time), data=str(data_time)))
+                    msg += f' max mem: {torch.cuda.max_memory_allocated() / MB:0f}'
+
+                print(msg)
+                self.meters = Counter()
+
             i += 1
             end = time.time()
 
         total_time = time.time() - start_time
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
         print(f'{header} Total time: {total_time_str} ({total_time / len(iterable):.4f} s / it)')
+
+        # print meters only once in the end of the epoch
+        if self.print_freq is None:
+            print(self)
+            print()
+
         self.epoch += 1
