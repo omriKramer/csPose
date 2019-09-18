@@ -146,8 +146,7 @@ class Engine:
         else:
             self.model.eval()
 
-        header = 'Train' if train else 'Val'
-        for images, targets in evaluator.iter_and_log(data_loader, header=header):
+        for images, targets in evaluator.iter_and_log(data_loader):
             images, targets = self.to_device(images, targets)
 
             with torch.set_grad_enabled(train):

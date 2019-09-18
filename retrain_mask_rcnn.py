@@ -1,5 +1,6 @@
 import torch
 import torchvision
+from torch.utils.tensorboard import SummaryWriter
 
 import coco_eval
 import coco_utils
@@ -66,7 +67,7 @@ if __name__ == '__main__':
         }
 
 
-    train_evaluator = MetricLogger(train_metrics, print_freq=100)
-    val_evaluator = MetricLogger(val_metrics, print_freq=False)
+    train_evaluator = MetricLogger(train_metrics, print_freq=2, writer=SummaryWriter(engine.output_dir), name='train')
+    val_evaluator = MetricLogger(val_metrics)
 
     engine.run(coco_train, coco_val, train_evaluator, val_evaluator, loss_fn, collate_fn=coco_utils.collate_fn)

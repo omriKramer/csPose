@@ -63,9 +63,10 @@ class SmoothedValue(object):
             value=self.value)
 
 
-class MetricLogger(object):
-    def __init__(self, metrics, print_freq, epoch=0, name=''):
-        self.header = name
+class MetricLogger:
+    def __init__(self, metrics, print_freq=None, epoch=0, name='', writer=None):
+        self.writer = writer
+        self.name = name
         self.metrics = metrics
         self.meters = None
         self.epoch = epoch
@@ -79,25 +80,6 @@ class MetricLogger(object):
         batch_results = self.metrics(targets, outputs)
         batch_metrics_reduced = utils.reduce_dict(batch_results)
         self.update(**batch_metrics_reduced)
-
-    def __getattr__(self, attr):
-        if attr in self.meters:
-            return self.meters[attr]
-        if attr in self.__dict__:
-            return self.__dict__[attr]
-        raise AttributeError("'{}' object has no attribute '{}'".format(
-            type(self).__name__, attr))
-
-    def __str__(self):
-        if self.meters is None:
-            return 'No metrics were logged'
-
-        loss_str = []
-        for name, meter in self.meters.items():
-            loss_str.append(
-                "{}: {}".format(name, str(meter / self.print_freq))
-            )
-        return ' '.join(loss_str)
 
     def iteration_header(self):
         epoch_header = f'Epoch: [{self.epoch}]'
@@ -116,22 +98,27 @@ class MetricLogger(object):
 
         self.meters = Counter()
         header = self.iteration_header()
-        nspace = str(len(str(len(iterable))))
+        n_space = str(len(str(len(iterable))))
 
         i = 0
+        n_batch = len(iterable)
         for obj in iterable:
             data_time.update(time.time() - end)
             yield obj
             iter_time.update(time.time() - end)
             if self.print_freq and i % self.print_freq == self.print_freq - 1:
-                eta_seconds = iter_time.global_avg * (len(iterable) - i)
+                avg_meters = {name: value / self.print_freq for name, value in self.meters.items()}
+                meters = ' '.join(f'{name}: {value}' for name, value in avg_meters.items())
+
+                eta_seconds = iter_time.global_avg * (n_batch - i)
                 eta = datetime.timedelta(seconds=int(eta_seconds))
 
-                msg = f'{header} [{i:{nspace}d}/{len(iterable)}] eta: {eta} {self} time: {iter_time} data: {data_time}'
+                msg = f'{header} [{i:{n_space}d}/{n_batch}] eta: {eta} {meters} time: {iter_time} data: {data_time}'
                 if torch.cuda.is_available():
                     msg += f' max mem: {torch.cuda.max_memory_allocated() / MB:0f}'
 
                 print(msg)
+                self.write_meters(avg_meters, self.epoch * n_batch + i)
                 self.meters = Counter()
 
             i += 1
@@ -147,3 +134,10 @@ class MetricLogger(object):
             print()
 
         self.epoch += 1
+
+    def write_meters(self, scalars, iteration):
+        if not utils.is_main_process() or self.writer is None:
+            return
+
+        for metric, value in scalars.items():
+            self.writer.add_scalar(f'{metric}/{self.name}', value, iteration)
