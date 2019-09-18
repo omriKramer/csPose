@@ -23,7 +23,6 @@ class CocoEval:
         dx, dy, _ = decode_keypoints(dt)
 
         d = (gx - dx) ** 2 + (gy - dy) ** 2
-        print(d.dtype, var.dtype, area.dtype, self.eps.dtype, force=True)
         e = d / var / (area + self.eps) / 2
         e = e[v > 0]
         oks = torch.sum(torch.exp(-e)) / e.shape[0]
