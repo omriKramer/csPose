@@ -161,7 +161,7 @@ class Engine:
         else:
             self.model.eval()
 
-        for images, targets in evaluator.log_every(data_loader):
+        for images, targets in evaluator.iter_and_log(data_loader):
             images, targets = self.to_device(images, targets)
 
             with torch.set_grad_enabled(train):

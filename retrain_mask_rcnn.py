@@ -64,11 +64,12 @@ if __name__ == '__main__':
 
     def val_metrics(targets, outputs):
         return {
-            'OKS': coco_evaluator.batch_oks(output_to_single_kps(outputs), target_to_coco_format(targets)),
+            'OKS': coco_evaluator.batch_oks(output_to_single_kps(outputs), target_to_coco_format(targets)).to(
+                engine.device),
         }
 
 
-    train_evaluator = MetricLogger(train_metrics)
-    val_evaluator = MetricLogger(val_metrics, train=False)
+    train_evaluator = MetricLogger(train_metrics, print_freq=100)
+    val_evaluator = MetricLogger(val_metrics, print_freq=False)
 
     engine.run(coco_train, coco_val, train_evaluator, val_evaluator, loss_fn, collate_fn=coco_utils.collate_fn)

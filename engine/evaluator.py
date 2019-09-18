@@ -73,12 +73,12 @@ class SmoothedValue(object):
 
 
 class MetricLogger(object):
-    def __init__(self, metrics, train=True, delimiter="  ", epoch=0):
+    def __init__(self, metrics, print_freq, delimiter="  ", epoch=0):
         self.metrics = metrics
         self.meters = defaultdict(SmoothedValue)
         self.delimiter = delimiter
         self.epoch = epoch
-        self.train = train
+        self.print_freq = print_freq
 
     def update(self, **kwargs):
         for k, v in kwargs.items():
@@ -116,7 +116,7 @@ class MetricLogger(object):
     def add_meter(self, name, meter):
         self.meters[name] = meter
 
-    def log_every(self, iterable, print_freq=1000):
+    def iter_and_log(self, iterable):
         i = 0
         phase = 'Train' if self.train else 'Val'
         header = f'{phase} - Epoch: [{self.epoch}]'
@@ -148,7 +148,7 @@ class MetricLogger(object):
             data_time.update(time.time() - end)
             yield obj
             iter_time.update(time.time() - end)
-            if (i % print_freq == 0 and self.train) or i == len(iterable) - 1:
+            if (self.print_freq and i % self.print_freq == 0) or i == len(iterable) - 1:
                 eta_seconds = iter_time.global_avg * (len(iterable) - i)
                 eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
                 if torch.cuda.is_available():
