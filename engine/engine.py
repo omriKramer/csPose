@@ -30,6 +30,7 @@ def get_args():
                         help='images per gpu, the total batch size is $NGPU x batch_size')
     parser.add_argument('--output-dir', default='.', help='path where to save')
     parser.add_argument('--resume', default='')
+    parser.add_argument('--print-freq', default=100, type=int, help='print frequency')
 
     # distributed training parameters
     parser.add_argument('--world-size', default=1, type=int,
@@ -77,7 +78,8 @@ class Engine:
 
     def __init__(self, model, data_path='.', output_dir='.', batch_size=32, device='cpu', epochs=1,
                  resume='', optimizer=None, model_feeder=None, num_workers=0, world_size=1,
-                 dist_url='env://'):
+                 dist_url='env://', print_freq=100):
+        self.print_freq = print_freq
         self.dist_url = dist_url
         self.world_size = world_size
         self.epochs = epochs
