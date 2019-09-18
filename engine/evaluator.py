@@ -116,10 +116,14 @@ class MetricLogger(object):
     def add_meter(self, name, meter):
         self.meters[name] = meter
 
-    def iter_and_log(self, iterable):
+    def iter_and_log(self, iterable, header=None):
         i = 0
-        phase = 'Train' if self.train else 'Val'
-        header = f'{phase} - Epoch: [{self.epoch}]'
+        epoch_header = f'Epoch: [{self.epoch}]'
+        if header:
+            header = f'{header} - {epoch_header}'
+        else:
+            header = epoch_header
+
         start_time = time.time()
         end = time.time()
         iter_time = SmoothedValue(fmt='{avg:.4f}')
