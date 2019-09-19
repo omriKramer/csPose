@@ -1,12 +1,12 @@
 import torch
 import torchvision
-from torch.utils.tensorboard import SummaryWriter
 
 import coco_eval
 import coco_utils
 import engine.engine as eng
 import transform
-from engine.evaluator import MetricLogger
+from datasets import CocoSingleKPS
+from engine.eval import MetricLogger
 
 
 class WrapInList:
@@ -54,8 +54,9 @@ if __name__ == '__main__':
     train_transform = transform.Compose(
         (WrapInList(), transform.ConvertCocoPolysToMask(), transform.ToTensor(), transform.RandomHorizontalFlip(0.5)))
     val_transform = transform.Compose((WrapInList(), transform.ConvertCocoPolysToMask(), transform.ToTensor()))
-    coco_train = engine.get_dataset(train=True, transforms=train_transform)
-    coco_val = engine.get_dataset(train=False, transforms=val_transform)
+
+    coco_train = CocoSingleKPS.from_data_path(engine.data_path, train=True, transforms=train_transform)
+    coco_val = CocoSingleKPS.from_data_path(engine.data_path, train=False, transforms=val_transform)
 
     coco_evaluator = coco_eval.CocoEval(device=engine.device)
 
@@ -67,8 +68,7 @@ if __name__ == '__main__':
         }
 
 
-    train_evaluator = MetricLogger(train_metrics, print_freq=engine.print_freq, writer=SummaryWriter(engine.output_dir),
-                                   name='train')
+    train_evaluator = MetricLogger(train_metrics)
     val_evaluator = MetricLogger(val_metrics)
 
     engine.run(coco_train, coco_val, train_evaluator, val_evaluator, loss_fn, collate_fn=coco_utils.collate_fn)

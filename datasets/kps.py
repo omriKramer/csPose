@@ -1,5 +1,6 @@
 import itertools
 import math
+from pathlib import Path
 
 import numpy as np
 import torchvision
@@ -90,3 +91,11 @@ class CocoSingleKPS(torchvision.datasets.VisionDataset):
             img, target = self.transforms(img, target)
 
         return img, target
+
+    @classmethod
+    def from_data_path(cls, data_path, train=True, transform=None, target_transform=None, transforms=None):
+        data_path = Path(data_path).expanduser()
+        image_set = 'train' if train else 'val'
+        root = data_path / '{}2017'.format(image_set)
+        ann_file = data_path / 'annotations/person_keypoints_{}2017.json'.format(image_set)
+        return cls(root, ann_file, transform=transform, target_transform=target_transform, transforms=transforms)

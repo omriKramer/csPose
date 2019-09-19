@@ -1,4 +1,5 @@
 import argparse
+import datetime
 import os
 import time
 from pathlib import Path
@@ -7,29 +8,22 @@ import torch
 from torch import distributed as dist
 from torch import nn
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 
 import utils
-from datasets import CocoSingleKPS
-
-
-def get_dataset(data_path, train=True, transform=None, target_transform=None, transforms=None):
-    data_path = Path(data_path).expanduser()
-    image_set = 'train' if train else 'val'
-    root = data_path / '{}2017'.format(image_set)
-    ann_file = data_path / 'annotations/person_keypoints_{}2017.json'.format(image_set)
-    return CocoSingleKPS(root, ann_file, transform=transform, target_transform=target_transform, transforms=transforms)
+from engine import eval
 
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data-path', default='~/weizmann/coco/dev', help='dataset location')
-    parser.add_argument('-e', '--epochs', default=13, type=int, metavar='N', help='number of total epochs to run')
     parser.add_argument('-d', '--device', default='cuda', choices=['cuda', 'cpu'], help='device')
     parser.add_argument('--num-workers', default=0, type=int, metavar='N', help='number of workers to use')
+    parser.add_argument('-e', '--epochs', default=13, type=int, metavar='N', help='number of total epochs to run')
     parser.add_argument('-b', '--batch-size', default=2, type=int,
                         help='images per gpu, the total batch size is $NGPU x batch_size')
-    parser.add_argument('--output-dir', default='.', help='path where to save')
     parser.add_argument('--resume', default='')
+    parser.add_argument('--output-dir', default='.', help='path where to save')
     parser.add_argument('--print-freq', default=100, type=int, help='print frequency')
 
     # distributed training parameters
@@ -61,17 +55,34 @@ def load_from_checkpoint(checkpoint, model, map_location=None, optimizer=None):
     return start_epoch
 
 
-def write_metrics(writer, metrics, global_step):
-    for metric, value in metrics.items():
-        writer.add_scalar(metric, value, global_step)
-
-
 def default_model_feeder(model, images, _):
     return model(images)
 
 
 def feed_images_and_targets(model, images, targets):
     return model(images, targets)
+
+
+def get_train_msg(meters, iter_time, data_time, n_batch, epoch, i):
+    n_spaces = len(str(n_batch))
+    eta_seconds = iter_time.global_avg * (n_batch - i)
+    eta = datetime.timedelta(seconds=int(eta_seconds))
+    meters = meters_to_sting(meters)
+    msg = f'Train - Epoch [{epoch}]: [{i:{n_spaces}d}/{n_batch}], eta: {eta}, {meters}, time: {iter_time}, data: {data_time}'
+    if torch.cuda.is_available():
+        MB = 1024.0 * 1024.0
+        msg += f', max mem: {torch.cuda.max_memory_allocated() / MB}'
+
+    return msg
+
+
+def meters_to_sting(meters):
+    return ', '.join(f'{name}: {value:4f}' for name, value in meters.items())
+
+
+def print_end_epoch(phase, data_loader, epoch, total_time):
+    total_time_str = datetime.timedelta(seconds=int(total_time))
+    print(f'{phase} - Epoch [{epoch}]: Total time: {total_time_str} ({total_time / len(data_loader):.4f} s / it)')
 
 
 class Engine:
@@ -110,6 +121,8 @@ class Engine:
         else:
             self.model_feeder = default_model_feeder
 
+        self.writer = SummaryWriter(self.output_dir)
+
     @classmethod
     def command_line_init(cls, model, **kwargs):
         args = get_args()
@@ -133,34 +146,67 @@ class Engine:
             if self.distributed:
                 train_loader.batch_sampler.sampler.set_epoch(epoch)
 
-            self.one_epoch(train_loader, evaluator, loss_fn=loss_fn)
-            self.one_epoch(val_loader, val_evaluator)
+            self.train_one_epoch(train_loader, evaluator, epoch, loss_fn)
+            self.evaluate(val_loader, val_evaluator, epoch)
 
-            self.create_checkpoint(epoch, evaluator, val_evaluator)
+            self.create_checkpoint(epoch)
 
         total_time = time.time() - start_time
+        print('Done.')
         print(f'Total time {total_time // 60:.0f}m {total_time % 60:.0f}s')
 
-    def one_epoch(self, data_loader, evaluator, loss_fn=None):
-        train = bool(loss_fn)
-        if train:
-            self.model.train()
-        else:
-            self.model.eval()
+    def train_one_epoch(self, data_loader, evaluator, epoch, loss_fn):
+        self.model.train()
+        evaluator.reset()
 
-        for images, targets in evaluator.iter_and_log(data_loader):
+        start_time = time.time()
+        end = time.time()
+        iter_time = eval.SmoothedValue(fmt='{avg:.4f}')
+        data_time = eval.SmoothedValue(fmt='{avg:.4f}')
+        n_batch = len(data_loader)
+
+        for i, (images, targets) in enumerate(data_loader):
+            data_time.update(time.time() - end)
             images, targets = self.to_device(images, targets)
+            outputs = self.model_feeder(self.model, images, targets)
 
-            with torch.set_grad_enabled(train):
-                outputs = self.model_feeder(self.model, images, targets)
-                if train:
-                    loss = loss_fn(outputs, targets)
-                    self.optimizer.zero_grad()
-                    loss.backward()
-                    self.optimizer.step()
-                    evaluator.update(loss=loss)
+            loss = loss_fn(outputs, targets)
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
 
-                evaluator.eval(targets, outputs)
+            evaluator.eval(targets, outputs, loss=loss, reduce=True)
+
+            if i % self.print_freq == self.print_freq - 1:
+                meters = evaluator.emit()
+                print(get_train_msg(meters, iter_time, data_time, n_batch, epoch, i))
+                self.write_scalars(meters, epoch, i, n_batch, name='train')
+
+            iter_time.update(time.time() - end)
+            end = time.time()
+
+        total_time = time.time() - start_time
+        print_end_epoch('Train', data_loader, epoch, total_time)
+        print()
+
+    @torch.no_grad()
+    def evaluate(self, data_loader, evaluator, epoch):
+        self.model.eval()
+        start_time = time.time()
+
+        for images, targets in data_loader:
+            images, targets = self.to_device(images, targets)
+            outputs = self.model_feeder(self.model, images, targets)
+            evaluator.eval(targets, outputs)
+
+        total_time = time.time() - start_time
+        print_end_epoch('Val', data_loader, epoch, total_time)
+
+        evaluator.synchronize_between_processes()
+        meters = evaluator.emit()
+        self.write_scalars(meters, epoch, name='val')
+        print(meters_to_sting(meters))
+        print()
 
     def to_device(self, images, targets):
         if torch.is_tensor(images):
@@ -190,11 +236,11 @@ class Engine:
                                 collate_fn=collate_fn)
         return train_loader, val_loader
 
-    def create_checkpoint(self, epoch, train_metrics, val_metrics):
+    def create_checkpoint(self, epoch):
         if not utils.is_main_process():
             return
 
-        if isinstance(self.model, nn.DataParallel):
+        if isinstance(self.model, nn.parallel.DistributedDataParallel):
             model_state_dict = self.model.module.state_dict()
         else:
             model_state_dict = self.model.state_dict()
@@ -203,13 +249,7 @@ class Engine:
             'epoch': epoch,
             'model_state_dict': model_state_dict,
             'optimizer_state_dict': self.optimizer.state_dict(),
-            'train_metrics': train_metrics.meters,
-            'val_metrics': val_metrics.meters,
         }, self.output_dir / f'checkpoint{epoch:03}.tar')
-
-    def get_dataset(self, train=True, transform=None, target_transform=None, transforms=None):
-        return get_dataset(self.data_path, train=train, transform=transform, target_transform=target_transform,
-                           transforms=transforms)
 
     def _init_distributed_mode(self):
         if 'RANK' not in os.environ or 'WORLD_SIZE' not in os.environ:
@@ -229,3 +269,15 @@ class Engine:
         dist.barrier()
         utils.setup_for_distributed(self.rank == 0)
         return gpu
+
+    def write_scalars(self, scalars, epoch, iteration=None, epoch_size=None, name=''):
+        if iteration and epoch_size:
+            global_step = epoch * epoch_size + iteration
+        else:
+            global_step = epoch
+
+        if name:
+            scalars = {f'{tag}/{name}': value for tag, value in scalars.items()}
+
+        for tag, value in scalars.items():
+            self.writer.add_scalar(tag, value, global_step)
