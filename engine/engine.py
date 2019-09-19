@@ -23,8 +23,11 @@ def get_args():
     parser.add_argument('-b', '--batch-size', default=2, type=int,
                         help='images per gpu, the total batch size is $NGPU x batch_size')
     parser.add_argument('--resume', default='')
+
+    # output parameters
     parser.add_argument('--output-dir', default='.', help='path where to save')
     parser.add_argument('--print-freq', default=100, type=int, help='print frequency')
+    parser.add_argument('--plot-freq', type=int, help='plot frequency')
 
     # distributed training parameters
     parser.add_argument('--world-size', default=1, type=int,
@@ -89,7 +92,8 @@ class Engine:
 
     def __init__(self, model, data_path='.', output_dir='.', batch_size=32, device='cpu', epochs=1,
                  resume='', optimizer=None, model_feeder=None, num_workers=0, world_size=1,
-                 dist_url='env://', print_freq=100):
+                 dist_url='env://', print_freq=100, plot_freq=None):
+        self.plot_freq = plot_freq if utils.is_main_process() else None
         self.print_freq = print_freq
         self.dist_url = dist_url
         self.world_size = world_size
@@ -194,10 +198,14 @@ class Engine:
         self.model.eval()
         start_time = time.time()
 
-        for images, targets in data_loader:
+        for i, (images, targets) in enumerate(data_loader):
             images, targets = self.to_device(images, targets)
             outputs = self.model_feeder(self.model, images, targets)
-            evaluator.eval(targets, outputs)
+
+            batch_results = evaluator.eval(targets, outputs)
+            if self.plot_freq and i % self.plot_freq == self.plot_freq - 1:
+                title, fig = evaluator.create_plots(batch_results, images, targets, outputs)
+                self.writer.add_figure(title, fig, epoch)
 
         total_time = time.time() - start_time
         print_end_epoch('Val', data_loader, epoch, total_time)

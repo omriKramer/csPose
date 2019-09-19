@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -60,19 +61,32 @@ def collate_fn(batch):
     return tuple(zip(*batch))
 
 
-def show_image_with_kps(img, keypoints, visible=None):
+def plot_image_with_kps(img, keypoints, visible=None, ax: Optional[plt.Axes] = None):
+    if ax is None:
+        ax = plt.gca()
+
+    ax.set_axis_off()
     if isinstance(img, Image.Image):
         img = np.asarray(img)
     elif isinstance(img, torch.Tensor):
         img = img.permute(1, 2, 0).numpy()
 
-    if not isinstance(keypoints, list):
-        keypoints = list(keypoints.reshape((-1,)))
-
+    if torch.is_tensor(keypoints):
+        keypoints = keypoints.reshape((-1,)).numpy()
+    elif isinstance(keypoints, list):
+        keypoints = np.array(keypoints)
     if visible is not None:
         keypoints[2::3] = visible[2::3]
 
     plt.imshow(img)
-    plt.axis('off')
-    _coco_helper.showAnns([{'keypoints': keypoints, 'category_id': 1}])
-    plt.show()
+    if keypoints.size == 0:
+        return
+
+    x, y, v = decode_keypoints(keypoints)
+    c = (np.random.random((1, 3)) * 0.6 + 0.4).tolist()[0]
+    sks = np.array(_coco_helper.cats[1]['skeleton']) - 1
+    for sk in sks:
+        if np.all(v[sk] > 0):
+            plt.plot(x[sk], y[sk], linewidth=3, color=c)
+    ax.plot(x[v > 0], y[v > 0], 'o', markersize=8, markerfacecolor=c, markeredgecolor='k', markeredgewidth=2)
+    ax.plot(x[v > 1], y[v > 1], 'o', markersize=8, markerfacecolor=c, markeredgecolor=c, markeredgewidth=2)

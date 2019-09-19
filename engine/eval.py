@@ -74,7 +74,8 @@ class SmoothedValue(object):
 
 
 class MetricLogger:
-    def __init__(self, metrics):
+    def __init__(self, metrics, plot_fn=None):
+        self.create_plots = plot_fn
         self.metrics = metrics
         self.meters = defaultdict(lambda: SmoothedValue(window_size=None, fmt="{median:.4f}"))
 
@@ -97,6 +98,7 @@ class MetricLogger:
             size *= utils.get_world_size()
 
         self.update(n=size, **averaged_results)
+        return batch_results
 
     def emit(self):
         meters = {name: meter.avg for name, meter in self.meters.items()}

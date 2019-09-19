@@ -1,3 +1,6 @@
+import random
+
+import matplotlib.pyplot as plt
 import torch
 import torchvision
 
@@ -47,6 +50,23 @@ def loss_fn(loss_dict, _):
     return sum(loss for loss in loss_dict.values())
 
 
+def plot_kps(meters, images, targets, outputs):
+    n = 4
+    fig, axis = plt.subplots(2, n)
+    chosen = random.choices(list(zip(meters['OKS'], images, targets, outputs)), k=n)
+    for i, (oks, img, t, o) in enumerate(chosen):
+        gt = t['keypoints'][0]
+        dt = o['keypoints'][0] if o['keypoints'].nelement() > 0 else []
+        coco_utils.plot_image_with_kps(img, dt, ax=axis[0, i])
+        coco_utils.plot_image_with_kps(img, gt, ax=axis[1, i])
+        axis[0, i].set_title(f'id: {t["image_id"]}\n oks: {oks}')
+
+    axis[0, 0].set_ylabel('Detection')
+    axis[1, 0].set_ylabel('Ground Truth')
+
+    return 'predictions vs. actuals', fig
+
+
 if __name__ == '__main__':
     model = torchvision.models.detection.keypointrcnn_resnet50_fpn(pretrained=True, min_size=80, max_size=640)
     engine = eng.Engine.command_line_init(model, optimizer=torch.optim.Adam, model_feeder=eng.feed_images_and_targets)
@@ -69,6 +89,6 @@ if __name__ == '__main__':
 
 
     train_evaluator = MetricLogger(train_metrics)
-    val_evaluator = MetricLogger(val_metrics)
+    val_evaluator = MetricLogger(val_metrics, plot_fn=plot_kps)
 
     engine.run(coco_train, coco_val, train_evaluator, val_evaluator, loss_fn, collate_fn=coco_utils.collate_fn)
