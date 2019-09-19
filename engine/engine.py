@@ -74,7 +74,7 @@ def get_train_msg(meters, iter_time, data_time, n_batch, epoch, i):
     msg = f'Train - Epoch [{epoch}]: [{i:{n_spaces}d}/{n_batch}], eta: {eta}, {meters}, time: {iter_time}, data: {data_time}'
     if torch.cuda.is_available():
         MB = 1024.0 * 1024.0
-        msg += f', max mem: {torch.cuda.max_memory_allocated() / MB:.4}'
+        msg += f', max mem: {torch.cuda.max_memory_allocated() / MB:.4f}'
 
     return msg
 
@@ -210,7 +210,7 @@ class Engine:
         total_time = time.time() - start_time
         print_end_epoch('Val', data_loader, epoch, total_time)
 
-        evaluator.synchronize_between_processes()
+        evaluator.synchronize_between_processes(self.device)
         meters = evaluator.emit()
         self.write_scalars(meters, epoch, name='val')
         print(meters_to_sting(meters))
