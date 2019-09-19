@@ -74,18 +74,18 @@ def get_train_msg(meters, iter_time, data_time, n_batch, epoch, i):
     msg = f'Train - Epoch [{epoch}]: [{i:{n_spaces}d}/{n_batch}], eta: {eta}, {meters}, time: {iter_time}, data: {data_time}'
     if torch.cuda.is_available():
         MB = 1024.0 * 1024.0
-        msg += f', max mem: {torch.cuda.max_memory_allocated() / MB}'
+        msg += f', max mem: {torch.cuda.max_memory_allocated() / MB:.4}'
 
     return msg
 
 
 def meters_to_sting(meters):
-    return ', '.join(f'{name}: {value:4f}' for name, value in meters.items())
+    return ', '.join(f'{name}: {value:.4}' for name, value in meters.items())
 
 
 def print_end_epoch(phase, data_loader, epoch, total_time):
     total_time_str = datetime.timedelta(seconds=int(total_time))
-    print(f'{phase} - Epoch [{epoch}]: Total time: {total_time_str} ({total_time / len(data_loader):.4f} s / it)')
+    print(f'{phase} - Epoch [{epoch}]: Total time: {total_time_str} ({total_time / len(data_loader):.4} s / it)')
 
 
 class Engine:

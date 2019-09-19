@@ -110,4 +110,5 @@ class MetricLogger:
 
     def synchronize_between_processes(self):
         for key in sorted(self.meters.keys()):
+            print(f'rank: {utils.get_rank()}, key: {key}', force=True)
             self.meters[key].synchronize_between_processes()
