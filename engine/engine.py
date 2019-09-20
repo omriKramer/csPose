@@ -41,11 +41,12 @@ def get_args():
 
 def setup_output(output_dir, overwrite=False):
     output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=overwrite)
-    if overwrite:
-        for child in output_dir.iterdir():
-            if child.is_file():
-                child.unlink()
+    if utils.is_main_process():
+        output_dir.mkdir(parents=True, exist_ok=overwrite)
+        if overwrite:
+            for child in output_dir.iterdir():
+                if child.is_file():
+                    child.unlink()
 
     return output_dir
 
