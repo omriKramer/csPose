@@ -28,6 +28,7 @@ def get_args():
     parser.add_argument('--output-dir', default='.', help='path where to save')
     parser.add_argument('--print-freq', default=100, type=int, help='print frequency')
     parser.add_argument('--plot-freq', type=int, help='plot frequency')
+    parser.add_argument('--overwrite', action='store_true', help='delete contents of output dir before running')
 
     # distributed training parameters
     parser.add_argument('--world-size', default=1, type=int,
@@ -38,9 +39,14 @@ def get_args():
     return args
 
 
-def setup_output(output_dir):
+def setup_output(output_dir, overwrite=False):
     output_dir = Path(output_dir)
-    output_dir.mkdir(exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=overwrite)
+    if overwrite:
+        for child in output_dir.iterdir():
+            if child.is_file():
+                child.unlink()
+
     return output_dir
 
 
@@ -80,19 +86,19 @@ def get_train_msg(meters, iter_time, data_time, n_batch, epoch, i):
 
 
 def meters_to_sting(meters):
-    return ', '.join(f'{name}: {value:.4}' for name, value in meters.items())
+    return ', '.join(f'{name}: {value:.4f}' for name, value in meters.items())
 
 
 def print_end_epoch(phase, data_loader, epoch, total_time):
     total_time_str = datetime.timedelta(seconds=int(total_time))
-    print(f'{phase} - Epoch [{epoch}]: Total time: {total_time_str} ({total_time / len(data_loader):.4} s / it)')
+    print(f'{phase} - Epoch [{epoch}]: Total time: {total_time_str} ({total_time / len(data_loader):.2f} s / it)')
 
 
 class Engine:
 
     def __init__(self, model, data_path='.', output_dir='.', batch_size=32, device='cpu', epochs=1,
                  resume='', optimizer=None, model_feeder=None, num_workers=0, world_size=1,
-                 dist_url='env://', print_freq=100, plot_freq=None):
+                 dist_url='env://', print_freq=100, plot_freq=None, overwrite=False):
         self.plot_freq = plot_freq if utils.is_main_process() else None
         self.print_freq = print_freq
         self.dist_url = dist_url
@@ -100,7 +106,7 @@ class Engine:
         self.epochs = epochs
         self.data_path = data_path
         self.batch_size = batch_size
-        self.output_dir = setup_output(output_dir)
+        self.output_dir = setup_output(output_dir, overwrite=overwrite)
         self.num_workers = num_workers
         self.start_epoch = 0
         self.optimizer = None
@@ -152,7 +158,6 @@ class Engine:
 
             self.train_one_epoch(train_loader, evaluator, epoch, loss_fn)
             self.evaluate(val_loader, val_evaluator, epoch)
-
             self.create_checkpoint(epoch)
 
         total_time = time.time() - start_time
@@ -205,7 +210,8 @@ class Engine:
             batch_results = evaluator.eval(targets, outputs)
             if self.plot_freq and i % self.plot_freq == self.plot_freq - 1:
                 title, fig = evaluator.create_plots(batch_results, images, targets, outputs)
-                self.writer.add_figure(title, fig, epoch)
+                title += f'/{i}'
+                self.add_figure(title, fig, epoch)
 
         total_time = time.time() - start_time
         print_end_epoch('Val', data_loader, epoch, total_time)
@@ -279,6 +285,9 @@ class Engine:
         return gpu
 
     def write_scalars(self, scalars, epoch, iteration=None, epoch_size=None, name=''):
+        if not utils.is_main_process():
+            return
+
         if iteration and epoch_size:
             global_step = epoch * epoch_size + iteration
         else:
@@ -289,3 +298,9 @@ class Engine:
 
         for tag, value in scalars.items():
             self.writer.add_scalar(tag, value, global_step)
+
+    def add_figure(self, title, fig, global_step):
+        if not utils.is_main_process():
+            return
+
+        self.writer.add_figure(title, fig, global_step)

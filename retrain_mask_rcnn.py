@@ -1,5 +1,3 @@
-import random
-
 import matplotlib.pyplot as plt
 import torch
 import torchvision
@@ -51,15 +49,17 @@ def loss_fn(loss_dict, _):
 
 
 def plot_kps(meters, images, targets, outputs):
-    n = 4
+    n = min(4, len(images))
     fig, axis = plt.subplots(2, n)
-    chosen = random.choices(list(zip(meters['OKS'], images, targets, outputs)), k=n)
+    chosen = list(zip(meters['OKS'], images, targets, outputs))[:n]
     for i, (oks, img, t, o) in enumerate(chosen):
-        gt = t['keypoints'][0]
         dt = o['keypoints'][0] if o['keypoints'].nelement() > 0 else []
+        gt = t['keypoints'][0]
+
         coco_utils.plot_image_with_kps(img, dt, ax=axis[0, i])
         coco_utils.plot_image_with_kps(img, gt, ax=axis[1, i])
-        axis[0, i].set_title(f'id: {t["image_id"]}\n oks: {oks}')
+
+        axis[0, i].set_title(f'id: {t["image_id"].item()}\n oks: {oks:.2f}')
 
     axis[0, 0].set_ylabel('Detection')
     axis[1, 0].set_ylabel('Ground Truth')

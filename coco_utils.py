@@ -65,7 +65,7 @@ def plot_image_with_kps(img, keypoints, visible=None, ax: Optional[plt.Axes] = N
     if ax is None:
         ax = plt.gca()
 
-    ax.set_axis_off()
+    ax.tick_params(axis=u'both', which=u'both', length=0)
     if isinstance(img, Image.Image):
         img = np.asarray(img)
     elif isinstance(img, torch.Tensor):
@@ -78,7 +78,7 @@ def plot_image_with_kps(img, keypoints, visible=None, ax: Optional[plt.Axes] = N
     if visible is not None:
         keypoints[2::3] = visible[2::3]
 
-    plt.imshow(img)
+    ax.imshow(img)
     if keypoints.size == 0:
         return
 
@@ -87,6 +87,6 @@ def plot_image_with_kps(img, keypoints, visible=None, ax: Optional[plt.Axes] = N
     sks = np.array(_coco_helper.cats[1]['skeleton']) - 1
     for sk in sks:
         if np.all(v[sk] > 0):
-            plt.plot(x[sk], y[sk], linewidth=3, color=c)
+            ax.plot(x[sk], y[sk], linewidth=3, color=c)
     ax.plot(x[v > 0], y[v > 0], 'o', markersize=8, markerfacecolor=c, markeredgecolor='k', markeredgewidth=2)
     ax.plot(x[v > 1], y[v > 1], 'o', markersize=8, markerfacecolor=c, markeredgecolor=c, markeredgewidth=2)
