@@ -72,7 +72,7 @@ def plot_image_with_kps(img, keypoints, visible=None, ax: Optional[plt.Axes] = N
         img = img.permute(1, 2, 0).cpu().numpy()
 
     if torch.is_tensor(keypoints):
-        keypoints = keypoints.reshape((-1,)).numpy()
+        keypoints = keypoints.reshape((-1,)).cpu().numpy()
     elif isinstance(keypoints, list):
         keypoints = np.array(keypoints)
     if visible is not None:
