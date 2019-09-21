@@ -4,6 +4,7 @@ import os
 import time
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import torch
 from torch import distributed as dist
 from torch import nn
@@ -141,6 +142,12 @@ class Engine:
         return engine
 
     def run(self, train_ds, val_ds, evaluator, val_evaluator, loss_fn, collate_fn=None):
+        print('writing debug image')
+        fig = plt.figure()
+        ax = fig.add_subplot()
+        ax.plot([1, 5])
+        self.add_figure('debugging', fig, 0)
+
         print('Dataset Info')
         print('-' * 10)
         print(f'Train: {train_ds}')
@@ -302,6 +309,7 @@ class Engine:
             self.writer.add_scalar(tag, value, global_step)
 
     def add_figure(self, title, fig, global_step):
+        print(f'is main: {utils.is_main_process()}, rank: {self.rank} - {utils.get_rank()}')
         if utils.is_main_process():
             print(f'adding figure {title} on step {global_step}')
             self.writer.add_figure(title, fig, global_step)
