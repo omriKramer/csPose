@@ -77,7 +77,7 @@ def get_train_msg(meters, iter_time, data_time, n_batch, epoch, i):
     n_spaces = len(str(n_batch))
     eta_seconds = iter_time.global_avg * (n_batch - i)
     eta = datetime.timedelta(seconds=int(eta_seconds))
-    meters = meters_to_sting(meters)
+    meters = meters_to_string(meters)
     msg = f'Train - Epoch [{epoch}]: [{i:{n_spaces}d}/{n_batch}], eta: {eta}, {meters}, time: {iter_time}, data: {data_time}'
     if torch.cuda.is_available():
         MB = 1024.0 * 1024.0
@@ -86,7 +86,7 @@ def get_train_msg(meters, iter_time, data_time, n_batch, epoch, i):
     return msg
 
 
-def meters_to_sting(meters):
+def meters_to_string(meters):
     return ', '.join(f'{name}: {value:.4f}' for name, value in meters.items())
 
 
@@ -220,7 +220,7 @@ class Engine:
         evaluator.synchronize_between_processes(self.device)
         meters = evaluator.emit()
         self.write_scalars(meters, epoch, name='val')
-        print(meters_to_sting(meters))
+        print(meters_to_string(meters))
         print()
 
     def to_device(self, images, targets):
@@ -301,7 +301,5 @@ class Engine:
             self.writer.add_scalar(tag, value, global_step)
 
     def add_figure(self, title, fig, global_step):
-        if not utils.is_main_process():
-            return
-
-        self.writer.add_figure(title, fig, global_step)
+        if utils.is_main_process():
+            self.writer.add_figure(title, fig, global_step)
