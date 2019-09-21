@@ -297,9 +297,11 @@ class Engine:
         if name:
             scalars = {f'{tag}/{name}': value for tag, value in scalars.items()}
 
+        print(f'adding scalars on epoch {epoch}')
         for tag, value in scalars.items():
             self.writer.add_scalar(tag, value, global_step)
 
     def add_figure(self, title, fig, global_step):
         if utils.is_main_process():
+            print(f'adding figure {title} on step {global_step}')
             self.writer.add_figure(title, fig, global_step)
