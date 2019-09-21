@@ -69,7 +69,7 @@ def plot_image_with_kps(img, keypoints, visible=None, ax: Optional[plt.Axes] = N
     if isinstance(img, Image.Image):
         img = np.asarray(img)
     elif isinstance(img, torch.Tensor):
-        img = img.permute(1, 2, 0).numpy()
+        img = img.permute(1, 2, 0).cpu().numpy()
 
     if torch.is_tensor(keypoints):
         keypoints = keypoints.reshape((-1,)).numpy()

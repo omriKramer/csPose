@@ -302,5 +302,4 @@ class Engine:
 
     def add_figure(self, title, fig, global_step):
         if utils.is_main_process():
-            print(f'adding figure {title} on step {global_step}')
             self.writer.add_figure(title, fig, global_step)
