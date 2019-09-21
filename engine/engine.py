@@ -107,7 +107,6 @@ class Engine:
         self.epochs = epochs
         self.data_path = data_path
         self.batch_size = batch_size
-        self.output_dir = setup_output(output_dir, overwrite=overwrite)
         self.num_workers = num_workers
         self.start_epoch = 0
         self.optimizer = None
@@ -132,6 +131,7 @@ class Engine:
         else:
             self.model_feeder = default_model_feeder
 
+        self.output_dir = setup_output(output_dir, overwrite=overwrite)
         self.writer = SummaryWriter(self.output_dir)
 
     @classmethod
