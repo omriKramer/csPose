@@ -213,6 +213,9 @@ class Engine:
                 title, fig = evaluator.create_plots(batch_results, images, targets, outputs)
                 title += f'/{i}'
                 self.add_figure(title, fig, epoch)
+                print(f'plotting - epoch {epoch}, iteration {i} - {self.print_freq}')
+            else:
+                print(f'Not plotting - epoch {epoch}, iteration {i} - {self.print_freq}')
 
         total_time = time.time() - start_time
         print_end_epoch('Val', data_loader, epoch, total_time)
