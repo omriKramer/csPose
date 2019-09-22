@@ -266,6 +266,7 @@ class ResNet(nn.Module):
         bu = []
         td = []
         for cmd in commands:
+            print(f'cmd {cmd}')
             out_bu = x
             for l in self._iter_inner():
                 out_bu = l(out_bu, 'BU')
