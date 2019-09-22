@@ -119,7 +119,6 @@ class Engine:
         if self.distributed:
             self.model = nn.parallel.DistributedDataParallel(self.model, device_ids=[self.device])
 
-        print(torch.cuda.max_memory_allocated())
         params = [p for p in model.parameters() if p.requires_grad]
         if optimizer:
             self.optimizer = optimizer(params)
