@@ -87,7 +87,7 @@ if __name__ == '__main__':
 
     def metrics(targets, outputs):
         pred_kps = heatmap_to_pred(outputs['td'])
-        return {'OKS': coco_evaluator.batch_oks(pred_kps, targets)}
+        return {'OKS': coco_evaluator.batch_oks(pred_kps, targets).to(engine.device)}
 
 
     train_evaluator = MetricLogger(metrics)

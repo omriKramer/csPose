@@ -32,5 +32,5 @@ class CocoEval:
 
     def batch_oks(self, outputs, targets):
         oks = [self.compute_oks(gt, dt, area) for gt, dt, area in
-               zip(targets['keypoints'].to(cpu_device), outputs.to(cpu_device), targets['area'].to(cpu_device))]
+               zip(targets['keypoints'], outputs, targets['area'])]
         return torch.tensor(oks, dtype=torch.float)
