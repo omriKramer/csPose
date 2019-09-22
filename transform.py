@@ -12,8 +12,8 @@ def resize_keypoints(keypoints, ratios):
     ratio_h, ratio_w = ratios
     new_keypoints = np.array(keypoints, dtype=np.float32)
     x, y, v = decode_keypoints(new_keypoints)
-    x *= ratio_h
-    y *= ratio_w
+    x *= ratio_w
+    y *= ratio_h
     if x.max() >= 256 or y.max() >= 256:
         print(x, force=True)
         print(y, force=True)
