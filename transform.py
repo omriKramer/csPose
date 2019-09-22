@@ -8,17 +8,24 @@ from torchvision import transforms as T
 from coco_utils import decode_keypoints
 
 
-def resize_keypoints(keypoints, ratios):
+def resize_keypoints(keypoints, ratios, size):
     ratio_h, ratio_w = ratios
     new_keypoints = np.array(keypoints, dtype=np.float32)
     x, y, v = decode_keypoints(new_keypoints)
     x *= ratio_w
     y *= ratio_h
-    if x.max() >= 256 or y.max() >= 256:
+    if x.max() >= 256:
         print(x, force=True)
+        print(ratios, force=True)
+        print(keypoints, force=True)
+        print(size, force=True)
+        assert False
+    if y.max() >= 256:
         print(y, force=True)
         print(ratios, force=True)
         print(keypoints, force=True)
+        print(size, force=True)
+        assert False
     return new_keypoints
 
 
@@ -34,7 +41,7 @@ def resize_boxes(box, ratios):
 
 def resize(img, target, new_size):
     ratios = tuple(float(s) / float(s_orig) for s, s_orig in zip(new_size, img.size))
-    target['keypoints'] = resize_keypoints(target['keypoints'], ratios)
+    target['keypoints'] = resize_keypoints(target['keypoints'], ratios, img.size)
     target['bbox'] = resize_boxes(target['bbox'], ratios)
     target['area'] *= ratios[0] * ratios[1]
     new_img = img.resize(new_size)
