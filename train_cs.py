@@ -47,11 +47,11 @@ def loss(outputs, targets):
 
     batched = batched.reshape((batched.shape[0], -1))
     t = t_batched[:, 1] * w + t_batched[:, 0]
-    t = t.long()
+    t = t.round().long()
     c = batched.shape[1]
     if t.min() < 0 or t.max() > c - 1:
         print(t, force=True)
-        print(w, forc=True)
+        print(w, force=True)
         print(t_batched, force=True)
         assert False
     return cross_entropy(batched, t)
