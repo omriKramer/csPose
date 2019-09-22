@@ -73,6 +73,9 @@ class SmoothedValue(object):
             value=self.value)
 
 
+cpu_device = torch.device('cpu')
+
+
 class MetricLogger:
     def __init__(self, metrics, plot_fn=None):
         self.create_plots = plot_fn
@@ -86,11 +89,12 @@ class MetricLogger:
             assert isinstance(v, (float, int))
             self.meters[k].update(v, n=n)
 
+    @torch.no_grad()
     def eval(self, targets, outputs, loss=None, reduce=False):
         batch_results = self.metrics(targets, outputs)
         averaged_results = {name: values.mean() for name, values in batch_results.items()}
         if loss:
-            averaged_results['loss'] = loss.item()
+            averaged_results['loss'] = loss.to(cpu_device)
 
         size = len(targets)
         if reduce:
