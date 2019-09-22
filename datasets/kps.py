@@ -88,7 +88,7 @@ class CocoSingleKPS(torchvision.datasets.VisionDataset):
             'segmentation': fix_segmentation(annotation['segmentation'], frame)
         }
         x, y, v = decode_keypoints(target['keypoints'])
-        w, h = img.size()
+        w, h = img.size
         if x.max() >= w:
             print(annotation['keypoints'])
             print(x)
