@@ -15,12 +15,14 @@ def resize_keypoints(keypoints, ratios, size):
     x *= ratio_w
     y *= ratio_h
     if x.max() >= 256:
+        print('X', force=True)
         print(x, force=True)
         print(ratios, force=True)
         print(keypoints, force=True)
         print(size, force=True)
         assert False
     if y.max() >= 256:
+        print('y', forc=True)
         print(y, force=True)
         print(ratios, force=True)
         print(keypoints, force=True)
