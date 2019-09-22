@@ -37,6 +37,8 @@ def loss(outputs, targets):
         x, y, v = coco_utils.decode_keypoints(kps)
         x = x[v > 0]
         y = y[v > 0]
+        assert x.max() < 256
+        assert y.max() < 256
         t_batched.append(torch.stack((x, y), dim=1))
         batched.append(td[v > 0])
 
