@@ -22,7 +22,7 @@ def resize_keypoints(keypoints, ratios, size):
         print(size, force=True)
         assert False
     if y.max() >= 256:
-        print('y', forc=True)
+        print('y', force=True)
         print(y, force=True)
         print(ratios, force=True)
         print(keypoints, force=True)
@@ -42,11 +42,12 @@ def resize_boxes(box, ratios):
 
 
 def resize(img, target, new_size):
-    ratios = tuple(float(s) / float(s_orig) for s, s_orig in zip(new_size, img.size))
-    target['keypoints'] = resize_keypoints(target['keypoints'], ratios, img.size)
+    w, h = img.size
+    ratios = tuple(float(s) / float(s_orig) for s, s_orig in zip(new_size, (h, w)))
+    target['keypoints'] = resize_keypoints(target['keypoints'], ratios, (h, w))
     target['bbox'] = resize_boxes(target['bbox'], ratios)
     target['area'] *= ratios[0] * ratios[1]
-    new_img = img.resize(new_size)
+    new_img = img.resize(new_size[::-1])
     return new_img, target
 
 
