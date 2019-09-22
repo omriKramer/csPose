@@ -9,7 +9,7 @@ from coco_utils import decode_keypoints, Coco
 
 
 def fix_kps(kps, frame):
-    x, y, v = decode_keypoints(kps)
+    x, y, v = decode_keypoints(kps.copy())
     x[v > 0] -= frame[0]
     y[v > 0] -= frame[1]
     return kps
@@ -27,8 +27,8 @@ def make_frame(bbox, segmentation, kps):
     left = math.floor(min(bbox[0], *seg_x, *kps_x))
     upper = math.floor(min(bbox[1], *seg_y, *kps_y))
 
-    right = math.ceil(max(bbox[0] + bbox[2], *seg_x, *kps_x))
-    lower = math.ceil(max(bbox[1] + bbox[3], *seg_y, *kps_y))
+    right = math.ceil(max(bbox[0] + bbox[2] - 1, *seg_x, *kps_x))
+    lower = math.ceil(max(bbox[1] + bbox[3] - 1, *seg_y, *kps_y))
 
     return left, upper, right, lower
 
@@ -72,6 +72,7 @@ class CocoSingleKPS(torchvision.datasets.VisionDataset):
         kps = np.array(annotation['keypoints'])
         frame = make_frame(annotation['bbox'], annotation['segmentation'], kps)
 
+        original_size = img.size
         img = self.coco.get_img(annotation['image_id'])
         img = img.crop(frame)
 
@@ -86,6 +87,20 @@ class CocoSingleKPS(torchvision.datasets.VisionDataset):
             'iscrowd': annotation['iscrowd'],
             'segmentation': fix_segmentation(annotation['segmentation'], frame)
         }
+        x, y, v = decode_keypoints(target['keypoints'])
+        w, h = img.size()
+        if x.max() >= w:
+            print(annotation['keypoints'])
+            print(x)
+            print(frame)
+            print(original_size)
+            assert False
+        if y.max() >= h:
+            print(annotation['keypoints'])
+            print(y)
+            print(frame)
+            print(original_size)
+            assert False
 
         if self.transforms is not None:
             img, target = self.transforms(img, target)
