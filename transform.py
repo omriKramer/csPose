@@ -14,7 +14,7 @@ def resize_keypoints(keypoints, ratios, size, id):
     x, y, v = decode_keypoints(new_keypoints)
     x *= ratio_w
     y *= ratio_h
-    if x.max() >= 256:
+    if x.max() >= 256 or x.min() < 0:
         print('X', force=True)
         print(x, force=True)
         print(ratios, force=True)
@@ -22,7 +22,7 @@ def resize_keypoints(keypoints, ratios, size, id):
         print(size, force=True)
         print(id, force=True)
         assert False
-    if y.max() >= 256:
+    if y.max() >= 256 or y.min() < 0:
         print('y', force=True)
         print(y, force=True)
         print(ratios, force=True)

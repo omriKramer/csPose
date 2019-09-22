@@ -37,8 +37,8 @@ def loss(outputs, targets):
         x, y, v = coco_utils.decode_keypoints(kps)
         x = x[v > 0]
         y = y[v > 0]
-        assert x.max() < 256
-        assert y.max() < 256
+        assert x.max() < 256 and x.min() >= 0
+        assert y.max() < 256 and y.min() >= 0
         t_batched.append(torch.stack((x, y), dim=1))
         batched.append(td[v > 0])
 
@@ -46,7 +46,7 @@ def loss(outputs, targets):
     t_batched = torch.cat(t_batched)
 
     batched = batched.reshape((batched.shape[0], -1))
-    t_batched = t_batched[:, 0] * w + t_batched[:, 1]
+    t_batched = t_batched[:, 1] * w + t_batched[:, 0]
     t_batched = t_batched.long()
     c = batched.shape[1]
     if t_batched.min() < 0 or t_batched.max() > c - 1:
@@ -89,7 +89,6 @@ if __name__ == '__main__':
     coco_val = CocoSingleKPS.from_data_path(engine.data_path, train=False, transforms=val_transform)
 
     coco_evaluator = coco_eval.CocoEval()
-
 
     def metrics(targets, outputs):
         pred_kps = heatmap_to_pred(outputs['td'])
