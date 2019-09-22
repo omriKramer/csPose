@@ -261,8 +261,7 @@ class ResNet(nn.Module):
 
         return nn.ModuleList(layers)
 
-    def forward(self, x, commands):
-        bu = []
+    def forward(self, x, commands, outputs):
         td = []
         for cmd in commands:
             print(f'cmd {cmd}')
@@ -275,8 +274,7 @@ class ResNet(nn.Module):
             out_bu = torch.flatten(out_bu, 1)
 
             bu_features = out_bu
-            out_bu = self.fc(out_bu)
-            bu.append(out_bu)
+            # out_bu = self.fc(out_bu)
 
             out_td = self.embedding(cmd)
             out_td = out_td.expand(bu_features.shape[0], -1)
@@ -291,7 +289,6 @@ class ResNet(nn.Module):
 
         self.clear()
         results = {
-            'bu': torch.stack(bu, dim=1),
             'td': torch.stack(td, dim=1)
         }
         return results
