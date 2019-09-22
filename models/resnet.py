@@ -262,7 +262,6 @@ class ResNet(nn.Module):
         return nn.ModuleList(layers)
 
     def forward(self, x, commands):
-        self.clear()
         bu = []
         td = []
         for cmd in commands:
@@ -290,6 +289,7 @@ class ResNet(nn.Module):
                 out_td = l(out_td, 'TD')
             td.append(out_td.squeeze())
 
+        self.clear()
         results = {
             'bu': torch.stack(bu, dim=1),
             'td': torch.stack(td, dim=1)

@@ -82,7 +82,7 @@ if __name__ == '__main__':
     coco_train = CocoSingleKPS.from_data_path(engine.data_path, train=True, transforms=train_transform)
     coco_val = CocoSingleKPS.from_data_path(engine.data_path, train=False, transforms=val_transform)
 
-    coco_evaluator = coco_eval.CocoEval(device=engine.device)
+    coco_evaluator = coco_eval.CocoEval()
 
 
     def metrics(targets, outputs):
