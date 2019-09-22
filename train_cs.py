@@ -39,14 +39,17 @@ def loss(outputs, targets):
         y = y[v > 0]
         t_batched.append(torch.stack((x, y), dim=1))
         batched.append(td[v > 0])
-        td[v <= 0].detach()
 
     batched = torch.cat(batched)
     t_batched = torch.cat(t_batched)
 
     batched = batched.reshape((batched.shape[0], -1))
     t_batched = t_batched[:, 0] * w + t_batched[:, 1]
-    return cross_entropy(batched, t_batched.long())
+    t_batched = t_batched.long()
+    print(batched.min(), batched.max())
+    print(t_batched.min(), t_batched.max())
+    print(batched.shape)
+    return cross_entropy(batched, t_batched)
 
 
 def heatmap_to_pred(heatmap):
