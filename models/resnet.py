@@ -261,7 +261,7 @@ class ResNet(nn.Module):
 
         return nn.ModuleList(layers)
 
-    def forward(self, x, commands, outputs):
+    def forward(self, x, commands):
         td = []
         for cmd in commands:
             print(f'cmd {cmd}')
