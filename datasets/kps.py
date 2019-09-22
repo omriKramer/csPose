@@ -90,19 +90,19 @@ class CocoSingleKPS(torchvision.datasets.VisionDataset):
         x, y, v = decode_keypoints(target['keypoints'])
         w, h = img.size
         if max(x) >= w:
-            print(target['target_id'])
+            print(target['image_id'])
             print(annotation['keypoints'])
             print(target['keypoints'])
-            print(x.max())
+            print(max(x))
             print(frame)
             print(original_size)
             print(img.size)
             assert False
         if max(y) >= h:
-            print(target['target_id'])
+            print(target['image_id'])
             print(annotation['keypoints'])
             print(target['keypoints'])
-            print(y.max())
+            print(max(y))
             print(frame)
             print(original_size)
             print(img.size)
