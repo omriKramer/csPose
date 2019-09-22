@@ -72,8 +72,8 @@ class CocoSingleKPS(torchvision.datasets.VisionDataset):
         kps = np.array(annotation['keypoints'])
         frame = make_frame(annotation['bbox'], annotation['segmentation'], kps)
 
-        original_size = img.size
         img = self.coco.get_img(annotation['image_id'])
+        original_size = img.size
         img = img.crop(frame)
 
         target = {
