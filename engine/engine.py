@@ -276,6 +276,7 @@ class Engine:
         self.rank = int(os.environ["RANK"])
         self.world_size = int(os.environ['WORLD_SIZE'])
         gpu = int(os.environ['LOCAL_RANK'])
+        torch.cuda.set_device(gpu)
 
         self.distributed = True
         self.dist_backend = 'nccl'

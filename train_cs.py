@@ -39,6 +39,7 @@ def loss(outputs, targets):
         y = y[v > 0]
         t_batched.append(torch.stack((x, y), dim=1))
         batched.append(td[v > 0])
+        td[v <= 0].detach()
 
     batched = torch.cat(batched)
     t_batched = torch.cat(t_batched)
