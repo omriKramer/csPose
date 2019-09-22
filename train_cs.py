@@ -46,12 +46,15 @@ def loss(outputs, targets):
     t_batched = torch.cat(t_batched)
 
     batched = batched.reshape((batched.shape[0], -1))
-    t_batched = t_batched[:, 1] * w + t_batched[:, 0]
-    t_batched = t_batched.long()
+    t = t_batched[:, 1] * w + t_batched[:, 0]
+    t = t.long()
     c = batched.shape[1]
-    if t_batched.min() < 0 or t_batched.max() > c - 1:
+    if t.min() < 0 or t.max() > c - 1:
+        print(t, force=True)
+        print(w, forc=True)
         print(t_batched, force=True)
-    return cross_entropy(batched, t_batched)
+        assert False
+    return cross_entropy(batched, t)
 
 
 def heatmap_to_pred(heatmap):
