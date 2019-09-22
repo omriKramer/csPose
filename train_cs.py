@@ -79,7 +79,7 @@ def plot_kps(batch_results, images, targets, outputs):
 
 if __name__ == '__main__':
     num_keypoints = len(coco_utils.KEYPOINTS)
-    resnet34 = resnet.resnet34(layers_out=1, num_instructions=num_keypoints, )
+    resnet34 = resnet.resnet18(layers_out=1, num_instructions=num_keypoints, )
     engine = eng.Engine.command_line_init(resnet34, optimizer=torch.optim.Adam, model_feeder=model_feeder)
 
     new_size = 256, 256
@@ -94,7 +94,7 @@ if __name__ == '__main__':
     coco_evaluator = coco_eval.CocoEval()
 
     def metrics(targets, outputs):
-        pred_kps = heatmap_to_pred(outputs['td'])
+        pred_kps = heatmap_to_pred(outputs['td'].detach())
         return {'OKS': coco_evaluator.batch_oks(pred_kps, targets).to(engine.device)}
 
 
