@@ -90,7 +90,7 @@ class MetricLogger:
         batch_results = self.metrics(targets, outputs)
         averaged_results = {name: values.mean() for name, values in batch_results.items()}
         if loss:
-            averaged_results['loss'] = loss
+            averaged_results['loss'] = loss.item()
 
         size = len(targets)
         if reduce:
