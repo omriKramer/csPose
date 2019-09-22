@@ -46,9 +46,8 @@ def loss(outputs, targets):
     batched = batched.reshape((batched.shape[0], -1))
     t_batched = t_batched[:, 0] * w + t_batched[:, 1]
     t_batched = t_batched.long()
-    print(batched.min(), batched.max())
-    print(t_batched.min(), t_batched.max())
-    print(batched.shape)
+    c = batched.shape[1]
+    print(t_batched.min() >= 0, t_batched.max() <= c - 1)
     return cross_entropy(batched, t_batched)
 
 
