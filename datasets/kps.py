@@ -9,7 +9,8 @@ from coco_utils import decode_keypoints, Coco
 
 
 def fix_kps(kps, frame):
-    x, y, v = decode_keypoints(kps.copy())
+    kps = kps.copy()
+    x, y, v = decode_keypoints(kps)
     x[v > 0] -= frame[0]
     y[v > 0] -= frame[1]
     return kps
@@ -30,7 +31,7 @@ def make_frame(bbox, segmentation, kps):
     right = math.ceil(max(bbox[0] + bbox[2] - 1, *seg_x, *kps_x))
     lower = math.ceil(max(bbox[1] + bbox[3] - 1, *seg_y, *kps_y))
 
-    return left, upper, right, lower
+    return left, upper, right + 1, lower + 1
 
 
 def fix_bbox(bbox, frame):
@@ -73,7 +74,6 @@ class CocoSingleKPS(torchvision.datasets.VisionDataset):
         frame = make_frame(annotation['bbox'], annotation['segmentation'], kps)
 
         img = self.coco.get_img(annotation['image_id'])
-        original_size = img.size
         img = img.crop(frame)
 
         target = {
@@ -87,26 +87,6 @@ class CocoSingleKPS(torchvision.datasets.VisionDataset):
             'iscrowd': annotation['iscrowd'],
             'segmentation': fix_segmentation(annotation['segmentation'], frame)
         }
-        x, y, v = decode_keypoints(target['keypoints'])
-        w, h = img.size
-        if max(x) >= w:
-            print(target['image_id'])
-            print(annotation['keypoints'])
-            print(target['keypoints'])
-            print(max(x))
-            print(frame)
-            print(original_size)
-            print(img.size)
-            assert False
-        if max(y) >= h:
-            print(target['image_id'])
-            print(annotation['keypoints'])
-            print(target['keypoints'])
-            print(max(y))
-            print(frame)
-            print(original_size)
-            print(img.size)
-            assert False
 
         if self.transforms is not None:
             img, target = self.transforms(img, target)
