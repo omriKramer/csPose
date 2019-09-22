@@ -1,10 +1,10 @@
 from pathlib import Path
 from typing import Optional
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from PIL import Image
+from matplotlib import pyplot as plt
 from pycocotools.coco import COCO
 
 KEYPOINTS = ['nose', 'left_eye', 'right_eye', 'left_ear', 'right_ear',
@@ -90,3 +90,17 @@ def plot_image_with_kps(img, keypoints, visible=None, ax: Optional[plt.Axes] = N
             ax.plot(x[sk], y[sk], linewidth=3, color=c)
     ax.plot(x[v > 0], y[v > 0], 'o', markersize=8, markerfacecolor=c, markeredgecolor='k', markeredgewidth=2)
     ax.plot(x[v > 1], y[v > 1], 'o', markersize=8, markerfacecolor=c, markeredgecolor=c, markeredgewidth=2)
+
+
+def plot_kps_comparison(oks, images, dt, gt):
+    fig, axis = plt.subplots(2, len(images))
+    for i, (value, img, t, o) in enumerate(zip(oks, images, dt, gt)):
+        plot_image_with_kps(img, dt, ax=axis[0, i])
+        plot_image_with_kps(img, gt, ax=axis[1, i])
+
+        axis[0, i].set_title(f'oks: {value:.2f}')
+
+    axis[0, 0].set_ylabel('Detection')
+    axis[1, 0].set_ylabel('Ground Truth')
+
+    return 'predictions vs. actuals', fig

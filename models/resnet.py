@@ -39,6 +39,7 @@ class CSConv(CSBlock):
         padding = kernel_size // 2
         self.bu_conv = nn.Conv2d(in_planes, bu_planes, kernel_size=kernel_size, stride=stride, padding=padding,
                                  bias=bias)
+        self.bu_bn = nn.BatchNorm2d(bu_planes)
         self.bu_multp = conv1x1(bu_planes, bu_planes)
         self.bu_side_bn = nn.BatchNorm2d(bu_planes)
 
@@ -63,7 +64,7 @@ class CSConv(CSBlock):
         x = self.bu_bn(x)
         x = self.relu(x)
 
-        if self.td_in:
+        if self.td_in is not None:
             x = self.bu_multp(self.td_in) + x
             x = self.bu_side_bn(x)
             x = self.relu(x)
@@ -152,7 +153,7 @@ class BasicBlock(CSBlock):
         out = self.relu(out)
 
         if self.td_in1 is not None:
-            out = self.self.bu_multp2(self.td_in1) + out
+            out = self.bu_multp2(self.td_in1) + out
             out = self.bu_side_bn2(out)
             out = self.relu(out)
 
@@ -178,7 +179,7 @@ class BasicBlock(CSBlock):
         self.td_in2 = out
 
         if self.stride == 2:
-            out = F.interpolate(out, scale_factor=2, mode='bilinear')
+            out = F.interpolate(out, scale_factor=2, mode='bilinear', align_corners=False)
 
         out = self.td_conv2(out)
         out = self.td_bn2(out)
@@ -262,29 +263,36 @@ class ResNet(nn.Module):
 
     def forward(self, x, commands):
         self.clear()
-        results = {'bu': [], 'td': []}
+        bu = []
+        td = []
         for cmd in commands:
+            out_bu = x
             for l in self._iter_inner():
-                x = l(x, 'BU')
+                out_bu = l(out_bu, 'BU')
 
-            pre_pooling_size = x.shape
-            x = self.avgpool(x)
-            x = torch.flatten(x, 1)
+            pre_pooling_size = out_bu.shape
+            out_bu = self.avgpool(out_bu)
+            out_bu = torch.flatten(out_bu, 1)
 
-            bu_features = x
-            x = self.fc(x)
-            results['bu'].append(x)
+            bu_features = out_bu
+            out_bu = self.fc(out_bu)
+            bu.append(out_bu)
 
-            y = self.embedding(cmd)
-            y = torch.cat((y, bu_features), dim=1)
-            y = self.td_fc(y)
-            y = self.relu(y)
+            out_td = self.embedding(cmd)
+            out_td = out_td.expand(bu_features.shape[0], -1)
+            out_td = torch.cat((out_td, bu_features), dim=1)
+            out_td = self.td_fc(out_td)
+            out_td = self.relu(out_td)
 
-            y = y[:, :, None, None].expand(pre_pooling_size)
+            out_td = out_td[:, :, None, None].expand(pre_pooling_size)
             for l in reversed(list(self._iter_inner())):
-                y = l(y, 'TD')
-            results['td'].append(y)
+                out_td = l(out_td, 'TD')
+            td.append(out_td.squeeze())
 
+        results = {
+            'bu': torch.stack(bu, dim=1),
+            'td': torch.stack(td, dim=1)
+        }
         return results
 
     def _iter_inner(self):

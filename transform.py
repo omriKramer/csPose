@@ -57,8 +57,7 @@ class ToTensor:
     def __call__(self, img, target):
         img = self.to_tensor(img)
         if self.keys:
-            for key in self.keys:
-                target[key] = torch.tensor(target[key])
+            target = {key: torch.tensor((target[key])) for key in self.keys}
 
         return img, target
 
@@ -84,9 +83,10 @@ class RandomHorizontalFlip(object):
         if random.random() < self.prob:
             height, width = image.shape[-2:]
             image = image.flip(-1)
-            bbox = target["boxes"]
-            bbox[:, [0, 2]] = width - bbox[:, [2, 0]]
-            target["boxes"] = bbox
+            if "boxes" in target:
+                bbox = target["boxes"]
+                bbox[:, [0, 2]] = width - bbox[:, [2, 0]]
+                target["boxes"] = bbox
             if "masks" in target:
                 target["masks"] = target["masks"].flip(-1)
             if "keypoints" in target:

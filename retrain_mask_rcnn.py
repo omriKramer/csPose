@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import torch
 import torchvision
 
@@ -6,6 +5,7 @@ import coco_eval
 import coco_utils
 import engine.engine as eng
 import transform
+from coco_utils import plot_kps_comparison
 from datasets import CocoSingleKPS
 from engine.eval import MetricLogger
 
@@ -50,21 +50,10 @@ def loss_fn(loss_dict, _):
 
 def plot_kps(meters, images, targets, outputs):
     n = min(4, len(images))
-    fig, axis = plt.subplots(2, n)
-    chosen = list(zip(meters['OKS'], images, targets, outputs))[:n]
-    for i, (oks, img, t, o) in enumerate(chosen):
-        dt = o['keypoints'][0] if o['keypoints'].nelement() > 0 else []
-        gt = t['keypoints'][0]
-
-        coco_utils.plot_image_with_kps(img, dt, ax=axis[0, i])
-        coco_utils.plot_image_with_kps(img, gt, ax=axis[1, i])
-
-        axis[0, i].set_title(f'id: {t["image_id"].item()}\n oks: {oks:.2f}')
-
-    axis[0, 0].set_ylabel('Detection')
-    axis[1, 0].set_ylabel('Ground Truth')
-
-    return 'predictions vs. actuals', fig
+    images = images[:n]
+    gt = [t['keypoints'][0] for t in targets[:n]]
+    dt = [o['keypoints'][0] if o['keypoints'].nelement() > 0 else [] for o in outputs[:n]]
+    return plot_kps_comparison(meters['oks'], images, dt, gt)
 
 
 if __name__ == '__main__':
