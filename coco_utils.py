@@ -80,7 +80,7 @@ def plot_image_with_kps(img, keypoints, visible=None, ax: Optional[plt.Axes] = N
     ax.tick_params(axis=u'both', which=u'both', bottom=False, left=False)
     c, h, w = img.shape
     ax.set_xlim(0, w)
-    ax.sey_ylim(0, h)
+    ax.set_ylim(0, h)
 
     ax.imshow(img)
     if keypoints.size == 0:
