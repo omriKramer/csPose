@@ -77,11 +77,6 @@ def plot_image_with_kps(img, keypoints, visible=None, ax: Optional[plt.Axes] = N
     if visible is not None:
         keypoints[2::3] = visible[2::3]
 
-    ax.tick_params(axis=u'both', which=u'both', bottom=False, left=False)
-    c, h, w = img.shape
-    ax.set_xlim(0, w)
-    ax.set_ylim(0, h)
-
     ax.imshow(img)
     if keypoints.size == 0:
         return
@@ -94,6 +89,12 @@ def plot_image_with_kps(img, keypoints, visible=None, ax: Optional[plt.Axes] = N
             ax.plot(x[sk], y[sk], linewidth=3, color=c)
     ax.plot(x[v > 0], y[v > 0], 'o', markersize=8, markerfacecolor=c, markeredgecolor='k', markeredgewidth=2)
     ax.plot(x[v > 1], y[v > 1], 'o', markersize=8, markerfacecolor=c, markeredgecolor=c, markeredgewidth=2)
+
+    ax.tick_params(axis=u'both', which=u'both', bottom=False, left=False, labelbottom=False, labelleft=False)
+    h, w, w = img.shape
+    ax.set_xlim(0, w)
+    ax.set_ylim(0, h)
+    print(img.shape)
 
 
 def plot_kps_comparison(oks, images, output, targets):
