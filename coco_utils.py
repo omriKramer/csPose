@@ -65,7 +65,6 @@ def plot_image_with_kps(img, keypoints, visible=None, ax: Optional[plt.Axes] = N
     if ax is None:
         ax = plt.gca()
 
-    ax.tick_params(axis=u'both', which=u'both', length=0)
     if isinstance(img, Image.Image):
         img = np.asarray(img)
     elif isinstance(img, torch.Tensor):
@@ -77,6 +76,12 @@ def plot_image_with_kps(img, keypoints, visible=None, ax: Optional[plt.Axes] = N
         keypoints = np.array(keypoints)
     if visible is not None:
         keypoints[2::3] = visible[2::3]
+
+    ax.tick_params(axis=u'both', which=u'both', bottom=False, left=False)
+
+    c, h, w = img.size
+    ax.set_xlim(0, w)
+    ax.sey_ylim(0, h)
 
     ax.imshow(img)
     if keypoints.size == 0:
