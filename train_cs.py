@@ -14,11 +14,12 @@ lookup_order = ['nose', 'left_eye', 'right_eye', 'left_ear', 'right_ear',
                 'left_hip', 'left_knee', 'left_ankle',
                 'right_hip', 'right_knee', 'right_ankle']
 
-commands = torch.LongTensor([coco_utils.KEYPOINTS.index(pos) for pos in lookup_order])
+commands = [coco_utils.KEYPOINTS.index(pos) for pos in lookup_order]
+commands2coco = [commands.index(ind) for ind in range(len(commands))]
 
 
 def flip_to_coco_order(batch):
-    return batch[:, range(len(coco_utils.KEYPOINTS))]
+    return batch[:, commands2coco]
 
 
 def model_feeder(model, images, _):
@@ -37,8 +38,6 @@ def loss(outputs, targets):
         x, y, v = coco_utils.decode_keypoints(kps)
         x = x[v > 0]
         y = y[v > 0]
-        assert x.max() < 256 and x.min() >= 0
-        assert y.max() < 256 and y.min() >= 0
         t_batched.append(torch.stack((x, y), dim=1))
         batched.append(td[v > 0])
 
@@ -49,15 +48,11 @@ def loss(outputs, targets):
     t = t_batched[:, 1] * w + t_batched[:, 0]
     t = t.round().long()
     c = batched.shape[1]
-    if t.min() < 0 or t.max() > c - 1:
-        print(t, force=True)
-        print(w, force=True)
-        print(t_batched, force=True)
-        assert False
     return cross_entropy(batched, t)
 
 
 def heatmap_to_pred(heatmap):
+    heatmap = flip_to_coco_order(heatmap)
     n, k, h, w = heatmap.shape
     heatmap = heatmap.reshape((n, k, -1))
     _, preds = heatmap.max(dim=2)
@@ -92,6 +87,7 @@ if __name__ == '__main__':
     coco_val = CocoSingleKPS.from_data_path(engine.data_path, train=False, transforms=val_transform)
 
     coco_evaluator = coco_eval.CocoEval()
+
 
     def metrics(targets, outputs):
         pred_kps = heatmap_to_pred(outputs['td'].detach())
