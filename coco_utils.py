@@ -92,9 +92,9 @@ def plot_image_with_kps(img, keypoints, visible=None, ax: Optional[plt.Axes] = N
     ax.plot(x[v > 1], y[v > 1], 'o', markersize=8, markerfacecolor=c, markeredgecolor=c, markeredgewidth=2)
 
 
-def plot_kps_comparison(oks, images, dt, gt):
+def plot_kps_comparison(oks, images, output, targets):
     fig, axis = plt.subplots(2, len(images))
-    for i, (value, img, t, o) in enumerate(zip(oks, images, dt, gt)):
+    for i, (value, img, dt, gt) in enumerate(zip(oks, images, output, targets)):
         plot_image_with_kps(img, dt, ax=axis[0, i])
         plot_image_with_kps(img, gt, ax=axis[1, i])
 

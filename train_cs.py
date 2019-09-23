@@ -74,7 +74,6 @@ def plot_kps(batch_results, images, targets, outputs):
     dt = heatmap_to_pred(outputs['td'])[:n]
     gt = targets['keypoints'][:n]
     images = images[:n]
-    print(dt.shape)
     return coco_utils.plot_kps_comparison(oks, images, dt, gt)
 
 
