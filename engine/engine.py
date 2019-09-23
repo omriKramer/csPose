@@ -74,6 +74,9 @@ def feed_images_and_targets(model, images, targets):
     return model(images, targets)
 
 
+MB = 1024.0 * 1024.0
+
+
 def get_train_msg(meters, iter_time, data_time, n_batch, epoch, i):
     n_spaces = len(str(n_batch))
     eta_seconds = iter_time.global_avg * (n_batch - i)
@@ -81,7 +84,6 @@ def get_train_msg(meters, iter_time, data_time, n_batch, epoch, i):
     meters = meters_to_string(meters)
     msg = f'Train - Epoch [{epoch}]: [{i:{n_spaces}d}/{n_batch}], eta: {eta}, {meters}, time: {iter_time}, data: {data_time}'
     if torch.cuda.is_available():
-        MB = 1024.0 * 1024.0
         msg += f', max mem: {torch.cuda.max_memory_allocated() / MB:.4f}'
 
     return msg
@@ -133,8 +135,9 @@ class Engine:
         else:
             self.model_feeder = default_model_feeder
 
-        self.writer = SummaryWriter(output_dir)
         self.output_dir = setup_output(output_dir, overwrite=overwrite)
+        if utils.is_main_process():
+            self.writer = SummaryWriter(output_dir)
 
     @classmethod
     def command_line_init(cls, model, **kwargs):
