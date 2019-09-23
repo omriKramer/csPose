@@ -217,10 +217,6 @@ class Engine:
 
             batch_results = evaluator.eval(targets, outputs)
             if self.plot_freq and i % self.plot_freq == self.plot_freq - 1:
-                print(batch_results)
-                print(images.shape)
-                print(targets['keypoints'].shape)
-                print(outputs['td'].shape)
                 title, fig = evaluator.create_plots(batch_results, images, targets, outputs)
 
                 title += f'/{i}'

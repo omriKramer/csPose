@@ -69,17 +69,12 @@ def heatmap_to_pred(heatmap):
 
 
 def plot_kps(batch_results, images, targets, outputs):
-    print('plot')
     n = min(len(images), 4)
-    print('oks')
     oks = batch_results['OKS'][:n]
-    print('dt')
     dt = heatmap_to_pred(outputs['td'])[:n]
-    print('gt')
     gt = targets['keypoints'][:n]
-    print('images')
     images = images[:n]
-    coco_utils.plot_kps_comparison(oks, images, dt, gt)
+    return coco_utils.plot_kps_comparison(oks, images, dt, gt)
 
 
 if __name__ == '__main__':
