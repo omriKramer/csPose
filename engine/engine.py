@@ -134,7 +134,7 @@ class Engine:
         else:
             self.model_feeder = default_model_feeder
 
-        self.writer = SummaryWriter(self.output_dir)
+        self.writer = SummaryWriter(output_dir)
         self.output_dir = setup_output(output_dir, overwrite=overwrite)
 
     @classmethod
