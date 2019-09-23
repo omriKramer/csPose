@@ -61,8 +61,8 @@ def heatmap_to_pred(heatmap):
     n, k, h, w = heatmap.shape
     heatmap = heatmap.reshape((n, k, -1))
     _, preds = heatmap.max(dim=2)
-    x = preds // h
-    y = preds - preds // h
+    y = preds // w
+    x = preds - preds // h
     v = torch.ones_like(x)
     kps = torch.stack((x, y, v), dim=2).reshape(n, -1)
     return kps.to(dtype=torch.float32)
@@ -74,6 +74,7 @@ def plot_kps(batch_results, images, targets, outputs):
     dt = heatmap_to_pred(outputs['td'])[:n]
     gt = targets['keypoints'][:n]
     images = images[:n]
+    print(dt.shape)
     return coco_utils.plot_kps_comparison(oks, images, dt, gt)
 
 
