@@ -134,8 +134,8 @@ class Engine:
         else:
             self.model_feeder = default_model_feeder
 
-        self.writer = SummaryWriter(output_dir)
         self.output_dir = setup_output(output_dir, overwrite=overwrite)
+        self.writer = SummaryWriter(output_dir)
 
     @classmethod
     def command_line_init(cls, model, **kwargs):
@@ -297,6 +297,7 @@ class Engine:
         return gpu
 
     def write_scalars(self, scalars, epoch, iteration=None, epoch_size=None, name=''):
+        print('writing scalars')
         if not utils.is_main_process():
             return
 
@@ -313,4 +314,5 @@ class Engine:
 
     def add_figure(self, title, fig, global_step):
         if utils.is_main_process():
+            print('adding figure')
             self.writer.add_figure(title, fig, global_step)
