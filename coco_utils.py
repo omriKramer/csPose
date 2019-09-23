@@ -77,19 +77,17 @@ def plot_image_with_kps(img, keypoints, visible=None, ax: Optional[plt.Axes] = N
     if visible is not None:
         keypoints[2::3] = visible[2::3]
 
-    ax.imshow(img)
-    if keypoints.size == 0:
-        return
+    x, y, v = decode_keypoints(keypoints)
+    c = (np.random.random((1, 3)) * 0.6 + 0.4).tolist()[0]
+    sks = np.array(_coco_helper.cats[1]['skeleton']) - 1
+    for sk in sks:
+        if np.all(v[sk] > 0):
+            ax.plot(x[sk], y[sk], linewidth=3, color=c)
+    ax.plot(x[v > 0], y[v > 0], 'o', markersize=8, markerfacecolor=c, markeredgecolor='k', markeredgewidth=2)
+    ax.plot(x[v > 1], y[v > 1], 'o', markersize=8, markerfacecolor=c, markeredgecolor=c, markeredgewidth=2)
 
-    # x, y, v = decode_keypoints(keypoints)
-    # c = (np.random.random((1, 3)) * 0.6 + 0.4).tolist()[0]
-    # sks = np.array(_coco_helper.cats[1]['skeleton']) - 1
-    # for sk in sks:
-    #     if np.all(v[sk] > 0):
-    #         ax.plot(x[sk], y[sk], linewidth=3, color=c)
-    # ax.plot(x[v > 0], y[v > 0], 'o', markersize=8, markerfacecolor=c, markeredgecolor='k', markeredgewidth=2)
-    # ax.plot(x[v > 1], y[v > 1], 'o', markersize=8, markerfacecolor=c, markeredgecolor=c, markeredgewidth=2)
-    #
+    ax.imshow(img)
+
     # ax.tick_params(axis=u'both', which=u'both', bottom=False, left=False, labelbottom=False, labelleft=False)
 
 
