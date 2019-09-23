@@ -134,8 +134,8 @@ class Engine:
         else:
             self.model_feeder = default_model_feeder
 
-        self.output_dir = setup_output(output_dir, overwrite=overwrite)
         self.writer = SummaryWriter(self.output_dir)
+        self.output_dir = setup_output(output_dir, overwrite=overwrite)
 
     @classmethod
     def command_line_init(cls, model, **kwargs):
@@ -218,9 +218,9 @@ class Engine:
             batch_results = evaluator.eval(targets, outputs)
             if self.plot_freq and i % self.plot_freq == self.plot_freq - 1:
                 print(batch_results)
-                print(images)
-                print(targets)
-                print(outputs)
+                print(images.shape)
+                print(targets['keypoints'].shape)
+                print(outputs['td'].shape)
                 title, fig = evaluator.create_plots(batch_results, images, targets, outputs)
 
                 title += f'/{i}'

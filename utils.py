@@ -62,7 +62,7 @@ def setup_for_distributed(is_master, debug=False):
 
     def my_print(*args, **kwargs):
         force = kwargs.pop('force', False)
-        if is_master or force or debug:
+        if is_master or force:
             builtin_print(*args, **kwargs)
 
     __builtin__.print = my_print
