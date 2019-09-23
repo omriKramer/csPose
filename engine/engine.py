@@ -35,6 +35,8 @@ def get_args():
                         help='number of distributed processes')
     parser.add_argument('--dist-url', default='env://', help='url used to set up distributed training')
 
+    parser.add_argument('--debug', action='store_true', help='stop iterating after print and plot')
+
     args = parser.parse_args()
     return args
 
@@ -99,7 +101,7 @@ class Engine:
 
     def __init__(self, model, data_path='.', output_dir='.', batch_size=32, device='cpu', epochs=1,
                  resume='', optimizer=None, model_feeder=None, num_workers=0, world_size=1,
-                 dist_url='env://', print_freq=100, plot_freq=None, overwrite=False):
+                 dist_url='env://', print_freq=100, plot_freq=None, overwrite=False, debug=False):
         self.plot_freq = plot_freq if utils.is_main_process() else None
         self.print_freq = print_freq
         self.dist_url = dist_url
@@ -110,6 +112,7 @@ class Engine:
         self.num_workers = num_workers
         self.start_epoch = 0
         self.optimizer = None
+        self.debug = debug
 
         device_index = self._init_distributed_mode()
         self.device = torch.device(f'{device}:{device_index}')
@@ -160,6 +163,8 @@ class Engine:
             self.train_one_epoch(train_loader, evaluator, epoch, loss_fn)
             self.evaluate(val_loader, val_evaluator, epoch)
             self.create_checkpoint(epoch)
+            if self.debug:
+                break
 
         total_time = time.time() - start_time
         print('Done.')
@@ -191,6 +196,8 @@ class Engine:
                 meters = evaluator.emit()
                 print(get_train_msg(meters, iter_time, data_time, n_batch, epoch, i))
                 self.write_scalars(meters, epoch, i, n_batch, name='train')
+                if self.debug:
+                    break
 
             iter_time.update(time.time() - end)
             end = time.time()
@@ -210,9 +217,16 @@ class Engine:
 
             batch_results = evaluator.eval(targets, outputs)
             if self.plot_freq and i % self.plot_freq == self.plot_freq - 1:
+                print(batch_results)
+                print(images)
+                print(targets)
+                print(outputs)
                 title, fig = evaluator.create_plots(batch_results, images, targets, outputs)
+
                 title += f'/{i}'
                 self.add_figure(title, fig, epoch)
+                if self.debug:
+                    break
 
         total_time = time.time() - start_time
         print_end_epoch('Val', data_loader, epoch, total_time)
@@ -283,7 +297,7 @@ class Engine:
         dist.init_process_group(backend=self.dist_backend, init_method=self.dist_url,
                                 world_size=self.world_size, rank=self.rank)
         dist.barrier()
-        utils.setup_for_distributed(self.rank == 0)
+        utils.setup_for_distributed(self.rank == 0, debug=self.debug)
         return gpu
 
     def write_scalars(self, scalars, epoch, iteration=None, epoch_size=None, name=''):

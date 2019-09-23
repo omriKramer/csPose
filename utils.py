@@ -53,7 +53,7 @@ def reduce_dict(input_dict, average=True):
     return reduced_dict
 
 
-def setup_for_distributed(is_master):
+def setup_for_distributed(is_master, debug=False):
     """
     This function disables printing when not in master process
     """
@@ -62,7 +62,7 @@ def setup_for_distributed(is_master):
 
     def my_print(*args, **kwargs):
         force = kwargs.pop('force', False)
-        if is_master or force:
+        if is_master or force or debug:
             builtin_print(*args, **kwargs)
 
     __builtin__.print = my_print
