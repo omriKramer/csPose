@@ -97,13 +97,25 @@ def print_end_epoch(phase, data_loader, epoch, total_time):
     print(f'{phase} - Epoch [{epoch}]: Total time: {total_time_str} ({total_time / len(data_loader):.2f} s / it)')
 
 
+def infer_checkpoint(output_dir: Path):
+    k = len('checkpoint')
+    checkpoints = [child for child in output_dir.iterdir() if child.name.startswith('checkpoint')]
+    if len(checkpoints) == 0:
+        return None
+
+    latest = max(checkpoints, key=lambda file: int(file.name[k:k + 3]))
+    return latest
+
+
 class Engine:
 
     def __init__(self, model, data_path='.', output_dir='.', batch_size=32, device='cpu', epochs=1,
                  resume='', optimizer=None, model_feeder=None, num_workers=0, world_size=1,
                  dist_url='env://', print_freq=100, plot_freq=None, overwrite=False, debug=False):
+        self.output_dir = setup_output(output_dir, overwrite=overwrite)
         self.plot_freq = plot_freq if utils.is_main_process() else None
         self.print_freq = print_freq
+
         self.dist_url = dist_url
         self.world_size = world_size
         self.epochs = epochs
@@ -127,14 +139,17 @@ class Engine:
             self.optimizer = optimizer(params)
 
         if resume:
-            load_from_checkpoint(resume, self.model, self.device, self.optimizer)
+            if resume == 'auto':
+                resume = infer_checkpoint(self.output_dir)
+
+            if resume:
+                load_from_checkpoint(resume, self.model, self.device, self.optimizer)
 
         if model_feeder:
             self.model_feeder = model_feeder
         else:
             self.model_feeder = default_model_feeder
 
-        self.output_dir = setup_output(output_dir, overwrite=overwrite)
         if utils.is_main_process():
             self.writer = SummaryWriter(output_dir)
 
