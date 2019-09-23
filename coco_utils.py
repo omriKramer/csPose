@@ -91,10 +91,6 @@ def plot_image_with_kps(img, keypoints, visible=None, ax: Optional[plt.Axes] = N
     ax.plot(x[v > 1], y[v > 1], 'o', markersize=8, markerfacecolor=c, markeredgecolor=c, markeredgewidth=2)
 
     ax.tick_params(axis=u'both', which=u'both', bottom=False, left=False, labelbottom=False, labelleft=False)
-    h, w, w = img.shape
-    ax.set_xlim(0, w)
-    ax.set_ylim(0, h)
-    print(img.shape)
 
 
 def plot_kps_comparison(oks, images, output, targets):
