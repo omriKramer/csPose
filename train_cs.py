@@ -23,7 +23,7 @@ def flip_to_coco_order(batch):
 
 
 def model_feeder(model, images, _):
-    return model(images, commands)
+    return model(images, torch.tensor(commands))
 
 
 cross_entropy = torch.nn.CrossEntropyLoss()
@@ -47,7 +47,6 @@ def loss(outputs, targets):
     batched = batched.reshape((batched.shape[0], -1))
     t = t_batched[:, 1] * w + t_batched[:, 0]
     t = t.round().long()
-    c = batched.shape[1]
     return cross_entropy(batched, t)
 
 
