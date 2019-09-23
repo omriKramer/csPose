@@ -62,7 +62,7 @@ def heatmap_to_pred(heatmap):
     heatmap = heatmap.reshape((n, k, -1))
     _, preds = heatmap.max(dim=2)
     y = preds // w
-    x = preds - preds // h
+    x = preds.remainder(w)
     v = torch.ones_like(x)
     kps = torch.stack((x, y, v), dim=2).reshape(n, -1)
     return kps.to(dtype=torch.float32)

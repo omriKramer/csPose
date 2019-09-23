@@ -88,13 +88,12 @@ def plot_image_with_kps(img, keypoints, visible=None, ax: Optional[plt.Axes] = N
 
     ax.imshow(img)
 
-    # ax.tick_params(axis=u'both', which=u'both', bottom=False, left=False, labelbottom=False, labelleft=False)
+    ax.tick_params(axis=u'both', which=u'both', bottom=False, left=False, labelbottom=False, labelleft=False)
 
 
 def plot_kps_comparison(oks, images, output, targets):
     fig, axis = plt.subplots(2, len(images))
     for i, (value, img, dt, gt) in enumerate(zip(oks, images, output, targets)):
-        print(dt)
         plot_image_with_kps(img, dt, ax=axis[0, i])
         plot_image_with_kps(img, gt, ax=axis[1, i])
 
