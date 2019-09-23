@@ -169,6 +169,8 @@ class Engine:
         print('Done.')
         print(f'Total time {total_time // 60:.0f}m {total_time % 60:.0f}s')
 
+        self.writer.flush()
+
     def train_one_epoch(self, data_loader, evaluator, epoch, loss_fn):
         self.model.train()
         evaluator.reset()
@@ -296,7 +298,6 @@ class Engine:
         return gpu
 
     def write_scalars(self, scalars, epoch, iteration=None, epoch_size=None, name=''):
-        print('writing scalars')
         if not utils.is_main_process():
             return
 
@@ -313,5 +314,4 @@ class Engine:
 
     def add_figure(self, title, fig, global_step):
         if utils.is_main_process():
-            print('adding figure')
             self.writer.add_figure(title, fig, global_step)
