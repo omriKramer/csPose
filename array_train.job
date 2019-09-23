@@ -1,3 +1,4 @@
+#!/bin/sh
 #BSUB -q waic-short
 #BSUB -j train_cs[1-10:1]
 #BSUB -oo out.%J
