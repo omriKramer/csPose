@@ -109,8 +109,8 @@ def infer_checkpoint(output_dir: Path):
 
 class Engine:
 
-    def __init__(self, model, data_path='.', output_dir='.', batch_size=32, device='cpu', epochs=1,
-                 resume='', optimizer=None, model_feeder=None, num_workers=0, world_size=1,
+    def __init__(self, data_path='.', output_dir='.', batch_size=32, device='cpu', epochs=1,
+                 resume='', num_workers=0, world_size=1,
                  dist_url='env://', print_freq=100, plot_freq=None, overwrite=False, debug=False):
         self.output_dir = setup_output(output_dir, overwrite=overwrite)
         self.plot_freq = plot_freq if utils.is_main_process() else None
@@ -129,37 +129,22 @@ class Engine:
         device_index = self._init_distributed_mode()
         self.device = torch.device(f'{device}:{device_index}')
 
-        self.model = model
-        self.model.to(self.device)
-        if self.distributed:
-            self.model = nn.parallel.DistributedDataParallel(self.model, device_ids=[self.device])
-
-        params = [p for p in model.parameters() if p.requires_grad]
-        if optimizer:
-            self.optimizer = optimizer(params)
-
-        if resume:
-            if resume == 'auto':
-                resume = infer_checkpoint(self.output_dir)
-
-            if resume:
-                load_from_checkpoint(resume, self.model, self.device, self.optimizer)
-
-        if model_feeder:
-            self.model_feeder = model_feeder
+        if resume == 'auto':
+            self.checkpoint = infer_checkpoint(self.output_dir)
         else:
-            self.model_feeder = default_model_feeder
+            self.checkpoint = resume
 
         if utils.is_main_process():
             self.writer = SummaryWriter(output_dir)
 
     @classmethod
-    def command_line_init(cls, model, **kwargs):
+    def command_line_init(cls, **kwargs):
         args = get_args()
-        engine = cls(model, **vars(args), **kwargs)
+        engine = cls(**vars(args), **kwargs)
         return engine
 
-    def run(self, train_ds, val_ds, evaluator, val_evaluator, loss_fn, collate_fn=None):
+    def run(self, model, optimizer, train_ds, val_ds, evaluator, val_evaluator, loss_fn, collate_fn=None,
+            model_feeder=None):
         print('Dataset Info')
         print('-' * 10)
         print(f'Train: {train_ds}')
@@ -167,7 +152,10 @@ class Engine:
         print(f'Validation: {val_ds}')
         print()
 
-        print("Creating data loaders")
+        if model_feeder is None:
+            model_feeder = default_model_feeder
+
+        model, optimizer = self.setup_model_and_optimizer(model, optimizer)
         train_loader, val_loader = self.create_loaders(train_ds, val_ds, collate_fn)
 
         print('Start training')
@@ -176,8 +164,8 @@ class Engine:
             if self.distributed:
                 train_loader.batch_sampler.sampler.set_epoch(epoch)
 
-            self.train_one_epoch(train_loader, evaluator, epoch, loss_fn)
-            self.evaluate(val_loader, val_evaluator, epoch)
+            self.train_one_epoch(model, optimizer, model_feeder, train_loader, evaluator, epoch, loss_fn)
+            self.evaluate(model, model_feeder, val_loader, val_evaluator, epoch)
             self.create_checkpoint(epoch)
             if self.debug:
                 break
@@ -189,8 +177,8 @@ class Engine:
         if utils.is_main_process():
             self.writer.flush()
 
-    def train_one_epoch(self, data_loader, evaluator, epoch, loss_fn):
-        self.model.train()
+    def train_one_epoch(self, model, optimizer, model_feeder, data_loader, evaluator, epoch, loss_fn):
+        model.train()
         evaluator.reset()
 
         start_time = time.time()
@@ -202,12 +190,12 @@ class Engine:
         for i, (images, targets) in enumerate(data_loader):
             data_time.update(time.time() - end)
             images, targets = self.to_device(images, targets)
-            outputs = self.model_feeder(self.model, images, targets)
+            outputs = model_feeder(model, images, targets)
 
             loss = loss_fn(outputs, targets)
-            self.optimizer.zero_grad()
+            optimizer.zero_grad()
             loss.backward()
-            self.optimizer.step()
+            optimizer.step()
 
             evaluator.eval(targets, outputs, loss=loss, reduce=True)
 
@@ -226,13 +214,13 @@ class Engine:
         print()
 
     @torch.no_grad()
-    def evaluate(self, data_loader, evaluator, epoch):
-        self.model.eval()
+    def evaluate(self, model, model_feeder, data_loader, evaluator, epoch):
+        model.eval()
         start_time = time.time()
 
         for i, (images, targets) in enumerate(data_loader):
             images, targets = self.to_device(images, targets)
-            outputs = self.model_feeder(self.model, images, targets)
+            outputs = model_feeder(model, images, targets)
 
             batch_results = evaluator.eval(targets, outputs)
             if self.plot_freq and i % self.plot_freq == self.plot_freq - 1:
@@ -252,6 +240,19 @@ class Engine:
         print(meters_to_string(meters))
         print()
 
+    def setup_model_and_optimizer(self, model, opt_class):
+        print('setup model')
+        model.to(self.device)
+        if self.distributed:
+            model = nn.parallel.DistributedDataParallel(model, device_ids=[self.device])
+
+        params = [p for p in model.parameters() if p.requires_grad]
+        optimizer = opt_class(params)
+        if self.checkpoint:
+            load_from_checkpoint(self.checkpoint, model, self.device, optimizer)
+
+        return model, optimizer
+
     def to_device(self, images, targets):
         if torch.is_tensor(images):
             images = images.to(self.device)
@@ -266,6 +267,7 @@ class Engine:
         return images, targets
 
     def create_loaders(self, train_ds, val_ds, collate_fn):
+        print("Creating data loaders")
         if self.distributed:
             train_sampler = torch.utils.data.distributed.DistributedSampler(train_ds)
             val_sampler = torch.utils.data.distributed.DistributedSampler(val_ds)
