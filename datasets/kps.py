@@ -75,7 +75,7 @@ class CocoSingleKPS(torchvision.datasets.VisionDataset):
             kps = np.array(an['keypoints'])
             x, y, v = coco_utils.decode_keypoints(kps)
             if np.all(v[indices]):
-                relevant_kps = np.concatenate(kps[3 * i:3 * (i + 1)] for i in indices)
+                relevant_kps = np.concatenate([kps[3 * i:3 * (i + 1)] for i in indices])
                 an['keypoints'] = list(relevant_kps)
                 an['num_keypoints'] = len(self.keypoints)
                 filtered.append(an)
@@ -111,9 +111,9 @@ class CocoSingleKPS(torchvision.datasets.VisionDataset):
         return img, target
 
     @classmethod
-    def from_data_path(cls, data_path, train=True, transform=None, target_transform=None, transforms=None):
+    def from_data_path(cls, data_path, train=True, **kwargs):
         data_path = Path(data_path).expanduser()
         image_set = 'train' if train else 'val'
         root = data_path / '{}2017'.format(image_set)
         ann_file = data_path / 'annotations/person_keypoints_{}2017.json'.format(image_set)
-        return cls(root, ann_file, transform=transform, target_transform=target_transform, transforms=transforms)
+        return cls(root, ann_file, **kwargs)

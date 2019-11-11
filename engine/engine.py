@@ -14,9 +14,8 @@ import utils
 from engine import eval
 
 
-def get_args():
+def get_args(args=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data-path', default='~/weizmann/coco/dev', help='dataset location')
     parser.add_argument('-d', '--device', default='cuda', choices=['cuda', 'cpu'], help='device')
     parser.add_argument('--num-workers', default=0, type=int, metavar='N', help='number of workers to use')
     parser.add_argument('-e', '--epochs', default=13, type=int, metavar='N', help='number of total epochs to run')
@@ -37,8 +36,7 @@ def get_args():
 
     parser.add_argument('--debug', action='store_true', help='stop iterating after print and plot')
 
-    args = parser.parse_args()
-    return args
+    return parser.parse_args(args)
 
 
 def setup_output(output_dir, overwrite=False):
@@ -123,7 +121,6 @@ class Engine:
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.start_epoch = 0
-        self.optimizer = None
         self.debug = debug
 
         device_index = self._init_distributed_mode()
@@ -138,8 +135,8 @@ class Engine:
             self.writer = SummaryWriter(output_dir)
 
     @classmethod
-    def command_line_init(cls, **kwargs):
-        args = get_args()
+    def command_line_init(cls, args=None, **kwargs):
+        args = get_args(args=args)
         engine = cls(**vars(args), **kwargs)
         return engine
 
@@ -166,7 +163,7 @@ class Engine:
 
             self.train_one_epoch(model, optimizer, model_feeder, train_loader, evaluator, epoch, loss_fn)
             self.evaluate(model, model_feeder, val_loader, val_evaluator, epoch)
-            self.create_checkpoint(epoch)
+            self.create_checkpoint(model, optimizer, epoch)
             if self.debug:
                 break
 
@@ -259,7 +256,9 @@ class Engine:
         else:
             images = [img.to(self.device) for img in images]
 
-        if isinstance(targets, dict):
+        if torch.is_tensor(targets):
+            targets = targets.to(self.device)
+        elif isinstance(targets, dict):
             targets = {k: v.to(self.device) for k, v in targets.items()}
         else:
             targets = [{k: v.to(self.device) for k, v in d.items()} for d in targets]
@@ -282,19 +281,19 @@ class Engine:
                                 collate_fn=collate_fn)
         return train_loader, val_loader
 
-    def create_checkpoint(self, epoch):
+    def create_checkpoint(self, model, optimizer, epoch):
         if not utils.is_main_process():
             return
 
-        if isinstance(self.model, nn.parallel.DistributedDataParallel):
-            model_state_dict = self.model.module.state_dict()
+        if isinstance(model, nn.parallel.DistributedDataParallel):
+            model_state_dict = model.module.state_dict()
         else:
-            model_state_dict = self.model.state_dict()
+            model_state_dict = model.state_dict()
 
         torch.save({
             'epoch': epoch,
             'model_state_dict': model_state_dict,
-            'optimizer_state_dict': self.optimizer.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
         }, self.output_dir / f'checkpoint{epoch:03}.tar')
 
     def _init_distributed_mode(self):

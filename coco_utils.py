@@ -48,8 +48,10 @@ class Coco(COCO):
         if img_id is None:
             cat_ids = self.getCatIds()
             img_id = self.getImgIds(catIds=cat_ids)
+        elif isinstance(img_id, int):
+            img_id = [img_id]
 
-        ann_ids = self.getAnnIds(imgIds=[img_id])
+        ann_ids = self.getAnnIds(imgIds=img_id)
         annotations = self.loadAnns(ann_ids)
         return annotations
 

@@ -1,3 +1,5 @@
+import argparse
+
 import torch
 import torch.distributed as dist
 
@@ -66,3 +68,10 @@ def setup_for_distributed(is_master, debug=False):
             builtin_print(*args, **kwargs)
 
     __builtin__.print = my_print
+
+
+def get_data_path():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data-path', default='~/weizmann/coco/dev', help='dataset location')
+    parsed, remaining_args = parser.parse_known_args()
+    return parsed.data_path, remaining_args

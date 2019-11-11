@@ -261,9 +261,10 @@ class ResNet(nn.Module):
 
         return nn.ModuleList(layers)
 
-    def forward(self, x, commands):
+    def forward(self, x, instructions):
         td = []
-        for cmd in commands:
+        batch_size = x.shape[0]
+        for inst in instructions:
             out_bu = x
             for l in self._iter_inner():
                 out_bu = l(out_bu, 'BU')
@@ -275,8 +276,8 @@ class ResNet(nn.Module):
             bu_features = out_bu
             # out_bu = self.fc(out_bu)
 
-            out_td = self.embedding(cmd)
-            out_td = out_td.expand(bu_features.shape[0], -1)
+            inst = inst.expand([batch_size])
+            out_td = self.embedding(inst)
             out_td = torch.cat((out_td, bu_features), dim=1)
 
             out_td = self.td_fc(out_td)
@@ -285,11 +286,12 @@ class ResNet(nn.Module):
             out_td = out_td[:, :, None, None].expand(pre_pooling_size)
             for l in reversed(list(self._iter_inner())):
                 out_td = l(out_td, 'TD')
-            td.append(out_td.squeeze())
+
+            td.append(out_td.squeeze(dim=1))
 
         self.clear()
         results = {
-            'td': torch.stack(td, dim=1)
+            'td': td
         }
         return results
 
