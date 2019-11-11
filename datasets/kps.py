@@ -5,12 +5,12 @@ from pathlib import Path
 import numpy as np
 import torchvision
 
-from coco_utils import decode_keypoints, Coco
+import coco_utils
 
 
 def fix_kps(kps, frame):
     kps = kps.copy()
-    x, y, v = decode_keypoints(kps)
+    x, y, v = coco_utils.decode_keypoints(kps)
     x[v > 0] -= frame[0]
     y[v > 0] -= frame[1]
     return kps
@@ -21,7 +21,7 @@ def make_frame(bbox, segmentation, kps):
     seg_x = segmentation[::2]
     seg_y = segmentation[1::2]
 
-    kps_x, kps_y, v = decode_keypoints(kps)
+    kps_x, kps_y, v = coco_utils.decode_keypoints(kps)
     kps_x = kps_x[v > 0]
     kps_y = kps_y[v > 0]
 
@@ -53,17 +53,34 @@ def fix_segmentation(segmentation, frame):
 
 class CocoSingleKPS(torchvision.datasets.VisionDataset):
 
-    def __init__(self, root, ann_file, transform=None, target_transform=None, transforms=None):
+    def __init__(self, root, ann_file, transform=None, target_transform=None, transforms=None, keypoints=None):
         super().__init__(root, transforms, transform, target_transform)
 
-        coco = Coco(root, ann_file)
-        cat_ids = coco.getCatIds()
-        img_ids = coco.getImgIds(catIds=cat_ids)
-        ann_ids = coco.getAnnIds(imgIds=img_ids)
-        annotations = coco.loadAnns(ann_ids)
-        annotations = [an for an in annotations if not an['iscrowd'] and an['num_keypoints'] >= 10]
-        self.annotations = annotations
-        self.coco = coco
+        if isinstance(keypoints, str):
+            keypoints = [keypoints]
+        self.keypoints = keypoints
+
+        self.coco = coco_utils.Coco(root, ann_file)
+        annotations = self.coco.get_annotations()
+        self.annotations = self._filter_annotations(annotations)
+
+    def _filter_annotations(self, annotations):
+        if self.keypoints is None:
+            annotations = [an for an in annotations if not an['iscrowd'] and an['num_keypoints'] >= 10]
+            return annotations
+
+        indices = [coco_utils.KEYPOINTS.index(keypoint_name) for keypoint_name in self.keypoints]
+        filtered = []
+        for an in annotations:
+            kps = np.array(an['keypoints'])
+            x, y, v = coco_utils.decode_keypoints(kps)
+            if np.all(v[indices]):
+                relevant_kps = np.concatenate(kps[3 * i:3 * (i + 1)] for i in indices)
+                an['keypoints'] = list(relevant_kps)
+                an['num_keypoints'] = len(self.keypoints)
+                filtered.append(an)
+
+        return filtered
 
     def __len__(self):
         return len(self.annotations)

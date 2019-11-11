@@ -278,6 +278,7 @@ class ResNet(nn.Module):
             out_td = self.embedding(cmd)
             out_td = out_td.expand(bu_features.shape[0], -1)
             out_td = torch.cat((out_td, bu_features), dim=1)
+
             out_td = self.td_fc(out_td)
             out_td = self.relu(out_td)
 

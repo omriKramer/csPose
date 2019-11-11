@@ -225,8 +225,8 @@ class Engine:
             batch_results = evaluator.eval(targets, outputs)
             if self.plot_freq and i % self.plot_freq == self.plot_freq - 1:
                 title, fig = evaluator.create_plots(batch_results, images, targets, outputs)
-
                 title += f'/{i}'
+
                 self.add_figure(title, fig, epoch)
                 if self.debug:
                     break

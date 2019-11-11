@@ -44,7 +44,11 @@ class Coco(COCO):
         img = Image.open(self.image_dir / img_details['file_name']).convert('RGB')
         return img
 
-    def get_annotations(self, img_id):
+    def get_annotations(self, img_id=None):
+        if img_id is None:
+            cat_ids = self.getCatIds()
+            img_id = self.getImgIds(catIds=cat_ids)
+
         ann_ids = self.getAnnIds(imgIds=[img_id])
         annotations = self.loadAnns(ann_ids)
         return annotations
