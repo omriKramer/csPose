@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import torch
 
 import engine as eng
@@ -51,6 +52,21 @@ def loss(outputs, targets):
     return ce(heatmap, targets)
 
 
+def plot(batch_results, images, targets, outputs):
+    images = images.permute(0, 2, 3, 1).cpu().numpy()
+    preds = outputs['td'][0].cpu().numpy()
+    targets = targets.cpu().numpy()
+    fig, axis = plt.subplots(1, len(images))
+    for ax, distance, image, t, p in zip(axis, batch_results['L2'], images, targets, preds):
+        ax.imshow(image)
+        ax.plot(t[0], t[1], 'ro', label='target')
+        ax.plot(p[0], p[1], 'bo', label='prediction')
+        ax.legend()
+        ax.set_title(f'L2: {distance}')
+
+    return 'predictions vs. actuals', fig
+
+
 if __name__ == '__main__':
     data_path, remaining_args = utils.get_data_path()
     train_transform = transform.Compose([transform.ResizeKPS(IMAGE_SIZE), extract_keypoints, transform.ToTensor()])
@@ -65,5 +81,5 @@ if __name__ == '__main__':
     engine = eng.Engine.command_line_init(args=remaining_args)
 
     train_eval = MetricLogger(metrics)
-    val_eval = MetricLogger(metrics)
+    val_eval = MetricLogger(metrics, plot_fn=plot)
     engine.run(resnet18, torch.optim.Adam, coco_train, coco_val, train_eval, val_eval, loss, model_feeder=model_feeder)
