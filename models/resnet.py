@@ -85,7 +85,7 @@ class CSConv(CSBlock):
         return x
 
     def one_iteration(self):
-        for l in (self.td_side_bn, self.td_multp):
+        for l in (self.bu_multp, self.bu_side_bn):
             for p in l.parameters():
                 p.requires_grad = False
 
