@@ -84,6 +84,11 @@ class CSConv(CSBlock):
         x = self.td_conv(x)
         return x
 
+    def one_iteration(self):
+        for l in (self.td_side_bn, self.td_multp):
+            for p in l.parameters():
+                p.requires_grad = False
+
 
 class BasicBlock(CSBlock):
     expansion = 1
@@ -129,6 +134,11 @@ class BasicBlock(CSBlock):
     def clear(self):
         self.bu_out1 = self.bu_out2 = None
         self.td_in1 = self.td_in2 = None
+
+    def one_iteration(self):
+        for l in (self.bu_multp1, self.bu_side_bn1, self.bu_multp2, self.bu_side_bn2):
+            for p in l.parameters():
+                p.requires_grad = False
 
     def _bottom_up(self, x):
         identity = x
@@ -302,6 +312,10 @@ class ResNet(nn.Module):
     def clear(self):
         for l in self._iter_inner():
             l.clear()
+
+    def one_iteration(self):
+        for l in self._iter_inner():
+            l.one_iteration()
 
 
 def _resnet(block, layers, **kwargs):

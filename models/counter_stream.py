@@ -24,3 +24,7 @@ class CSBlock(nn.Module, ABC):
     @abstractmethod
     def clear(self):
         pass
+
+    @abstractmethod
+    def one_iteration(self):
+        pass

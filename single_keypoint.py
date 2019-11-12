@@ -61,6 +61,7 @@ if __name__ == '__main__':
     coco_val = CocoSingleKPS.from_data_path(data_path, train=False, transforms=val_transform, keypoints=keypoints)
 
     resnet18 = resnet.resnet18(layers_out=1, num_instructions=1)
+    resnet18.one_iteration()
     engine = eng.Engine.command_line_init(args=remaining_args)
 
     train_eval = MetricLogger(metrics)

@@ -187,10 +187,10 @@ class Engine:
         for i, (images, targets) in enumerate(data_loader):
             data_time.update(time.time() - end)
             images, targets = self.to_device(images, targets)
+            optimizer.zero_grad()
             outputs = model_feeder(model, images, targets)
 
             loss = loss_fn(outputs, targets)
-            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
