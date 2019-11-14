@@ -220,7 +220,7 @@ class Engine:
             outputs = model_feeder(model, images, targets)
 
             batch_results = evaluator.eval(targets, outputs)
-            if self.plot_freq and i % self.plot_freq == self.plot_freq - 1:
+            if utils.is_main_process() and self.plot_freq and i % self.plot_freq == self.plot_freq - 1:
                 title, fig = evaluator.create_plots(batch_results, images, targets, outputs)
                 title += f'/{i}'
 
@@ -332,5 +332,4 @@ class Engine:
             self.writer.add_scalar(tag, value, global_step)
 
     def add_figure(self, title, fig, global_step):
-        if utils.is_main_process():
-            self.writer.add_figure(title, fig, global_step)
+        self.writer.add_figure(title, fig, global_step)
