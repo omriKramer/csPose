@@ -64,7 +64,7 @@ def plot(batch_results, images, targets, outputs):
         ax.plot(p[0], p[1], 'bo', label='prediction')
         ax.set_title(f'L2: {distance:.2f}')
 
-    handles, labels = axis[len(images)].get_legend_handles_labels()
+    handles, labels = axis[-1].get_legend_handles_labels()
     fig.legend(handles, labels, loc='upper right')
     return 'predictions vs. actuals', fig
 
