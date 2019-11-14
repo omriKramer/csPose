@@ -54,16 +54,18 @@ def loss(outputs, targets):
 
 def plot(batch_results, images, targets, outputs):
     images = images.permute(0, 2, 3, 1).cpu().numpy()
-    preds = outputs['td'][0].cpu().numpy()
+    preds = heatmap_to_preds(outputs['td'][0])
+    preds = preds.cpu().numpy()
     targets = targets.cpu().numpy()
     fig, axis = plt.subplots(1, len(images))
     for ax, distance, image, t, p in zip(axis, batch_results['L2'], images, targets, preds):
         ax.imshow(image)
         ax.plot(t[0], t[1], 'ro', label='target')
         ax.plot(p[0], p[1], 'bo', label='prediction')
-        ax.legend()
-        ax.set_title(f'L2: {distance}')
+        ax.set_title(f'L2: {distance:.2f}')
 
+    handles, labels = axis[len(images)].get_legend_handles_labels()
+    fig.legend(handles, labels, loc='upper right')
     return 'predictions vs. actuals', fig
 
 
