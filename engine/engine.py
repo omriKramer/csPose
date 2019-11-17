@@ -186,10 +186,10 @@ class Engine:
 
         for i, (images, targets) in enumerate(data_loader):
             data_time.update(time.time() - end)
-            images, targets = self.to_device(images, targets)
-            optimizer.zero_grad()
-            outputs = model_feeder(model, images, targets)
 
+            optimizer.zero_grad()
+            images, targets = self.to_device(images, targets)
+            outputs = model_feeder(model, images, targets)
             loss = loss_fn(outputs, targets)
             loss.backward()
             optimizer.step()
@@ -246,7 +246,7 @@ class Engine:
         params = [p for p in model.parameters() if p.requires_grad]
         optimizer = opt_class(params)
         if self.checkpoint:
-            load_from_checkpoint(self.checkpoint, model, self.device, optimizer)
+            self.start_epoch = load_from_checkpoint(self.checkpoint, model, self.device, optimizer)
 
         return model, optimizer
 
