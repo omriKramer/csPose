@@ -27,7 +27,7 @@ def heatmap_to_preds(heatmap):
     preds = heatmap.argmax(dim=-1)
     y = preds // w
     x = preds.remainder(w)
-    preds = torch.stack((x, y), dim=len(x.shape))
+    preds = torch.stack((x, y), dim=-1)
     return preds
 
 
@@ -47,7 +47,7 @@ def loss(outputs, targets):
     heatmap = outputs['td'][0]
     h, w = heatmap.shape[-2:]
     heatmap = heatmap.flatten(start_dim=-2)
-    targets = targets[:, 0] * w + targets[:, 1]
+    targets = targets[:, 1] * w + targets[:, 0]
     targets = targets.round().long()
     return ce(heatmap, targets)
 

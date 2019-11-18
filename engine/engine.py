@@ -153,6 +153,8 @@ class Engine:
             model_feeder = default_model_feeder
 
         model, optimizer = self.setup_model_and_optimizer(model, optimizer)
+        if self.checkpoint:
+            self.start_epoch = load_from_checkpoint(self.checkpoint, model, self.device, optimizer)
         train_loader, val_loader = self.create_loaders(train_ds, val_ds, collate_fn)
 
         print('Start training')
@@ -245,8 +247,6 @@ class Engine:
 
         params = [p for p in model.parameters() if p.requires_grad]
         optimizer = opt_class(params)
-        if self.checkpoint:
-            self.start_epoch = load_from_checkpoint(self.checkpoint, model, self.device, optimizer)
 
         return model, optimizer
 
