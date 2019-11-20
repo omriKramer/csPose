@@ -2,6 +2,7 @@ import argparse
 
 import torch
 import torch.distributed as dist
+from torch.utils.data import DataLoader
 
 
 def get_rank():
@@ -75,3 +76,41 @@ def get_data_path():
     parser.add_argument('--data-path', default='~/weizmann/coco/dev', help='dataset location')
     parsed, remaining_args = parser.parse_known_args()
     return parsed.data_path, remaining_args
+
+
+def dataset_mean_and_std(dataset):
+    loader = DataLoader(dataset, batch_size=16, shuffle=False)
+    mean = 0.
+    std = 0.
+    nb_samples = 0.
+    for i, (images, _) in enumerate(loader):
+        batch_samples = images.shape[0]
+        data = images.reshape(batch_samples, images.shape[1], -1)
+        mean += data.mean(2).sum(0)
+        std += data.std(2).sum(0)
+        nb_samples += batch_samples
+        print_progress_bar(i, len(loader))
+
+    mean /= nb_samples
+    std /= nb_samples
+    return mean, std
+
+
+def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█'):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        length      - Optional  : character length of bar (Int)
+        fill        - Optional  : bar fill character (Str)
+    """
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filled_length = int(length * iteration // total)
+    bar = fill * filled_length + '-' * (length - filled_length)
+    print('%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end="\r")
+    if iteration == total:
+        print()
