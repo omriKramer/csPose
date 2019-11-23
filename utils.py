@@ -79,9 +79,9 @@ def get_data_path():
 
 
 def dataset_mean_and_std(dataset):
-    loader = DataLoader(dataset, batch_size=16, shuffle=False)
-    mean = 0.
-    std = 0.
+    loader = DataLoader(dataset, batch_size=64, shuffle=False)
+    mean = torch.zeros(1)
+    std = torch.zeros(1)
     nb_samples = 0.
     for i, (images, _) in enumerate(loader):
         batch_samples = images.shape[0]
@@ -93,7 +93,7 @@ def dataset_mean_and_std(dataset):
 
     mean /= nb_samples
     std /= nb_samples
-    return mean, std
+    return mean.item(), std.item()
 
 
 def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█'):
