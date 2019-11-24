@@ -89,11 +89,10 @@ def dataset_mean_and_std(dataset):
         mean += data.mean(2).sum(0)
         std += data.std(2).sum(0)
         nb_samples += batch_samples
-        print_progress_bar(i, len(loader))
 
     mean /= nb_samples
     std /= nb_samples
-    return mean.item(), std.item()
+    return mean, std
 
 
 def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█'):

@@ -14,5 +14,5 @@ dataset = CocoSingleKPS.from_data_path(args.data_path, train=True, transform=tra
 
 mean, std = dataset_mean_and_std(dataset)
 
-print(f'mean: {mean:.4}')
-print(f'std: {std:.4}')
+print(f'mean: {mean}')
+print(f'std: {std}')
