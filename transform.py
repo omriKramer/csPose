@@ -185,3 +185,15 @@ class ConvertCocoPolysToMask(object):
 
     def __repr__(self):
         return f'{self.__class__.__name__}()'
+
+
+class ImageTargetWrapper:
+
+    def __init__(self, transform):
+        self.t = transform
+
+    def __call__(self, image, target):
+        return self.t(image), target
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.t}'

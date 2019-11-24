@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import torch
+import torchvision.transforms as T
 
 import engine as eng
 import transform
@@ -71,12 +72,19 @@ def plot(batch_results, images, targets, outputs):
 
 if __name__ == '__main__':
     data_path, remaining_args = utils.get_data_path()
-    train_transform = transform.Compose([transform.ResizeKPS(IMAGE_SIZE), extract_keypoints, transform.ToTensor()])
-    val_transform = transform.Compose([transform.ResizeKPS(IMAGE_SIZE), extract_keypoints, transform.ToTensor()])
+
+    mean = [0.4064, 0.3758, 0.3585]
+    std = [0.2377, 0.2263, 0.2234]
+    data_transform = transform.Compose([
+        transform.ResizeKPS(IMAGE_SIZE),
+        extract_keypoints,
+        transform.ToTensor(),
+        transform.ImageTargetWrapper(T.Normalize(mean, std))
+    ])
 
     keypoints = 'left_eye'
-    coco_train = CocoSingleKPS.from_data_path(data_path, train=True, transforms=train_transform, keypoints=keypoints)
-    coco_val = CocoSingleKPS.from_data_path(data_path, train=False, transforms=val_transform, keypoints=keypoints)
+    coco_train = CocoSingleKPS.from_data_path(data_path, train=True, transforms=data_transform, keypoints=keypoints)
+    coco_val = CocoSingleKPS.from_data_path(data_path, train=False, transforms=data_transform, keypoints=keypoints)
 
     resnet18 = resnet.resnet18(layers_out=1, num_instructions=1)
     resnet18.one_iteration()
