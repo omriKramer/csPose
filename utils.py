@@ -80,8 +80,8 @@ def get_data_path():
 
 def dataset_mean_and_std(dataset):
     loader = DataLoader(dataset, batch_size=64, shuffle=False)
-    mean = torch.zeros(1)
-    std = torch.zeros(1)
+    mean = torch.zeros(3)
+    std = torch.zeros(3)
     nb_samples = 0.
     for i, (images, _) in enumerate(loader):
         batch_samples = images.shape[0]
