@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torchvision.transforms as T
 
@@ -53,17 +54,30 @@ def loss(outputs, targets):
     return ce(heatmap, targets)
 
 
+mean = np.array([0.4064, 0.3758, 0.3585])
+std = np.array([0.2377, 0.2263, 0.2234])
+
+
+def show_image(ax, image):
+    image = std * image + mean
+    image = image.clip(0, 1)
+    ax.imshow(image)
+
+
 def plot(batch_results, images, targets, outputs):
     images = images.permute(0, 2, 3, 1).cpu().numpy()
     preds = heatmap_to_preds(outputs['td'][0])
     preds = preds.cpu().numpy()
     targets = targets.cpu().numpy()
+
     fig, axis = plt.subplots(1, len(images))
+    fig.set_tight_layout(True)
     for ax, distance, image, t, p in zip(axis, batch_results['L2'], images, targets, preds):
-        ax.imshow(image)
+        show_image(ax, image)
         ax.plot(t[0], t[1], 'ro', label='target')
         ax.plot(p[0], p[1], 'bo', label='prediction')
         ax.set_title(f'L2: {distance:.2f}')
+        ax.set_axis_off()
 
     handles, labels = axis[-1].get_legend_handles_labels()
     fig.legend(handles, labels, loc='upper right')
@@ -73,8 +87,6 @@ def plot(batch_results, images, targets, outputs):
 if __name__ == '__main__':
     data_path, remaining_args = utils.get_data_path()
 
-    mean = [0.4064, 0.3758, 0.3585]
-    std = [0.2377, 0.2263, 0.2234]
     data_transform = transform.Compose([
         transform.ResizeKPS(IMAGE_SIZE),
         extract_keypoints,
