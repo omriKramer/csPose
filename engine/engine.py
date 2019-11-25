@@ -126,8 +126,8 @@ class Engine:
         device_index = self._init_distributed_mode()
         self.device = torch.device(f'{device}:{device_index}')
 
+        self.output_dir = setup_output(output_dir, overwrite=overwrite and utils.is_main_process())
         if utils.is_main_process():
-            self.output_dir = setup_output(output_dir, overwrite=overwrite)
             self.writer = SummaryWriter(output_dir)
 
         if resume == 'auto':
