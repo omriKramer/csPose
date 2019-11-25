@@ -227,7 +227,7 @@ class Engine:
                 title, fig = evaluator.create_plots(batch_results, images, targets, outputs)
                 title += f'/{i}'
 
-                self.add_figure(title, fig, epoch)
+                self.writer.add_figure(title, fig, epoch)
                 if self.debug:
                     break
 
@@ -331,6 +331,3 @@ class Engine:
 
         for tag, value in scalars.items():
             self.writer.add_scalar(tag, value, global_step)
-
-    def add_figure(self, title, fig, global_step):
-        self.writer.add_figure(title, fig, global_step)
