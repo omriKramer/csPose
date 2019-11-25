@@ -17,7 +17,7 @@ from engine import eval
 def get_args(args=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--device', default='cuda', choices=['cuda', 'cpu'], help='device')
-    parser.add_argument('--num-workers', default=0, type=int, metavar='N', help='number of workers to use')
+    parser.add_argument('--num-workers', default=4, type=int, metavar='N', help='number of workers to use')
     parser.add_argument('-e', '--epochs', default=13, type=int, metavar='N', help='number of total epochs to run')
     parser.add_argument('-b', '--batch-size', default=2, type=int,
                         help='images per gpu, the total batch size is $NGPU x batch_size')
@@ -108,7 +108,7 @@ def infer_checkpoint(output_dir: Path):
 class Engine:
 
     def __init__(self, data_path='.', output_dir='.', batch_size=32, device='cpu', epochs=1,
-                 resume='', num_workers=0, world_size=1,
+                 resume='', num_workers=4, world_size=1,
                  dist_url='env://', print_freq=100, plot_freq=None, overwrite=False, debug=False):
         self.plot_freq = plot_freq if utils.is_main_process() else None
         self.print_freq = print_freq
