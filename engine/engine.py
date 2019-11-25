@@ -41,7 +41,7 @@ def get_args(args=None):
 
 def setup_output(output_dir, overwrite=False):
     output_dir = Path(output_dir)
-    if utils.is_main_process() and output_dir.is_dir() and overwrite:
+    if overwrite:
         for child in output_dir.iterdir():
             if child.is_file():
                 child.unlink()
@@ -110,12 +110,12 @@ class Engine:
     def __init__(self, data_path='.', output_dir='.', batch_size=32, device='cpu', epochs=1,
                  resume='', num_workers=0, world_size=1,
                  dist_url='env://', print_freq=100, plot_freq=None, overwrite=False, debug=False):
-        self.output_dir = setup_output(output_dir, overwrite=overwrite)
         self.plot_freq = plot_freq if utils.is_main_process() else None
         self.print_freq = print_freq
 
         self.dist_url = dist_url
         self.world_size = world_size
+
         self.epochs = epochs
         self.data_path = data_path
         self.batch_size = batch_size
@@ -126,13 +126,14 @@ class Engine:
         device_index = self._init_distributed_mode()
         self.device = torch.device(f'{device}:{device_index}')
 
+        if utils.is_main_process():
+            self.output_dir = setup_output(output_dir, overwrite=overwrite)
+            self.writer = SummaryWriter(output_dir)
+
         if resume == 'auto':
             self.checkpoint = infer_checkpoint(self.output_dir)
         else:
             self.checkpoint = resume
-
-        if utils.is_main_process():
-            self.writer = SummaryWriter(output_dir)
 
     @classmethod
     def command_line_init(cls, args=None, **kwargs):
