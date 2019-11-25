@@ -70,7 +70,7 @@ def plot(batch_results, images, targets, outputs):
     preds = preds.cpu().numpy()
     targets = targets.cpu().numpy()
 
-    fig, axis = plt.subplots(1, len(images))
+    fig, axis = plt.subplots(1, min(len(images), 4))
     fig.set_tight_layout(True)
     for ax, distance, image, t, p in zip(axis, batch_results['L2'], images, targets, preds):
         show_image(ax, image)
