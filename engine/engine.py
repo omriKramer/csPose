@@ -182,8 +182,8 @@ class Engine:
                 train_loader.batch_sampler.sampler.set_epoch(epoch)
 
             self.train_one_epoch(model, optimizer, model_feeder, train_loader, evaluator, epoch, loss_fn)
-            lr_scheduler.step()
             self.evaluate(model, model_feeder, val_loader, val_evaluator, epoch)
+            lr_scheduler.step()
             self.create_checkpoint(model, optimizer, epoch, lr_scheduler)
 
         total_time = time.time() - start_time
