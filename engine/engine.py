@@ -210,7 +210,6 @@ class Engine:
             optimizer.zero_grad()
             images, targets = self.to_device(images, targets)
             outputs = model_feeder(model, images, targets)
-            assert not torch.isnan(outputs).any(), 'Output of model has nans'
             loss = loss_fn(outputs, targets)
             loss.backward()
             optimizer.step()

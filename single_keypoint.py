@@ -49,6 +49,7 @@ def loss(outputs, targets):
     heatmap = outputs['td'][0]
     h, w = heatmap.shape[-2:]
     heatmap = heatmap.flatten(start_dim=-2)
+    assert not torch.isnan(heatmap).any(), 'Output of model has nans'
     targets = targets[:, 1] * w + targets[:, 0]
     targets = targets.round().long()
     return ce(heatmap, targets)
