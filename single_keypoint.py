@@ -53,6 +53,9 @@ def ce_loss(outputs, targets):
     targets = targets[:, 1] * w + targets[:, 0]
     targets = targets.round().long()
     loss = ce(heatmap, targets)
+    if torch.isnan(loss).any():
+        print(targets)
+        print(heatmap)
     assert not torch.isnan(loss).any(), 'loss is nan'
     return loss
 
