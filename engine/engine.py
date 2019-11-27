@@ -1,7 +1,6 @@
 import argparse
 import datetime
 import os
-import pprint
 import time
 from pathlib import Path
 
@@ -90,7 +89,8 @@ def get_train_msg(meters, iter_time, data_time, n_batch, epoch, i):
     eta_seconds = iter_time.global_avg * (n_batch - i)
     eta = datetime.timedelta(seconds=int(eta_seconds))
     meters = meters_to_string(meters)
-    msg = f'Train - Epoch [{epoch}]: [{i:{n_spaces}d}/{n_batch}], eta: {eta}, {meters}, time: {iter_time}, data: {data_time}'
+    msg = (f'Train - Epoch [{epoch}]: [{i:{n_spaces}d}/{n_batch}], eta: {eta},'
+           f' {meters}, time: {iter_time}, data: {data_time}')
     if torch.cuda.is_available():
         msg += f', max mem: {torch.cuda.max_memory_allocated() / MB:.4f}'
 
@@ -173,13 +173,13 @@ class Engine:
         model = self.setup_model(model)
         optimizer, lr_scheduler = self.setup_optimizer(model)
         print(f'training info:')
-        pprint.pprint(self)
+        print(self)
         if self.checkpoint:
             print(f'Loading from checkpoint {self.checkpoint}')
             self.start_epoch = load_from_checkpoint(self.checkpoint, model, self.device, optimizer, lr_scheduler)
         train_loader, val_loader = self.create_loaders(train_ds, val_ds, collate_fn)
 
-        print('Start training')
+        print('Start training...')
         start_time = time.time()
         for epoch in range(self.start_epoch, self.start_epoch + self.epochs):
             if self.distributed:
@@ -214,7 +214,7 @@ class Engine:
             images, targets = self.to_device(images, targets)
             outputs = model_feeder(model, images, targets)
             loss = loss_fn(outputs, targets)
-            assert torch.isfinite(loss), print(f'Loss is {loss} on epoch {epoch} iter {i}, stopping training')
+            assert torch.isfinite(loss), print(f'Loss is {loss} on epoch {epoch} iter {i}, stopping training!')
             loss.backward()
             optimizer.step()
 
