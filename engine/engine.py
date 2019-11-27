@@ -1,6 +1,7 @@
 import argparse
 import datetime
 import os
+import pprint
 import time
 from pathlib import Path
 
@@ -171,6 +172,8 @@ class Engine:
 
         model = self.setup_model(model)
         optimizer, lr_scheduler = self.setup_optimizer(model)
+        print(f'training info:')
+        pprint.pprint(self)
         if self.checkpoint:
             print(f'Loading from checkpoint {self.checkpoint}')
             self.start_epoch = load_from_checkpoint(self.checkpoint, model, self.device, optimizer, lr_scheduler)
@@ -255,7 +258,7 @@ class Engine:
         print()
 
     def setup_model(self, model):
-        print('setup model')
+        print('setup mode...')
         model.to(self.device)
         if self.distributed:
             model = nn.parallel.DistributedDataParallel(model, device_ids=[self.device])
@@ -350,3 +353,23 @@ class Engine:
 
         for tag, value in scalars.items():
             self.writer.add_scalar(tag, value, global_step)
+
+    def __repr__(self):
+        d = {
+            'optimization':
+                {
+                    'lr': self.lr,
+                    'momentum': self.momentum,
+                    'weight decay': self.weight_decay,
+                    'lr steps': self.lr_steps,
+                    'gamma': self.lr_gamma
+                },
+            'batch size': self.batch_size,
+            'epochs': self.epochs,
+            'world_size': self.world_size,
+        }
+
+        if self.checkpoint:
+            d['checkpoint'] = self.checkpoint
+
+        return repr(d)
