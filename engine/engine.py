@@ -172,6 +172,7 @@ class Engine:
         model = self.setup_model(model)
         optimizer, lr_scheduler = self.setup_optimizer(model)
         if self.checkpoint:
+            print(f'Loading from checkpoint {self.checkpoint}')
             self.start_epoch = load_from_checkpoint(self.checkpoint, model, self.device, optimizer, lr_scheduler)
         train_loader, val_loader = self.create_loaders(train_ds, val_ds, collate_fn)
 
@@ -209,6 +210,7 @@ class Engine:
             optimizer.zero_grad()
             images, targets = self.to_device(images, targets)
             outputs = model_feeder(model, images, targets)
+            assert not torch.isnan(outputs).any(), 'Output of model has nans'
             loss = loss_fn(outputs, targets)
             loss.backward()
             optimizer.step()
