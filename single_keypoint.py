@@ -104,4 +104,4 @@ if __name__ == '__main__':
 
     train_eval = MetricLogger(metrics)
     val_eval = MetricLogger(metrics, plot_fn=plot)
-    engine.run(resnet18, torch.optim.Adam, coco_train, coco_val, train_eval, val_eval, loss, model_feeder=model_feeder)
+    engine.run(resnet18, coco_train, coco_val, train_eval, val_eval, loss, model_feeder=model_feeder)

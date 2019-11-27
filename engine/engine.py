@@ -23,6 +23,15 @@ def get_args(args=None):
                         help='images per gpu, the total batch size is $NGPU x batch_size')
     parser.add_argument('--resume', default='')
 
+    # optimization parameters
+    parser.add_argument('--lr', default=0.02, type=float, help='initial learning rate')
+    parser.add_argument('--momentum', default=0.9, type=float, metavar='M', help='momentum')
+    parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
+                        metavar='W', help='weight decay (default: 1e-4)',
+                        dest='weight_decay')
+    parser.add_argument('--lr-steps', default=[16, 22], nargs='+', type=int, help='decrease lr every step-size epochs')
+    parser.add_argument('--lr-gamma', default=0.1, type=float, help='decrease lr by a factor of lr-gamma')
+
     # output parameters
     parser.add_argument('--output-dir', default='.', help='path where to save')
     parser.add_argument('--print-freq', default=100, type=int, help='print frequency')
@@ -33,8 +42,6 @@ def get_args(args=None):
     parser.add_argument('--world-size', default=1, type=int,
                         help='number of distributed processes')
     parser.add_argument('--dist-url', default='env://', help='url used to set up distributed training')
-
-    parser.add_argument('--debug', action='store_true', help='stop iterating after print and plot')
 
     return parser.parse_args(args)
 
@@ -49,7 +56,7 @@ def setup_output(output_dir, overwrite=False):
     return output_dir
 
 
-def load_from_checkpoint(checkpoint, model, map_location=None, optimizer=None):
+def load_from_checkpoint(checkpoint, model, map_location=None, optimizer=None, lr_scheduler=None):
     checkpoint = torch.load(checkpoint, map_location=map_location)
     if isinstance(model, nn.parallel.DistributedDataParallel):
         model.module.load_state_dict(checkpoint['model_state_dict'])
@@ -58,6 +65,9 @@ def load_from_checkpoint(checkpoint, model, map_location=None, optimizer=None):
 
     if optimizer:
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+    if lr_scheduler:
+        lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
 
     start_epoch = checkpoint['epoch'] + 1
     return start_epoch
@@ -107,9 +117,16 @@ def infer_checkpoint(output_dir: Path):
 
 class Engine:
 
-    def __init__(self, data_path='.', output_dir='.', batch_size=32, device='cpu', epochs=1,
+    def __init__(self, lr, momentum, weight_decay, lr_steps, lr_gamma,
+                 data_path='.', output_dir='.', batch_size=32, device='cpu', epochs=1,
                  resume='', num_workers=4, world_size=1,
-                 dist_url='env://', print_freq=100, plot_freq=None, overwrite=False, debug=False):
+                 dist_url='env://', print_freq=100, plot_freq=None, overwrite=False, ):
+        self.lr = lr
+        self.momentum = momentum
+        self.weight_decay = weight_decay
+        self.lr_steps = lr_steps
+        self.lr_gamma = lr_gamma
+
         self.plot_freq = plot_freq if utils.is_main_process() else None
         self.print_freq = print_freq
 
@@ -121,7 +138,6 @@ class Engine:
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.start_epoch = 0
-        self.debug = debug
 
         device_index = self._init_distributed_mode()
         self.device = torch.device(f'{device}:{device_index}')
@@ -141,7 +157,7 @@ class Engine:
         engine = cls(**vars(args), **kwargs)
         return engine
 
-    def run(self, model, optimizer, train_ds, val_ds, evaluator, val_evaluator, loss_fn, collate_fn=None,
+    def run(self, model, train_ds, val_ds, evaluator, val_evaluator, loss_fn, collate_fn=None,
             model_feeder=None):
         print('Dataset Info')
         print('-' * 10)
@@ -153,9 +169,10 @@ class Engine:
         if model_feeder is None:
             model_feeder = default_model_feeder
 
-        model, optimizer = self.setup_model_and_optimizer(model, optimizer)
+        model = self.setup_model(model)
+        optimizer, lr_scheduler = self.setup_optimizer(model)
         if self.checkpoint:
-            self.start_epoch = load_from_checkpoint(self.checkpoint, model, self.device, optimizer)
+            self.start_epoch = load_from_checkpoint(self.checkpoint, model, self.device, optimizer, lr_scheduler)
         train_loader, val_loader = self.create_loaders(train_ds, val_ds, collate_fn)
 
         print('Start training')
@@ -165,10 +182,9 @@ class Engine:
                 train_loader.batch_sampler.sampler.set_epoch(epoch)
 
             self.train_one_epoch(model, optimizer, model_feeder, train_loader, evaluator, epoch, loss_fn)
+            lr_scheduler.step()
             self.evaluate(model, model_feeder, val_loader, val_evaluator, epoch)
-            self.create_checkpoint(model, optimizer, epoch)
-            if self.debug:
-                break
+            self.create_checkpoint(model, optimizer, epoch, lr_scheduler)
 
         total_time = time.time() - start_time
         print('Done.')
@@ -203,8 +219,6 @@ class Engine:
                 meters = evaluator.emit()
                 print(get_train_msg(meters, iter_time, data_time, n_batch, epoch, i))
                 self.write_scalars(meters, epoch, i, n_batch, name='train')
-                if self.debug:
-                    break
 
             iter_time.update(time.time() - end)
             end = time.time()
@@ -228,8 +242,6 @@ class Engine:
                 title += f'/{i}'
 
                 self.writer.add_figure(title, fig, epoch)
-                if self.debug:
-                    break
 
         total_time = time.time() - start_time
         print_end_epoch('Val', data_loader, epoch, total_time)
@@ -240,16 +252,20 @@ class Engine:
         print(meters_to_string(meters))
         print()
 
-    def setup_model_and_optimizer(self, model, opt_class):
+    def setup_model(self, model):
         print('setup model')
         model.to(self.device)
         if self.distributed:
             model = nn.parallel.DistributedDataParallel(model, device_ids=[self.device])
 
-        params = [p for p in model.parameters() if p.requires_grad]
-        optimizer = opt_class(params)
+        return model
 
-        return model, optimizer
+    def setup_optimizer(self, model):
+        params = [p for p in model.parameters() if p.requires_grad]
+        optimizer = torch.optim.SGD(params, lr=self.lr, momentum=self.momentum, weight_decay=self.weight_decay)
+        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=self.lr_steps, gamma=self.lr_gamma)
+
+        return optimizer, lr_scheduler
 
     def to_device(self, images, targets):
         if torch.is_tensor(images):
@@ -282,7 +298,7 @@ class Engine:
                                 collate_fn=collate_fn)
         return train_loader, val_loader
 
-    def create_checkpoint(self, model, optimizer, epoch):
+    def create_checkpoint(self, model, optimizer, epoch, lr_scheduler):
         if not utils.is_main_process():
             return
 
@@ -295,6 +311,7 @@ class Engine:
             'epoch': epoch,
             'model_state_dict': model_state_dict,
             'optimizer_state_dict': optimizer.state_dict(),
+            'lr_scheduler': lr_scheduler.state_dict()
         }, self.output_dir / f'checkpoint{epoch:03}.tar')
 
     def _init_distributed_mode(self):
@@ -314,7 +331,7 @@ class Engine:
         dist.init_process_group(backend=self.dist_backend, init_method=self.dist_url,
                                 world_size=self.world_size, rank=self.rank)
         dist.barrier()
-        utils.setup_for_distributed(self.rank == 0, debug=self.debug)
+        utils.setup_for_distributed(self.rank == 0)
         return gpu
 
     def write_scalars(self, scalars, epoch, iteration=None, epoch_size=None, name=''):
