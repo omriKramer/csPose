@@ -45,14 +45,16 @@ def metrics(targets, outputs):
 ce = torch.nn.CrossEntropyLoss()
 
 
-def loss(outputs, targets):
+def ce_loss(outputs, targets):
     heatmap = outputs['td'][0]
     h, w = heatmap.shape[-2:]
     heatmap = heatmap.flatten(start_dim=-2)
     assert not torch.isnan(heatmap).any(), 'Output of model has nans'
     targets = targets[:, 1] * w + targets[:, 0]
     targets = targets.round().long()
-    return ce(heatmap, targets)
+    loss = ce(heatmap, targets)
+    assert not torch.isnan(loss).any(), 'loss is nan'
+    return loss
 
 
 mean = np.array([0.4064, 0.3758, 0.3585])
@@ -105,4 +107,4 @@ if __name__ == '__main__':
 
     train_eval = MetricLogger(metrics)
     val_eval = MetricLogger(metrics, plot_fn=plot)
-    engine.run(resnet18, coco_train, coco_val, train_eval, val_eval, loss, model_feeder=model_feeder)
+    engine.run(resnet18, coco_train, coco_val, train_eval, val_eval, ce_loss, model_feeder=model_feeder)
