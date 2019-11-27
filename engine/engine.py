@@ -205,6 +205,7 @@ class Engine:
         n_batch = len(data_loader)
 
         for i, (images, targets) in enumerate(data_loader):
+            print(i, epoch)
             data_time.update(time.time() - end)
 
             optimizer.zero_grad()
