@@ -35,7 +35,7 @@ def get_args(args=None):
     # output parameters
     parser.add_argument('--output-dir', default='.', help='path where to save')
     parser.add_argument('--print-freq', default=100, type=int, help='print frequency')
-    parser.add_argument('--plot-freq', type=int, help='plot frequency')
+    parser.add_argument('--plot-freq', type=int, help='plot frequency in epochs')
     parser.add_argument('--overwrite', action='store_true', help='delete contents of output dir before running')
 
     # distributed training parameters
@@ -242,10 +242,9 @@ class Engine:
             outputs = model_feeder(model, images, targets)
 
             batch_results = evaluator.eval(targets, outputs)
-            if utils.is_main_process() and self.plot_freq and i % self.plot_freq == 0:
+            if self._should_plot(epoch, i, len(data_loader)):
                 title, fig = evaluator.create_plots(batch_results, images, targets, outputs)
                 title += f'/{i}'
-
                 self.writer.add_figure(title, fig, epoch)
 
         total_time = time.time() - start_time
@@ -256,6 +255,17 @@ class Engine:
         self.write_scalars(meters, epoch, name='val')
         print(meters_to_string(meters))
         print()
+
+    def _should_plot(self, epoch, iteration, total_iterations):
+        if not utils.is_main_process() or not self.plot_freq:
+            return False
+
+        if epoch % self.plot_freq == 0 or epoch == self.start_epoch + self.epochs - 1:
+            period = total_iterations // 10
+            if iteration % period == 0:
+                return True
+
+        return False
 
     def setup_model(self, model):
         print('setup mode...')
