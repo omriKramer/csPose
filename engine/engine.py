@@ -172,7 +172,7 @@ class Engine:
 
         model = self.setup_model(model)
         optimizer, lr_scheduler = self.setup_optimizer(model)
-        print(f'training info:')
+        print(f'Training info:')
         print(self)
         if self.checkpoint:
             print(f'Loading from checkpoint {self.checkpoint}')
@@ -261,7 +261,7 @@ class Engine:
             return False
 
         if epoch % self.plot_freq == 0 or epoch == self.start_epoch + self.epochs - 1:
-            period = total_iterations // 10
+            period = max(total_iterations // 10, 1)
             if iteration % period == 0:
                 return True
 

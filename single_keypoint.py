@@ -100,10 +100,10 @@ if __name__ == '__main__':
     coco_train = CocoSingleKPS.from_data_path(data_path, train=True, transforms=data_transform, keypoints=keypoints)
     coco_val = CocoSingleKPS.from_data_path(data_path, train=False, transforms=data_transform, keypoints=keypoints)
 
-    resnet18 = resnet.resnet18(layers_out=1, num_instructions=1)
-    resnet18.one_iteration()
+    model = resnet.resnet50(layers_out=1, num_instructions=1)
+    model.one_iteration()
     engine = eng.Engine.command_line_init(args=remaining_args)
 
     train_eval = MetricLogger(metrics)
     val_eval = MetricLogger(metrics, plot_fn=plot)
-    engine.run(resnet18, coco_train, coco_val, train_eval, val_eval, ce_loss, model_feeder=model_feeder)
+    engine.run(model, coco_train, coco_val, train_eval, val_eval, ce_loss, model_feeder=model_feeder)

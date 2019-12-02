@@ -1,10 +1,17 @@
 import itertools
+from typing import Iterator
 
 import torch
 from torch import nn
 from torch.nn import functional as F
 
 from models.counter_stream import CSBlock
+
+
+def conv_transpose3x3(in_planes, out_planes, stride=1):
+    """3x3 transposed convolution with padding"""
+    return nn.ConvTranspose2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, output_padding=stride - 1,
+                              bias=False)
 
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
@@ -16,6 +23,12 @@ def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
 def conv1x1(in_planes, out_planes, stride=1):
     """1x1 convolution"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
+
+
+def disable_grads(*layers):
+    for l in layers:
+        for p in l.parameters():
+            p.requires_grad = False
 
 
 class InterpolateConv(nn.Module):
@@ -37,21 +50,13 @@ class CSConv(CSBlock):
     def __init__(self, in_planes, bu_planes, td_planes, kernel_size, stride=1, bias=False):
         super().__init__()
         padding = kernel_size // 2
-        self.bu_conv = nn.Conv2d(in_planes, bu_planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                 bias=bias)
+        self.bu_conv = nn.Conv2d(in_planes, bu_planes, kernel_size, stride, padding, bias=bias)
         self.bu_bn = nn.BatchNorm2d(bu_planes)
-        self.bu_multp = conv1x1(bu_planes, bu_planes)
-        self.bu_side_bn = nn.BatchNorm2d(bu_planes)
+        self.bu_lateral = conv1x1(bu_planes, bu_planes)
 
-        self.td_conv = nn.Conv2d(bu_planes, td_planes, kernel_size=kernel_size, bias=bias, padding=padding)
-        self.td_multp = conv1x1(bu_planes, bu_planes)
-        self.td_side_bn = nn.BatchNorm2d(bu_planes)
-
-        self.upsample = None
-        if stride == 2:
-            self.upsample = InterpolateConv(bu_planes, bu_planes, 2)
-        elif stride > 2:
-            raise ValueError('Supports stride of 1 or 2')
+        self.td_conv = nn.ConvTranspose2d(bu_planes, td_planes, kernel_size, stride, padding, output_padding=1,
+                                          bias=False)
+        self.td_lateral = conv1x1(bu_planes, bu_planes)
 
         self.relu = nn.ReLU(inplace=True)
         self.bu_out = self.td_in = None
@@ -65,34 +70,24 @@ class CSConv(CSBlock):
         x = self.relu(x)
 
         if self.td_in is not None:
-            x = self.bu_multp(self.td_in) + x
-            x = self.bu_side_bn(x)
-            x = self.relu(x)
+            x = x + self.bu_lateral(self.td_in)
 
         self.bu_out = x
         return x
 
     def _top_down(self, x):
-        x = self.td_multp(self.bu_out) + x
-        x = self.td_side_bn(x)
-        x = self.relu(x)
-
+        x = x + self.td_lateral(self.bu_out)
         self.td_in = x
-        if self.upsample:
-            x = self.upsample(x)
 
         x = self.td_conv(x)
         return x
 
     def one_iteration(self):
-        for l in (self.bu_multp, self.bu_side_bn):
-            for p in l.parameters():
-                p.requires_grad = False
+        disable_grads(self.bu_lateral)
 
 
 class BasicBlock(CSBlock):
     expansion = 1
-    __constants__ = ['downsample']
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, upsample=None, groups=1,
                  base_width=64, dilation=1, norm_layer=None):
@@ -136,9 +131,7 @@ class BasicBlock(CSBlock):
         self.td_in1 = self.td_in2 = None
 
     def one_iteration(self):
-        for l in (self.bu_multp1, self.bu_side_bn1, self.bu_multp2, self.bu_side_bn2):
-            for p in l.parameters():
-                p.requires_grad = False
+        disable_grads(self.bu_multp1, self.bu_side_bn1, self.bu_multp2, self.bu_side_bn2)
 
     def _bottom_up(self, x):
         identity = x
@@ -201,40 +194,120 @@ class BasicBlock(CSBlock):
         return out
 
 
+class Bottleneck(CSBlock):
+    expansion = 4
+
+    def __init__(self, inplanes, planes, stride=1, downsample=None, upsample=None,
+                 base_width=64, norm_layer=None):
+        assert (downsample and upsample) or (not downsample and not upsample)
+
+        super(Bottleneck, self).__init__()
+        if norm_layer is None:
+            norm_layer = nn.BatchNorm2d
+        width = int(planes * (base_width / 64.))
+        # Both self.conv2 and self.downsample layers downsample the input when stride != 1
+        self.conv1 = conv1x1(inplanes, width)
+        self.bn1 = norm_layer(width)
+        self.conv2 = conv3x3(width, width, stride)
+        self.bn2 = norm_layer(width)
+        self.conv3 = conv1x1(width, planes * self.expansion)
+        self.bn3 = norm_layer(planes * self.expansion)
+        self.downsample = downsample
+
+        self.upsample = upsample
+        self.td_conv1 = conv1x1(planes * self.expansion, width)
+        self.td_bn1 = norm_layer(width)
+        self.td_conv2 = conv_transpose3x3(width, width, stride)
+        self.td_bn2 = norm_layer(width)
+        self.td_conv3 = conv1x1(width, inplanes)
+        self.td_bn3 = norm_layer(inplanes)
+
+        self.td_in = self.bu_out = None
+        self.bu_lateral = conv1x1(planes * self.expansion, planes * self.expansion)
+        self.td_lateral = conv1x1(planes * self.expansion, planes * self.expansion)
+
+        self.relu = nn.ReLU(inplace=True)
+        self.stride = stride
+
+    def clear(self):
+        self.td_in = self.bu_out = None
+
+    def one_iteration(self):
+        disable_grads(self.bu_lateral)
+
+    def _bottom_up(self, x):
+        identity = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = self.relu(out)
+
+        out = self.conv3(out)
+        out = self.bn3(out)
+
+        if self.downsample is not None:
+            identity = self.downsample(x)
+
+        out = out + identity
+        out = self.relu(out)
+
+        if self.td_in:
+            out = self.bu_lateral(self.td_in) + out
+
+        self.bu_out = out
+        return out
+
+    def _top_down(self, x):
+        x = x + self.td_lateral(self.bu_out)
+        identity = x
+        self.td_in = x
+
+        out = self.td_conv1(x)
+        out = self.td_bn1(out)
+        out = self.relu(out)
+
+        out = self.td_conv2(out)
+        out = self.td_bn2(out)
+        out = self.relu(out)
+
+        out = self.td_conv3(out)
+        out = self.td_bn3(out)
+
+        if self.upsample is not None:
+            identity = self.upsample(identity)
+
+        out = out + identity
+        out = self.relu(out)
+
+        return out
+
+
 class ResNet(nn.Module):
 
-    def __init__(self, block, layers, num_classes=1000, layers_out=3, num_instructions=10, groups=1, width_per_group=64,
-                 replace_stride_with_dilation=None, norm_layer=None):
+    def __init__(self, block, layers, num_classes=1000, layers_out=3, num_instructions=10, width_per_group=64,
+                 norm_layer=None):
         super(ResNet, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         self._norm_layer = norm_layer
 
         self.inplanes = 64
-        self.dilation = 1
-        if replace_stride_with_dilation is None:
-            # each element in the tuple indicates if we should replace
-            # the 2x2 stride with a dilated convolution instead
-            replace_stride_with_dilation = [False, False, False]
-        if len(replace_stride_with_dilation) != 3:
-            raise ValueError("replace_stride_with_dilation should be None "
-                             "or a 3-element tuple, got {}".format(replace_stride_with_dilation))
-        self.groups = groups
         self.base_width = width_per_group
         self.conv_block = CSConv(3, self.inplanes, layers_out, kernel_size=7, stride=2, bias=False)
         self.relu = nn.ReLU(inplace=True)
         self.layer1 = self._make_layer(block, 64, layers[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2,
-                                       dilate=replace_stride_with_dilation[0])
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2,
-                                       dilate=replace_stride_with_dilation[1])
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2,
-                                       dilate=replace_stride_with_dilation[2])
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         # self.fc = nn.Linear(512 * block.expansion, num_classes)
 
         self.embedding = nn.Embedding(num_instructions, 512)
-        self.td_fc = nn.Linear(2 * 512, 512)
+        self.td_fc = nn.Linear(512 + (512 * block.expansion), 512 * block.expansion)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -243,31 +316,25 @@ class ResNet(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def _make_layer(self, block, planes, blocks, stride=1, dilate=False):
+    def _make_layer(self, block, planes, blocks, stride=1):
         norm_layer = self._norm_layer
         downsample = upsample = None
-        previous_dilation = self.dilation
-        if dilate:
-            self.dilation *= stride
-            stride = 1
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
                 conv1x1(self.inplanes, planes * block.expansion, stride),
                 norm_layer(planes * block.expansion),
             )
             upsample = nn.Sequential(
-                InterpolateConv(planes, self.inplanes * block.expansion, scale_factor=stride),
+                InterpolateConv(planes * block.expansion, self.inplanes, scale_factor=stride),
                 norm_layer(self.inplanes)
             )
 
         layers = [
-            block(self.inplanes, planes, stride=stride, downsample=downsample, upsample=upsample, groups=self.groups,
-                  base_width=self.base_width, dilation=previous_dilation, norm_layer=norm_layer)]
+            block(self.inplanes, planes, stride=stride, downsample=downsample, upsample=upsample,
+                  base_width=self.base_width, norm_layer=norm_layer)]
         self.inplanes = planes * block.expansion
         for _ in range(1, blocks):
-            layers.append(block(self.inplanes, planes, groups=self.groups,
-                                base_width=self.base_width, dilation=self.dilation,
-                                norm_layer=norm_layer))
+            layers.append(block(self.inplanes, planes, base_width=self.base_width, norm_layer=norm_layer))
 
         return nn.ModuleList(layers)
 
@@ -305,7 +372,7 @@ class ResNet(nn.Module):
         }
         return results
 
-    def _iter_inner(self):
+    def _iter_inner(self) -> Iterator[CSBlock]:
         iterator = itertools.chain([self.conv_block], self.layer1, self.layer2, self.layer3, self.layer4)
         return iterator
 
@@ -318,14 +385,13 @@ class ResNet(nn.Module):
             l.one_iteration()
 
 
-def _resnet(block, layers, **kwargs):
-    model = ResNet(block, layers, **kwargs)
-    return model
-
-
 def resnet18(**kwargs):
-    return _resnet(BasicBlock, [2, 2, 2, 2], **kwargs)
+    return ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
 
 
 def resnet34(**kwargs):
-    return _resnet(BasicBlock, [3, 4, 6, 3], **kwargs)
+    return ResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
+
+
+def resnet50(**kwargs):
+    return ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
