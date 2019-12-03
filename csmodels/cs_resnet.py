@@ -5,7 +5,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from models.counter_stream import CSBlock
+from csmodels.counter_stream import CSBlock
 
 
 def conv_transpose3x3(in_planes, out_planes, stride=1):
@@ -286,11 +286,10 @@ class Bottleneck(CSBlock):
         return out
 
 
-class ResNet(nn.Module):
+class CsResNet(CSBlock):
 
-    def __init__(self, block, layers, num_classes=1000, layers_out=3, num_instructions=10, width_per_group=64,
-                 norm_layer=None):
-        super(ResNet, self).__init__()
+    def __init__(self, block, layers, layers_out=3, num_instructions=10, width_per_group=64, norm_layer=None):
+        super(CsResNet, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         self._norm_layer = norm_layer
@@ -304,10 +303,12 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        # self.fc = nn.Linear(512 * block.expansion, num_classes)
 
         self.embedding = nn.Embedding(num_instructions, 512)
         self.td_fc = nn.Linear(512 + (512 * block.expansion), 512 * block.expansion)
+
+        self.pre_pooling_shape = None
+        self.bu_features = None
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -338,60 +339,52 @@ class ResNet(nn.Module):
 
         return nn.ModuleList(layers)
 
-    def forward(self, x, instructions):
-        td = []
-        batch_size = x.shape[0]
-        for inst in instructions:
-            out_bu = x
-            for l in self._iter_inner():
-                out_bu = l(out_bu, 'BU')
+    def _bottom_up(self, x):
+        for layer in self._iter_inner():
+            x = layer(x, 'BU')
 
-            pre_pooling_size = out_bu.shape
-            out_bu = self.avgpool(out_bu)
-            out_bu = torch.flatten(out_bu, 1)
+        self.pre_pooling_shape = x.shape
 
-            bu_features = out_bu
-            # out_bu = self.fc(out_bu)
+        out = self.avgpool(x)
+        out = out.flatten(1)
+        self.bu_features = out
+        return None
 
-            inst = inst.expand([batch_size])
-            out_td = self.embedding(inst)
-            out_td = torch.cat((out_td, bu_features), dim=1)
+    def _top_down(self, x):
+        out = self.embedding(x)
+        out = torch.cat((out, self.bu_features), dim=1)
 
-            out_td = self.td_fc(out_td)
-            out_td = self.relu(out_td)
+        out = self.td_fc(out)
+        out = self.relu(out)
 
-            out_td = out_td[:, :, None, None].expand(pre_pooling_size)
-            for l in reversed(list(self._iter_inner())):
-                out_td = l(out_td, 'TD')
+        out = out[:, :, None, None].expand(self.pre_pooling_size)
+        for layer in reversed(list(self._iter_inner())):
+            out = layer(out, 'TD')
 
-            td.append(out_td.squeeze(dim=1))
-
-        self.clear()
-        results = {
-            'td': td
-        }
-        return results
+        out = out.squeeze(dim=1)
+        return out
 
     def _iter_inner(self) -> Iterator[CSBlock]:
         iterator = itertools.chain([self.conv_block], self.layer1, self.layer2, self.layer3, self.layer4)
         return iterator
 
     def clear(self):
-        for l in self._iter_inner():
-            l.clear()
+        self.pre_pooling_shape = self.bu_features = None
+        for layer in self._iter_inner():
+            layer.clear()
 
     def one_iteration(self):
-        for l in self._iter_inner():
-            l.one_iteration()
+        for layer in self._iter_inner():
+            layer.one_iteration()
 
 
 def resnet18(**kwargs):
-    return ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
+    return CsResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
 
 
 def resnet34(**kwargs):
-    return ResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
+    return CsResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
 
 
 def resnet50(**kwargs):
-    return ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
+    return CsResNet(Bottleneck, [3, 4, 6, 3], **kwargs)

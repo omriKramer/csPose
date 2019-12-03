@@ -3,12 +3,12 @@ import numpy as np
 import torch
 import torchvision.transforms as T
 
+import csmodels
 import engine as eng
 import transform
 import utils
 from datasets import CocoSingleKPS
 from engine.eval import MetricLogger
-from models import resnet
 
 DUMMY_INSTRUCTION = 0
 IMAGE_SIZE = 256, 256
@@ -17,10 +17,6 @@ IMAGE_SIZE = 256, 256
 def extract_keypoints(image, target):
     target = target['keypoints'][:2]
     return image, target
-
-
-def model_feeder(model, images, _):
-    return model(images, torch.LongTensor([DUMMY_INSTRUCTION]))
 
 
 def heatmap_to_preds(heatmap):
@@ -88,6 +84,7 @@ def plot(batch_results, images, targets, outputs):
 
 if __name__ == '__main__':
     data_path, remaining_args = utils.get_data_path()
+    engine = eng.Engine.command_line_init(args=remaining_args)
 
     data_transform = transform.Compose([
         transform.ResizeKPS(IMAGE_SIZE),
@@ -100,10 +97,11 @@ if __name__ == '__main__':
     coco_train = CocoSingleKPS.from_data_path(data_path, train=True, transforms=data_transform, keypoints=keypoints)
     coco_val = CocoSingleKPS.from_data_path(data_path, train=False, transforms=data_transform, keypoints=keypoints)
 
-    model = resnet.resnet50(layers_out=1, num_instructions=1)
+    model = csmodels.resnet50(layers_out=1, num_instructions=1)
     model.one_iteration()
-    engine = eng.Engine.command_line_init(args=remaining_args)
+    instructions = torch.LongTensor([DUMMY_INSTRUCTION])
+    model = csmodels.SequentialInstructor(model, instructions)
 
     train_eval = MetricLogger(metrics)
     val_eval = MetricLogger(metrics, plot_fn=plot)
-    engine.run(model, coco_train, coco_val, train_eval, val_eval, ce_loss, model_feeder=model_feeder)
+    engine.run(model, coco_train, coco_val, train_eval, val_eval, ce_loss, )

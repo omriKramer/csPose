@@ -4,9 +4,9 @@ import coco_eval
 import coco_utils
 import engine.engine as eng
 import transform
+from csmodels import cs_resnet
 from datasets import CocoSingleKPS
 from engine.eval import MetricLogger
-from models import resnet
 
 lookup_order = ['nose', 'left_eye', 'right_eye', 'left_ear', 'right_ear',
                 'left_shoulder', 'left_elbow', 'left_wrist',
@@ -73,7 +73,7 @@ def plot_kps(batch_results, images, targets, outputs):
 
 if __name__ == '__main__':
     num_keypoints = len(coco_utils.KEYPOINTS)
-    resnet34 = resnet.resnet18(layers_out=1, num_instructions=num_keypoints, )
+    resnet34 = cs_resnet.resnet18(layers_out=1, num_instructions=num_keypoints, )
     engine = eng.Engine.command_line_init(resnet34, optimizer=torch.optim.Adam, model_feeder=model_feeder)
 
     new_size = 256, 256

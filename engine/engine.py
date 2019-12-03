@@ -37,6 +37,7 @@ def get_args(args=None):
     parser.add_argument('--print-freq', default=100, type=int, help='print frequency')
     parser.add_argument('--plot-freq', type=int, help='plot frequency in epochs')
     parser.add_argument('--overwrite', action='store_true', help='delete contents of output dir before running')
+    parser.add_argument('--add-graph', action='store_true')
 
     # distributed training parameters
     parser.add_argument('--world-size', default=1, type=int,
@@ -71,14 +72,6 @@ def load_from_checkpoint(checkpoint, model, map_location=None, optimizer=None, l
 
     start_epoch = checkpoint['epoch'] + 1
     return start_epoch
-
-
-def default_model_feeder(model, images, _):
-    return model(images)
-
-
-def feed_images_and_targets(model, images, targets):
-    return model(images, targets)
 
 
 MB = 1024.0 * 1024.0
@@ -121,7 +114,7 @@ class Engine:
     def __init__(self, lr, momentum, weight_decay, lr_steps, lr_gamma,
                  data_path='.', output_dir='.', batch_size=32, device='cpu', epochs=1,
                  resume='', num_workers=4, world_size=1,
-                 dist_url='env://', print_freq=100, plot_freq=None, overwrite=False, ):
+                 dist_url='env://', print_freq=100, plot_freq=None, overwrite=False, add_graph=False):
         self.lr = lr
         self.momentum = momentum
         self.weight_decay = weight_decay
@@ -130,6 +123,7 @@ class Engine:
 
         self.plot_freq = plot_freq if utils.is_main_process() else None
         self.print_freq = print_freq
+        self.add_graph = add_graph
 
         self.dist_url = dist_url
         self.world_size = world_size
@@ -179,6 +173,11 @@ class Engine:
             self.start_epoch = load_from_checkpoint(self.checkpoint, model, self.device, optimizer, lr_scheduler)
         train_loader, val_loader = self.create_loaders(train_ds, val_ds, collate_fn)
 
+        if self.add_graph and utils.is_main_process():
+            data_iter = iter(train_loader)
+            images, _ = next(data_iter)
+            self.writer.add_graph(model, images)
+
         print('Start training...')
         start_time = time.time()
         for epoch in range(self.start_epoch, self.start_epoch + self.epochs):
@@ -197,7 +196,7 @@ class Engine:
         if utils.is_main_process():
             self.writer.flush()
 
-    def train_one_epoch(self, model, optimizer, model_feeder, data_loader, evaluator, epoch, loss_fn):
+    def train_one_epoch(self, model, optimizer, data_loader, evaluator, epoch, loss_fn):
         model.train()
         evaluator.reset()
 
@@ -212,9 +211,9 @@ class Engine:
 
             optimizer.zero_grad()
             images, targets = self.to_device(images, targets)
-            outputs = model_feeder(model, images, targets)
+            outputs = model(images)
             loss = loss_fn(outputs, targets)
-            assert torch.isfinite(loss), print(f'Loss is {loss} on epoch {epoch} iter {i}, stopping training!')
+            assert torch.isfinite(loss), f'Loss is {loss} on epoch {epoch} iter {i}'
             loss.backward()
             optimizer.step()
 
@@ -222,6 +221,7 @@ class Engine:
 
             if i % self.print_freq == self.print_freq - 1:
                 meters = evaluator.emit()
+                meters['lr'] = optimizer.param_groups[0]['lr']
                 print(get_train_msg(meters, iter_time, data_time, n_batch, epoch, i))
                 self.write_scalars(meters, epoch, i, n_batch, name='train')
 
@@ -233,13 +233,13 @@ class Engine:
         print()
 
     @torch.no_grad()
-    def evaluate(self, model, model_feeder, data_loader, evaluator, epoch):
+    def evaluate(self, model, data_loader, evaluator, epoch):
         model.eval()
         start_time = time.time()
 
         for i, (images, targets) in enumerate(data_loader):
             images, targets = self.to_device(images, targets)
-            outputs = model_feeder(model, images, targets)
+            outputs = model(images)
 
             batch_results = evaluator.eval(targets, outputs)
             if self._should_plot(epoch, i, len(data_loader)):
