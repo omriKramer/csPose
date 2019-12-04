@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import torch.nn.functional as F
 import torchvision.transforms as T
 
 import csmodels
@@ -8,7 +9,6 @@ import engine as eng
 import transform
 import utils
 from datasets import CocoSingleKPS
-from engine.eval import MetricLogger
 
 DUMMY_INSTRUCTION = 0
 IMAGE_SIZE = 256, 256
@@ -29,26 +29,27 @@ def heatmap_to_preds(heatmap):
     return preds
 
 
-l2 = torch.nn.PairwiseDistance()
+class Evaluator:
+
+    def __call__(self, outputs, targets):
+        heatmap = outputs.squeeze(dim=1)
+        targets = targets.round()
+        loss = ce_loss(heatmap, targets.long())
+        with torch.no_grad():
+            preds = heatmap_to_preds(heatmap)
+            distances = F.pairwise_distance(preds.to(dtype=torch.float32), targets)
+        return {
+            'loss': loss,
+            'L2': distances,
+        }
 
 
-def metrics(targets, outputs):
-    preds = heatmap_to_preds(outputs['td'][0])
-    distances = l2(preds.to(dtype=torch.float32), targets)
-    return {'L2': distances}
-
-
-ce = torch.nn.CrossEntropyLoss()
-
-
-def ce_loss(outputs, targets):
-    heatmap = outputs['td'][0]
+def ce_loss(heatmap, targets):
     h, w = heatmap.shape[-2:]
     heatmap = heatmap.flatten(start_dim=-2)
     assert not torch.isnan(heatmap).any(), 'Output of model has nans'
     targets = targets[:, 1] * w + targets[:, 0]
-    targets = targets.round().long()
-    loss = ce(heatmap, targets)
+    loss = F.cross_entropy(heatmap, targets)
     return loss
 
 
@@ -64,7 +65,7 @@ def show_image(ax, image):
 
 def plot(batch_results, images, targets, outputs):
     images = images.permute(0, 2, 3, 1).cpu().numpy()
-    preds = heatmap_to_preds(outputs['td'][0])
+    preds = heatmap_to_preds(outputs[:, 0])
     preds = preds.cpu().numpy()
     targets = targets.cpu().numpy()
 
@@ -99,9 +100,9 @@ if __name__ == '__main__':
 
     model = csmodels.resnet50(layers_out=1, num_instructions=1)
     model.one_iteration()
-    instructions = torch.LongTensor([DUMMY_INSTRUCTION])
+    instructions = [DUMMY_INSTRUCTION]
     model = csmodels.SequentialInstructor(model, instructions)
 
-    train_eval = MetricLogger(metrics)
-    val_eval = MetricLogger(metrics, plot_fn=plot)
-    engine.run(model, coco_train, coco_val, train_eval, val_eval, ce_loss, )
+    train_eval = Evaluator()
+    val_eval = Evaluator()
+    engine.run(model, coco_train, coco_val, train_eval, val_eval, plot_fn=plot)

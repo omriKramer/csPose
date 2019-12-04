@@ -255,7 +255,7 @@ class Bottleneck(CSBlock):
         out = out + identity
         out = self.relu(out)
 
-        if self.td_in:
+        if self.td_in is not None:
             out = self.bu_lateral(self.td_in) + out
 
         self.bu_out = out
@@ -357,7 +357,7 @@ class CsResNet(CSBlock):
         out = self.td_fc(out)
         out = self.relu(out)
 
-        out = out[:, :, None, None].expand(self.pre_pooling_size)
+        out = out[:, :, None, None].expand(self.pre_pooling_shape)
         for layer in reversed(list(self._iter_inner())):
             out = layer(out, 'TD')
 

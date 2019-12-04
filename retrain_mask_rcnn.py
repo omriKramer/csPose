@@ -7,7 +7,7 @@ import engine.engine as eng
 import transform
 from coco_utils import plot_kps_comparison
 from datasets import CocoSingleKPS
-from engine.eval import MetricLogger
+from engine.metric_logger import MetricLogger
 
 
 class WrapInList:

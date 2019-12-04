@@ -74,35 +74,21 @@ class SmoothedValue(object):
 
 
 class MetricLogger:
-    def __init__(self, metrics, plot_fn=None):
-        self.create_plots = plot_fn
-        self.metrics = metrics
-        self.meters = defaultdict(lambda: SmoothedValue(window_size=None, fmt="{median:.4f}"))
-
-    def update(self, n=1, **kwargs):
-        for k, v in kwargs.items():
-            if isinstance(v, torch.Tensor):
-                v = v.item()
-            assert isinstance(v, (float, int))
-            self.meters[k].update(v, n=n)
+    def __init__(self):
+        self.meters = defaultdict(lambda: SmoothedValue(fmt="{global_avg:.4f}"))
 
     @torch.no_grad()
-    def eval(self, targets, outputs, loss=None, reduce=False):
-        batch_results = self.metrics(targets, outputs)
-        averaged_results = {name: values.mean() for name, values in batch_results.items()}
-        if loss:
-            averaged_results['loss'] = loss.detach()
-
-        size = len(targets)
+    def update(self, batch_results, size, reduce=False):
+        batch_results = {k: v.mean() for k, v in batch_results.items()}
         if reduce:
-            averaged_results = utils.reduce_dict(averaged_results)
+            batch_results = utils.reduce_dict(batch_results)
             size *= utils.get_world_size()
 
-        self.update(n=size, **averaged_results)
-        return batch_results
+        for k, v in batch_results.items():
+            self.meters[k].update(v.item(), n=size)
 
     def emit(self):
-        meters = {name: meter.avg for name, meter in self.meters.items()}
+        meters = {name: meter.global_avg for name, meter in self.meters.items()}
         self.reset()
         return meters
 

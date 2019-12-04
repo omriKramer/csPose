@@ -6,7 +6,7 @@ import engine.engine as eng
 import transform
 from csmodels import cs_resnet
 from datasets import CocoSingleKPS
-from engine.eval import MetricLogger
+from engine.metric_logger import MetricLogger
 
 lookup_order = ['nose', 'left_eye', 'right_eye', 'left_ear', 'right_ear',
                 'left_shoulder', 'left_elbow', 'left_wrist',

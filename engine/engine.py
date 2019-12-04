@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 import utils
-from engine import eval
+from engine import metric_logger
 
 
 def get_args(args=None):
@@ -37,11 +37,9 @@ def get_args(args=None):
     parser.add_argument('--print-freq', default=100, type=int, help='print frequency')
     parser.add_argument('--plot-freq', type=int, help='plot frequency in epochs')
     parser.add_argument('--overwrite', action='store_true', help='delete contents of output dir before running')
-    parser.add_argument('--add-graph', action='store_true')
 
     # distributed training parameters
-    parser.add_argument('--world-size', default=1, type=int,
-                        help='number of distributed processes')
+    parser.add_argument('--world-size', default=1, type=int, help='number of distributed processes')
     parser.add_argument('--dist-url', default='env://', help='url used to set up distributed training')
 
     return parser.parse_args(args)
@@ -49,7 +47,7 @@ def get_args(args=None):
 
 def setup_output(output_dir, overwrite=False):
     output_dir = Path(output_dir)
-    if overwrite:
+    if overwrite and output_dir.is_dir():
         for child in output_dir.iterdir():
             if child.is_file():
                 child.unlink()
@@ -114,7 +112,7 @@ class Engine:
     def __init__(self, lr, momentum, weight_decay, lr_steps, lr_gamma,
                  data_path='.', output_dir='.', batch_size=32, device='cpu', epochs=1,
                  resume='', num_workers=4, world_size=1,
-                 dist_url='env://', print_freq=100, plot_freq=None, overwrite=False, add_graph=False):
+                 dist_url='env://', print_freq=100, plot_freq=None, overwrite=False, ):
         self.lr = lr
         self.momentum = momentum
         self.weight_decay = weight_decay
@@ -123,7 +121,6 @@ class Engine:
 
         self.plot_freq = plot_freq if utils.is_main_process() else None
         self.print_freq = print_freq
-        self.add_graph = add_graph
 
         self.dist_url = dist_url
         self.world_size = world_size
@@ -152,17 +149,13 @@ class Engine:
         engine = cls(**vars(args), **kwargs)
         return engine
 
-    def run(self, model, train_ds, val_ds, evaluator, val_evaluator, loss_fn, collate_fn=None,
-            model_feeder=None):
+    def run(self, model, train_ds, val_ds, evaluator, val_evaluator, collate_fn=None, plot_fn=None):
         print('Dataset Info')
         print('-' * 10)
         print(f'Train: {train_ds}')
         print()
         print(f'Validation: {val_ds}')
         print()
-
-        if model_feeder is None:
-            model_feeder = default_model_feeder
 
         model = self.setup_model(model)
         optimizer, lr_scheduler = self.setup_optimizer(model)
@@ -173,19 +166,14 @@ class Engine:
             self.start_epoch = load_from_checkpoint(self.checkpoint, model, self.device, optimizer, lr_scheduler)
         train_loader, val_loader = self.create_loaders(train_ds, val_ds, collate_fn)
 
-        if self.add_graph and utils.is_main_process():
-            data_iter = iter(train_loader)
-            images, _ = next(data_iter)
-            self.writer.add_graph(model, images)
-
         print('Start training...')
         start_time = time.time()
         for epoch in range(self.start_epoch, self.start_epoch + self.epochs):
             if self.distributed:
                 train_loader.batch_sampler.sampler.set_epoch(epoch)
 
-            self.train_one_epoch(model, optimizer, model_feeder, train_loader, evaluator, epoch, loss_fn)
-            self.evaluate(model, model_feeder, val_loader, val_evaluator, epoch)
+            self.train_one_epoch(model, optimizer, train_loader, evaluator, epoch)
+            self.evaluate(model, val_loader, val_evaluator, epoch, plot_fn)
             lr_scheduler.step()
             self.create_checkpoint(model, optimizer, epoch, lr_scheduler)
 
@@ -196,14 +184,13 @@ class Engine:
         if utils.is_main_process():
             self.writer.flush()
 
-    def train_one_epoch(self, model, optimizer, data_loader, evaluator, epoch, loss_fn):
+    def train_one_epoch(self, model, optimizer, data_loader, evaluator, epoch):
         model.train()
-        evaluator.reset()
-
+        logger = metric_logger.MetricLogger()
         start_time = time.time()
         end = time.time()
-        iter_time = eval.SmoothedValue(fmt='{avg:.4f}')
-        data_time = eval.SmoothedValue(fmt='{avg:.4f}')
+        iter_time = metric_logger.SmoothedValue(fmt='{avg:.4f}')
+        data_time = metric_logger.SmoothedValue(fmt='{avg:.4f}')
         n_batch = len(data_loader)
 
         for i, (images, targets) in enumerate(data_loader):
@@ -212,15 +199,15 @@ class Engine:
             optimizer.zero_grad()
             images, targets = self.to_device(images, targets)
             outputs = model(images)
-            loss = loss_fn(outputs, targets)
+            batch_results = evaluator(outputs, targets)
+            loss = batch_results['loss']
             assert torch.isfinite(loss), f'Loss is {loss} on epoch {epoch} iter {i}'
             loss.backward()
             optimizer.step()
 
-            evaluator.eval(targets, outputs, loss=loss, reduce=True)
-
+            logger.update(batch_results, len(images), reduce=True)
             if i % self.print_freq == self.print_freq - 1:
-                meters = evaluator.emit()
+                meters = logger.emit()
                 meters['lr'] = optimizer.param_groups[0]['lr']
                 print(get_train_msg(meters, iter_time, data_time, n_batch, epoch, i))
                 self.write_scalars(meters, epoch, i, n_batch, name='train')
@@ -233,25 +220,27 @@ class Engine:
         print()
 
     @torch.no_grad()
-    def evaluate(self, model, data_loader, evaluator, epoch):
+    def evaluate(self, model, data_loader, evaluator, epoch, plot_fn=None):
         model.eval()
+        logger = metric_logger.MetricLogger()
         start_time = time.time()
 
         for i, (images, targets) in enumerate(data_loader):
             images, targets = self.to_device(images, targets)
             outputs = model(images)
 
-            batch_results = evaluator.eval(targets, outputs)
-            if self._should_plot(epoch, i, len(data_loader)):
-                title, fig = evaluator.create_plots(batch_results, images, targets, outputs)
+            batch_results = evaluator(outputs, targets)
+            logger.update(batch_results, len(images))
+            if plot_fn and self._should_plot(epoch, i, len(data_loader)):
+                title, fig = plot_fn(batch_results, images, targets, outputs)
                 title += f'/{i}'
                 self.writer.add_figure(title, fig, epoch)
 
         total_time = time.time() - start_time
         print_end_epoch('Val', data_loader, epoch, total_time)
 
-        evaluator.synchronize_between_processes(self.device)
-        meters = evaluator.emit()
+        logger.synchronize_between_processes(self.device)
+        meters = logger.emit()
         self.write_scalars(meters, epoch, name='val')
         print(meters_to_string(meters))
         print()

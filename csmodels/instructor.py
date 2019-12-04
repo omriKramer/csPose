@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 
 
@@ -10,14 +11,17 @@ class SequentialInstructor(nn.Module):
     def __init__(self, model, instructions):
         super().__init__()
         self.model = model
-        self.instruction = instructions
+        self.instructions = instructions
 
     def forward(self, x):
-        out = {'bu': [], 'td': []}
-        batch_size = x.shape[0]
-        for inst in self.instruction:
-            inst = inst.expand(batch_size)
-            self.model(x, 'BU')
-            out['td'].append(self.model(inst, 'TD'))
+        self.model.clear()
 
-        return out
+        batch_size = x.shape[0]
+        td = []
+        for inst in self.instructions:
+            self.model(x, 'BU')
+            inst = torch.full((batch_size,), inst, dtype=torch.long)
+            td.append(self.model(inst, 'TD'))
+
+        td = torch.stack(td, dim=1)
+        return td
