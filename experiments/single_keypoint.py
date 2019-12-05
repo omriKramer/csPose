@@ -34,14 +34,21 @@ class Evaluator:
     def __call__(self, outputs, targets):
         heatmap = outputs.squeeze(dim=1)
         targets = targets.round()
-        loss = ce_loss(heatmap, targets.long())
+        loss = mse(heatmap, targets.long())
         with torch.no_grad():
             preds = heatmap_to_preds(heatmap)
             distances = F.pairwise_distance(preds.to(dtype=torch.float32), targets)
         return {
             'loss': loss,
-            'L2': distances,
+            'distance': distances,
         }
+
+
+def mse(heatmap, targets):
+    h, w = heatmap.shape[-2:]
+    targets = targets[:, 1] * w + targets[:, 0]
+    targets = F.one_hot(targets, num_classes=h * w).reshape(-1, h, w)
+    return F.mse_loss(heatmap, targets.to(dtype=torch.float))
 
 
 def ce_loss(heatmap, targets):
@@ -71,7 +78,7 @@ def plot(batch_results, images, targets, outputs):
 
     fig, axis = plt.subplots(1, min(len(images), 4))
     fig.set_tight_layout(True)
-    for ax, distance, image, t, p in zip(axis, batch_results['L2'], images, targets, preds):
+    for ax, distance, image, t, p in zip(axis, batch_results['distance'], images, targets, preds):
         show_image(ax, image)
         ax.plot(t[0], t[1], 'ro', label='target')
         ax.plot(p[0], p[1], 'bo', label='prediction')

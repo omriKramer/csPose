@@ -56,7 +56,7 @@ def reduce_dict(input_dict, average=True):
     return reduced_dict
 
 
-def setup_for_distributed(is_master, debug=False):
+def setup_for_distributed(is_master):
     """
     This function disables printing when not in master process
     """
