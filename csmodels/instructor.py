@@ -11,7 +11,7 @@ class SequentialInstructor(nn.Module):
     def __init__(self, model, instructions):
         super().__init__()
         self.model = model
-        self.instructions = torch.tensor(instructions, dtype=torch.long)
+        self.register_buffer('instructions', torch.tensor(instructions, dtype=torch.long))
 
     def forward(self, x):
         self.model.clear()
