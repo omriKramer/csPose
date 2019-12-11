@@ -8,12 +8,15 @@ class SequentialInstructor(nn.Module):
     Feeds in the instructions in a sequential manner.
     """
 
-    def __init__(self, model, instructions):
+    def __init__(self, model, n_instructions):
         super().__init__()
         self.model = model
-        self.register_buffer('instructions', torch.tensor(instructions, dtype=torch.long))
+        self.register_buffer('instructions', torch.tensor(range(n_instructions), dtype=torch.long))
 
     def forward(self, x):
+        """
+        out shape: b * n_instructions [* td_layers_out] * h * w
+        """
         self.model.clear()
 
         batch_size = x.shape[0]

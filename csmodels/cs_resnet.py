@@ -288,15 +288,15 @@ class Bottleneck(CSBlock):
 
 class CsResNet(CSBlock):
 
-    def __init__(self, block, layers, layers_out=3, num_instructions=10, width_per_group=64, norm_layer=None):
+    def __init__(self, block, layers, td_outplanes=3, num_instructions=10, norm_layer=None):
         super(CsResNet, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         self._norm_layer = norm_layer
 
         self.inplanes = 64
-        self.base_width = width_per_group
-        self.conv_block = CSConv(3, self.inplanes, layers_out, kernel_size=7, stride=2, bias=False)
+        self.base_width = 64
+        self.conv_block = CSConv(3, self.inplanes, td_outplanes, kernel_size=7, stride=2, bias=False)
         self.relu = nn.ReLU(inplace=True)
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
