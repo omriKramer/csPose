@@ -178,6 +178,7 @@ class Engine:
 
             self.train_one_epoch(model, optimizer, train_loader, evaluator, epoch)
             meters = self.evaluate(model, val_loader, val_evaluator, epoch, plot_fn)
+            self.record_hparams(meters)
             iterations = (epoch + 1) * len(train_ds)
             self.write_scalars(meters, iterations, name='val')
             lr_scheduler.step()
@@ -213,7 +214,6 @@ class Engine:
             logger.update(batch_results, len(images), reduce=True)
             if i % self.print_freq == self.print_freq - 1:
                 meters = logger.emit()
-                meters['lr'] = optimizer.param_groups[0]['lr']
                 print(get_train_msg(meters, iter_time, data_time, len(data_loader), epoch, i))
                 iterations = epoch * len(data_loader.dataset) + self.batch_size * self.world_size * (i + 1)
                 self.write_scalars(meters, iterations, name='train')
@@ -373,3 +373,15 @@ class Engine:
             d['checkpoint'] = self.checkpoint
 
         return repr(d)
+
+    def record_hparams(self, metrics):
+        hparams_dict = {
+            'optimizer': 'SGD',
+            'lr': self.lr,
+            'momentum': self.momentum,
+            'weight_decay': self.weight_decay,
+            'gamma': self.lr_gamma,
+            'bsize': self.batch_size * self.world_size,
+        }
+        metrics_dict = {f'hparam/{name}': value for name, value in metrics.items()}
+        self.writer.add_hparams(hparams_dict, metrics_dict)
