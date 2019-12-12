@@ -15,6 +15,10 @@ from engine import metric_logger
 
 
 def get_args(args=None):
+    """
+    Example of using with multiple GPU's
+    python3 -m torch.distributed.launch --nproc_per_node=NUM_GPU --use_env /path/to/scripty.py --world-size NUM_GPU
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--device', default='cuda', choices=['cuda', 'cpu'], help='device')
     parser.add_argument('--num-workers', default=4, type=int, metavar='N', help='number of workers to use')
@@ -173,7 +177,9 @@ class Engine:
                 train_loader.batch_sampler.sampler.set_epoch(epoch)
 
             self.train_one_epoch(model, optimizer, train_loader, evaluator, epoch)
-            self.evaluate(model, val_loader, val_evaluator, epoch, plot_fn)
+            meters = self.evaluate(model, val_loader, val_evaluator, epoch, plot_fn)
+            iterations = (epoch + 1) * len(train_ds)
+            self.write_scalars(meters, iterations, name='val')
             lr_scheduler.step()
             self.create_checkpoint(model, optimizer, epoch, lr_scheduler)
 
@@ -191,7 +197,6 @@ class Engine:
         end = time.time()
         iter_time = metric_logger.SmoothedValue(fmt='{avg:.4f}')
         data_time = metric_logger.SmoothedValue(fmt='{avg:.4f}')
-        n_batch = len(data_loader)
 
         for i, (images, targets) in enumerate(data_loader):
             data_time.update(time.time() - end)
@@ -209,8 +214,9 @@ class Engine:
             if i % self.print_freq == self.print_freq - 1:
                 meters = logger.emit()
                 meters['lr'] = optimizer.param_groups[0]['lr']
-                print(get_train_msg(meters, iter_time, data_time, n_batch, epoch, i))
-                self.write_scalars(meters, epoch, i, n_batch, name='train')
+                print(get_train_msg(meters, iter_time, data_time, len(data_loader), epoch, i))
+                iterations = epoch * len(data_loader.dataset) + self.batch_size * self.world_size * (i + 1)
+                self.write_scalars(meters, iterations, name='train')
 
             iter_time.update(time.time() - end)
             end = time.time()
@@ -241,9 +247,9 @@ class Engine:
 
         logger.synchronize_between_processes(self.device)
         meters = logger.emit()
-        self.write_scalars(meters, epoch, name='val')
         print(meters_to_string(meters))
         print()
+        return meters
 
     def _should_plot(self, epoch, iteration, total_iterations):
         if not utils.is_main_process() or not self.plot_freq:
@@ -338,14 +344,9 @@ class Engine:
         utils.setup_for_distributed(self.rank == 0)
         return gpu
 
-    def write_scalars(self, scalars, epoch, iteration=None, epoch_size=None, name=''):
+    def write_scalars(self, scalars, global_step, name=''):
         if not utils.is_main_process():
             return
-
-        if iteration and epoch_size:
-            global_step = epoch * epoch_size + iteration
-        else:
-            global_step = epoch
 
         if name:
             scalars = {f'{tag}/{name}': value for tag, value in scalars.items()}
