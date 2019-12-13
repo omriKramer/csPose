@@ -197,3 +197,9 @@ class ImageTargetWrapper:
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.t}'
+
+
+def extract_keypoints(image, target):
+    keypoints = np.array((target['keypoints'])).reshape(-1, 3)
+    keypoints = keypoints[:, :2]
+    return image, keypoints

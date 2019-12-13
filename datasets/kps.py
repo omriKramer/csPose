@@ -52,6 +52,8 @@ def fix_segmentation(segmentation, frame):
 
 
 class CocoSingleKPS(torchvision.datasets.VisionDataset):
+    MEAN = np.array([0.4064, 0.3758, 0.3585])
+    STD = np.array([0.2377, 0.2263, 0.2234])
 
     def __init__(self, root, ann_file, transform=None, target_transform=None, transforms=None, keypoints=None):
         super().__init__(root, transforms, transform, target_transform)

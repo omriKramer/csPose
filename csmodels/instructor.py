@@ -8,10 +8,11 @@ class SequentialInstructor(nn.Module):
     Feeds in the instructions in a sequential manner.
     """
 
-    def __init__(self, model, n_instructions):
+    def __init__(self, model, n_instructions, td_head=None):
         super().__init__()
         self.model = model
         self.register_buffer('instructions', torch.tensor(range(n_instructions), dtype=torch.long))
+        self.td_head = td_head
 
     def forward(self, x):
         """
@@ -23,7 +24,12 @@ class SequentialInstructor(nn.Module):
         td = []
         for inst in self.instructions:
             self.model(x, 'BU')
+
             inst = inst.expand(batch_size)
-            td.append(self.model(inst, 'TD'))
+            td_out = self.model(inst, 'TD')
+            if self.td_head:
+                td_out = self.td_head(td_out)
+            td.append(td_out)
+
         td = torch.stack(td, dim=1)
         return td
