@@ -13,25 +13,45 @@ def heatmap_to_preds(heatmap):
     return preds
 
 
+def resize_kps(kps, new_size, original_size):
+    scale_x = new_size[1] / original_size[1]
+    scale_y = new_size[0] / original_size[0]
+    new_x = kps[..., 0] * scale_x
+    new_y = kps[..., 1] * scale_y
+    new_x = new_x.clamp(0, new_size[1] - 1)
+    new_y = new_y.clamp(0, new_size[0] - 1)
+    new_kps = torch.stack((new_x, new_y), dim=-1)
+    return new_kps
+
+
 class Evaluator:
+
+    def __init__(self, original_size=None):
+        self.original_size = original_size
 
     def __call__(self, outputs, targets):
         """
         outputs: (N, K, H, W)
         targets: (N, K, 2)
         """
-        targets = targets.round()
-        loss = ce_loss(outputs, targets.long())
+        ce_targets = targets
+        if self.original_size:
+            ce_targets = resize_kps(targets, outputs.shape[-2:], self.original_size)
+        ce_targets = ce_targets.round().long()
+        loss = ce_loss(outputs, ce_targets)
+
         with torch.no_grad():
-            distances = pairwise_distance(outputs, targets)
+            preds = heatmap_to_preds(outputs).float()
+            if self.original_size:
+                preds = resize_kps(preds, self.original_size, outputs.shape[-2:])
+            distances = pairwise_distance(preds, targets)
         return {
             'loss': loss,
             'mean_distance': distances,
         }
 
 
-def pairwise_distance(outputs, targets):
-    preds = heatmap_to_preds(outputs).to(dtype=torch.float32)
+def pairwise_distance(preds, targets):
     distances = [F.pairwise_distance(p, t).mean() for p, t in zip(preds, targets)]
     distances = torch.stack(distances)
     return distances

@@ -375,6 +375,9 @@ class Engine:
         return repr(d)
 
     def record_hparams(self, metrics):
+        if not utils.is_main_process():
+            return
+
         hparams_dict = {
             'optimizer': 'SGD',
             'lr': self.lr,
