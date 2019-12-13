@@ -64,7 +64,7 @@ td_head = nn.Sequential(
 )
 model = csmodels.SequentialInstructor(model, num_instructions, td_head=td_head)
 
-train_eval = eval.Evaluator()
-val_eval = eval.Evaluator()
+train_eval = eval.Evaluator(original_size=IMAGE_SIZE)
+val_eval = eval.Evaluator(original_size=IMAGE_SIZE)
 plot = eval.Visualizer(CocoSingleKPS.MEAN, CocoSingleKPS.STD)
 engine.run(model, coco_train, coco_val, train_eval, val_eval, plot_fn=plot)
