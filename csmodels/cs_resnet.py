@@ -107,44 +107,30 @@ class BasicBlock(CSBlock):
         self.downsample = downsample
         self.stride = stride
 
-        self.bu_multp1 = conv1x1(planes, planes)
-        self.bu_side_bn1 = nn.BatchNorm2d(planes)
-        self.bu_multp2 = conv1x1(planes, planes)
-        self.bu_side_bn2 = nn.BatchNorm2d(planes)
-
         self.td_conv1 = conv3x3(planes, planes)
         self.td_bn1 = norm_layer(planes)
-        self.td_conv2 = conv3x3(planes, inplanes)
+        self.td_conv2 = conv_transpose3x3(planes, inplanes, stride)
         self.td_bn2 = norm_layer(inplanes)
         self.upsample = upsample
 
-        self.td_multp1 = conv1x1(planes, planes)
-        self.td_side_bn1 = nn.BatchNorm2d(planes)
-        self.td_multp2 = conv1x1(planes, planes)
-        self.td_side_bn2 = nn.BatchNorm2d(planes)
+        self.bu_lateral = conv1x1(planes, planes)
+        self.td_lateral = conv1x1(planes, planes)
 
-        self.bu_out1 = self.bu_out2 = None
-        self.td_in1 = self.td_in2 = None
+        self.bu_out = None
+        self.td_in = None
 
     def clear(self):
-        self.bu_out1 = self.bu_out2 = None
-        self.td_in1 = self.td_in2 = None
+        self.bu_out = None
+        self.td_in = None
 
     def one_iteration(self):
-        disable_grads(self.bu_multp1, self.bu_side_bn1, self.bu_multp2, self.bu_side_bn2)
+        disable_grads(self.bu_lateral, self.td_lateral)
 
     def _bottom_up(self, x):
         identity = x
         out = self.conv1(x)
         out = self.bn1(out)
         out = self.relu(out)
-
-        if self.td_in2 is not None:
-            out = self.bu_multp1(self.td_in2) + out
-            out = self.bu_side_bn1(out)
-            out = self.relu(out)
-
-        self.bu_out1 = out
 
         out = self.conv2(out)
         out = self.bn2(out)
@@ -155,37 +141,24 @@ class BasicBlock(CSBlock):
         out += identity
         out = self.relu(out)
 
-        if self.td_in1 is not None:
-            out = self.bu_multp2(self.td_in1) + out
-            out = self.bu_side_bn2(out)
-            out = self.relu(out)
+        if self.td_in is not None:
+            out = self.bu_lateral(self.td_in) + out
 
-        self.bu_out2 = out
-
+        self.bu_out = out
         return out
 
     def _top_down(self, x):
-        x = self.td_multp1(self.bu_out2) + x
-        x = self.td_side_bn1(x)
-        identity = self.relu(x)
+        x = self.td_lateral(self.bu_out) + x
+        identity = x
+        self.td_in = identity
 
-        self.td_in1 = identity
-
-        out = self.td_conv1(identity)
+        out = self.td_conv1(x)
         out = self.td_bn1(out)
         out = self.relu(out)
 
-        out = self.td_multp2(self.bu_out1) + out
-        out = self.td_side_bn2(out)
-        out = self.relu(out)
-
-        self.td_in2 = out
-
-        if self.stride == 2:
-            out = F.interpolate(out, scale_factor=2, mode='bilinear', align_corners=False)
-
         out = self.td_conv2(out)
         out = self.td_bn2(out)
+
         if self.upsample:
             identity = self.upsample(identity)
 
