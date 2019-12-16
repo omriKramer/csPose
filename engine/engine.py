@@ -43,8 +43,8 @@ def get_args(args=None):
     parser.add_argument('--overwrite', action='store_true', help='delete contents of output dir before running')
 
     # distributed training parameters
-    parser.add_argument('--world-size', default=1, type=int, help='number of distributed processes')
     parser.add_argument('--dist-url', default='env://', help='url used to set up distributed training')
+    parser.add_argument('--data-parallel', action='store_true', help='use DataParallel')
 
     return parser.parse_args(args)
 
@@ -61,7 +61,7 @@ def setup_output(output_dir, overwrite=False):
 
 def load_from_checkpoint(checkpoint, model, map_location=None, optimizer=None, lr_scheduler=None):
     checkpoint = torch.load(checkpoint, map_location=map_location)
-    if isinstance(model, nn.parallel.DistributedDataParallel):
+    if isinstance(model, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
         model.module.load_state_dict(checkpoint['model_state_dict'])
     else:
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -115,8 +115,8 @@ class Engine:
 
     def __init__(self, lr, momentum, weight_decay, lr_steps, lr_gamma,
                  data_path='.', output_dir='.', batch_size=32, device='cpu', epochs=1,
-                 resume='', num_workers=4, world_size=1,
-                 dist_url='env://', print_freq=100, plot_freq=None, overwrite=False, ):
+                 resume='', num_workers=4, dist_url='env://', print_freq=100,
+                 plot_freq=None, overwrite=False, data_parallel=False):
         self.lr = lr
         self.momentum = momentum
         self.weight_decay = weight_decay
@@ -127,7 +127,6 @@ class Engine:
         self.print_freq = print_freq
 
         self.dist_url = dist_url
-        self.world_size = world_size
 
         self.epochs = epochs
         self.data_path = data_path
@@ -137,6 +136,8 @@ class Engine:
 
         device_index = self._init_distributed_mode()
         self.device = torch.device(f'{device}:{device_index}')
+        self.data_parallel = data_parallel
+        assert not (self.data_parallel and self.distributed), 'use either DataParallel or DistributedDataParallel'
 
         self.output_dir = setup_output(output_dir, overwrite=overwrite and utils.is_main_process())
         if utils.is_main_process():
@@ -264,9 +265,15 @@ class Engine:
 
     def setup_model(self, model):
         print('setup mode...')
-        model.to(self.device)
-        if self.distributed:
+        if self.data_parallel:
+            model = nn.DataParallel(model)
+            print("Using DataParallel with", torch.cuda.device_count(), "GPUs")
+            model.to(self.device)
+        elif self.distributed:
+            model.to(self.device)
             model = nn.parallel.DistributedDataParallel(model, device_ids=[self.device])
+        else:
+            model.to(self.device)
 
         return model
 
@@ -312,7 +319,7 @@ class Engine:
         if not utils.is_main_process():
             return
 
-        if isinstance(model, nn.parallel.DistributedDataParallel):
+        if isinstance(model, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
             model_state_dict = model.module.state_dict()
         else:
             model_state_dict = model.state_dict()
@@ -328,6 +335,7 @@ class Engine:
         if 'RANK' not in os.environ or 'WORLD_SIZE' not in os.environ:
             print('Not using distributed mode')
             self.distributed = False
+            self.world_size = 1
             return 0
 
         self.rank = int(os.environ["RANK"])
