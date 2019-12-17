@@ -40,23 +40,13 @@ def get_args(args=None):
     parser.add_argument('--output-dir', default='.', help='path where to save')
     parser.add_argument('--print-freq', default=100, type=int, help='print frequency')
     parser.add_argument('--plot-freq', type=int, help='plot frequency in epochs')
-    parser.add_argument('--overwrite', action='store_true', help='delete contents of output dir before running')
+    parser.add_argument('--out-file', help='name of log file')
 
     # distributed training parameters
     parser.add_argument('--dist-url', default='env://', help='url used to set up distributed training')
     parser.add_argument('--data-parallel', action='store_true', help='use DataParallel')
 
     return parser.parse_args(args)
-
-
-def setup_output(output_dir, overwrite=False):
-    output_dir = Path(output_dir)
-    if overwrite and output_dir.is_dir():
-        for child in output_dir.iterdir():
-            if child.is_file():
-                child.unlink()
-
-    return output_dir
 
 
 def load_from_checkpoint(checkpoint, model, map_location=None, optimizer=None, lr_scheduler=None):
@@ -96,9 +86,9 @@ def meters_to_string(meters):
     return ', '.join(f'{name}: {value:.4f}' for name, value in meters.items())
 
 
-def print_end_epoch(phase, data_loader, epoch, total_time):
+def end_epoch_msg(phase, data_loader, epoch, total_time):
     total_time_str = datetime.timedelta(seconds=int(total_time))
-    print(f'{phase} - Epoch [{epoch}]: Total time: {total_time_str} ({total_time / len(data_loader):.2f} s / it)')
+    return f'{phase} - Epoch [{epoch}]: Total time: {total_time_str} ({total_time / len(data_loader):.2f} s / it)'
 
 
 def infer_checkpoint(output_dir: Path):
@@ -114,9 +104,11 @@ def infer_checkpoint(output_dir: Path):
 class Engine:
 
     def __init__(self, lr, momentum, weight_decay, lr_steps, lr_gamma,
-                 data_path='.', output_dir='.', batch_size=32, device='cpu', epochs=1,
+                 data_path='.', output_dir='.', out_file=None, batch_size=32, device='cpu', epochs=1,
                  resume='', num_workers=4, dist_url='env://', print_freq=100,
-                 plot_freq=None, overwrite=False, data_parallel=False):
+                 plot_freq=None, data_parallel=False, ):
+        self._setup_output(output_dir, out_file)
+
         self.lr = lr
         self.momentum = momentum
         self.weight_decay = weight_decay
@@ -126,22 +118,17 @@ class Engine:
         self.plot_freq = plot_freq if utils.is_main_process() else None
         self.print_freq = print_freq
 
-        self.dist_url = dist_url
-
         self.epochs = epochs
         self.data_path = data_path
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.start_epoch = 0
 
+        self.dist_url = dist_url
         device_index = self._init_distributed_mode()
         self.device = torch.device(f'{device}:{device_index}')
         self.data_parallel = data_parallel
         assert not (self.data_parallel and self.distributed), 'use either DataParallel or DistributedDataParallel'
-
-        self.output_dir = setup_output(output_dir, overwrite=overwrite and utils.is_main_process())
-        if utils.is_main_process():
-            self.writer = SummaryWriter(output_dir)
 
         if resume == 'auto':
             self.checkpoint = infer_checkpoint(self.output_dir)
@@ -155,26 +142,34 @@ class Engine:
         return engine
 
     def run(self, model, train_ds, val_ds, evaluator, val_evaluator, collate_fn=None, plot_fn=None):
-        print('Dataset Info')
-        print('-' * 10)
-        print(f'Train: {train_ds}')
-        print()
-        print(f'Validation: {val_ds}')
-        print()
+        title = '| Engine Run started |'
+        self.print('-' * len(title))
+        self.print(title)
+        self.print('-' * len(title))
+        self.print()
+
+        self.print('Dataset Info')
+        self.print('-' * 10)
+        self.print(f'Train: {train_ds}')
+        self.print()
+        self.print(f'Validation: {val_ds}')
+        self.print()
 
         model = self.setup_model(model)
         optimizer, lr_scheduler = self.setup_optimizer(model)
-        print(f'Training info:')
-        print(self)
+        self.print(f'Training info')
+        self.print('-' * 10)
+        self.print(self)
+        self.print()
         if self.checkpoint:
-            print(f'Loading from checkpoint {self.checkpoint}')
+            self.print(f'Loading from checkpoint {self.checkpoint}')
             self.start_epoch = load_from_checkpoint(self.checkpoint, model, self.device, optimizer, lr_scheduler)
         else:
             self.record_hparams()
 
         train_loader, val_loader = self.create_loaders(train_ds, val_ds, collate_fn)
 
-        print('Start training...')
+        self.print('Start training...')
         start_time = time.time()
         for epoch in range(self.start_epoch, self.start_epoch + self.epochs):
             if self.distributed:
@@ -188,11 +183,13 @@ class Engine:
             self.create_checkpoint(model, optimizer, epoch, lr_scheduler)
 
         total_time = time.time() - start_time
-        print('Done.')
-        print(f'Total time {total_time // 60:.0f}m {total_time % 60:.0f}s')
+        self.print('Done.')
+        self.print(f'Total time {total_time // 60:.0f}m {total_time % 60:.0f}s')
 
         if utils.is_main_process():
             self.writer.close()
+            if self.out_file:
+                self.out_file.close()
 
     def train_one_epoch(self, model, optimizer, data_loader, evaluator, epoch):
         model.train()
@@ -217,7 +214,7 @@ class Engine:
             logger.update(batch_results, len(images), reduce=True)
             if i % self.print_freq == self.print_freq - 1:
                 meters = logger.emit()
-                print(get_train_msg(meters, iter_time, data_time, len(data_loader), epoch, i))
+                self.print(get_train_msg(meters, iter_time, data_time, len(data_loader), epoch, i))
                 iterations = epoch * len(data_loader.dataset) + self.batch_size * self.world_size * (i + 1)
                 self.write_scalars(meters, iterations, name='train')
 
@@ -225,8 +222,8 @@ class Engine:
             end = time.time()
 
         total_time = time.time() - start_time
-        print_end_epoch('Train', data_loader, epoch, total_time)
-        print()
+        self.print(end_epoch_msg('Train', data_loader, epoch, total_time))
+        self.print()
 
     @torch.no_grad()
     def evaluate(self, model, data_loader, evaluator, epoch, plot_fn=None):
@@ -246,12 +243,12 @@ class Engine:
                 self.writer.add_figure(title, fig, epoch)
 
         total_time = time.time() - start_time
-        print_end_epoch('Val', data_loader, epoch, total_time)
+        self.print(end_epoch_msg('Val', data_loader, epoch, total_time))
 
         logger.synchronize_between_processes(self.device)
         meters = logger.emit()
-        print(meters_to_string(meters))
-        print()
+        self.print(meters_to_string(meters))
+        self.print()
         return meters
 
     def _should_plot(self, epoch, iteration, total_iterations):
@@ -266,11 +263,14 @@ class Engine:
         return False
 
     def setup_model(self, model):
-        print('setup model...')
-        print(model.name)
+        self.print('Model')
+        self.print('-' * 10)
+
+        self.print(model.name)
+        self.print()
         if self.data_parallel:
             model = nn.DataParallel(model)
-            print("Using DataParallel with", torch.cuda.device_count(), "GPUs")
+            self.print("Using DataParallel with", torch.cuda.device_count(), "GPUs")
             model.to(self.device)
         elif self.distributed:
             model.to(self.device)
@@ -303,7 +303,6 @@ class Engine:
         return images, targets
 
     def create_loaders(self, train_ds, val_ds, collate_fn):
-        print("Creating data loaders")
         if self.distributed:
             train_sampler = torch.utils.data.distributed.DistributedSampler(train_ds)
             val_sampler = torch.utils.data.distributed.DistributedSampler(val_ds)
@@ -316,6 +315,7 @@ class Engine:
                                   collate_fn=collate_fn)
         val_loader = DataLoader(val_ds, batch_size=self.batch_size, sampler=val_sampler, num_workers=self.num_workers,
                                 collate_fn=collate_fn)
+
         return train_loader, val_loader
 
     def create_checkpoint(self, model, optimizer, epoch, lr_scheduler):
@@ -336,7 +336,7 @@ class Engine:
 
     def _init_distributed_mode(self):
         if 'RANK' not in os.environ or 'WORLD_SIZE' not in os.environ:
-            print('Not using distributed mode')
+            self.print('Not using distributed mode')
             self.distributed = False
             self.world_size = 1
             return 0
@@ -348,7 +348,7 @@ class Engine:
 
         self.distributed = True
         self.dist_backend = 'nccl'
-        print('| distributed init (rank {}): {}'.format(self.rank, self.dist_url), flush=True)
+        self.print('| distributed init (rank {}): {}'.format(self.rank, self.dist_url), flush=True)
         dist.init_process_group(backend=self.dist_backend, init_method=self.dist_url,
                                 world_size=self.world_size, rank=self.rank)
         dist.barrier()
@@ -377,10 +377,8 @@ class Engine:
             'world_size': self.world_size,
         }
 
-        if self.checkpoint:
-            d['checkpoint'] = self.checkpoint
-
-        return repr(d)
+        r = ', '.join(f'{name}: {value}' for name, value in d.items())
+        return r
 
     def record_hparams(self, metrics=None):
         if not metrics:
@@ -399,3 +397,16 @@ class Engine:
         }
         metrics_dict = {f'hparam/{name}': value for name, value in metrics.items()}
         self.writer.add_hparams(hparams_dict, metrics_dict)
+
+    def print(self, *objects):
+        print(*objects, file=self.out_file)
+
+    def _setup_output(self, output_dir, out_file):
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True)
+        self.out_file = None
+        if utils.is_main_process():
+            if out_file:
+                self.out_file = (self.output_dir / out_file).open('a')
+
+            self.writer = SummaryWriter(output_dir)
