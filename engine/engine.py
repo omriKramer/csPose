@@ -404,7 +404,7 @@ class Engine:
 
     def _setup_output(self, output_dir, out_file, flush):
         self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
         self.flush = flush
         self.out_file = None
         if utils.is_main_process():
