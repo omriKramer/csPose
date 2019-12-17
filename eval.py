@@ -45,15 +45,17 @@ class Evaluator:
             if self.original_size:
                 preds = resize_kps(preds, self.original_size, outputs.shape[-2:])
             distances = pairwise_distance(preds, targets)
-        return {
+        meters = {
             'loss': loss,
             'mean_distance': distances,
         }
+        return meters, preds
 
 
 def pairwise_distance(preds, targets):
-    distances = [F.pairwise_distance(p, t).mean() for p, t in zip(preds, targets)]
+    distances = [F.pairwise_distance(p, t) for p, t in zip(preds, targets)]
     distances = torch.stack(distances)
+    distances = distances.mean(dim=1)
     return distances
 
 
@@ -85,9 +87,9 @@ class Visualizer:
         self.std = std
         self.mean = mean
 
-    def __call__(self, batch_results, images, targets, outputs):
+    def __call__(self, batch_results, images, targets, preds):
         images = images.permute(0, 2, 3, 1).cpu().numpy()
-        preds = heatmap_to_preds(outputs).cpu().numpy()
+        preds = preds.cpu().numpy()
         targets = targets.cpu().numpy()
 
         fig, axis = plt.subplots(1, min(len(images), 4))
@@ -95,7 +97,7 @@ class Visualizer:
             show_image(ax, image, self.mean, self.std)
             ax.plot(img_t[:, 0], img_t[:, 1], 'or', label='target')
             ax.plot(img_p[:, 0], img_p[:, 1], 'ob', label='prediction')
-            ax.set_title(f'mePD: {distance:.2f}')
+            ax.set_title(f'mPD: {distance:.2f}\nt: {img_t}\np: {img_p}')
             ax.set_axis_off()
 
         handles, labels = axis[-1].get_legend_handles_labels()

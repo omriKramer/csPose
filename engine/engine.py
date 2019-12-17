@@ -206,7 +206,7 @@ class Engine:
             optimizer.zero_grad()
             images, targets = self.to_device(images, targets)
             outputs = model(images)
-            batch_results = evaluator(outputs, targets)
+            batch_results, _ = evaluator(outputs, targets)
             loss = batch_results['loss']
             assert torch.isfinite(loss), f'Loss is {loss} on epoch {epoch} iter {i}'
             loss.backward()
@@ -236,10 +236,10 @@ class Engine:
             images, targets = self.to_device(images, targets)
             outputs = model(images)
 
-            batch_results = evaluator(outputs, targets)
+            batch_results, preds = evaluator(outputs, targets)
             logger.update(batch_results, len(images))
             if plot_fn and self._should_plot(epoch, i, len(data_loader)):
-                title, fig = plot_fn(batch_results, images, targets, outputs)
+                title, fig = plot_fn(batch_results, images, targets, preds)
                 title += f'/{i}'
                 self.writer.add_figure(title, fig, epoch)
 
