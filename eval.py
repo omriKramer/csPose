@@ -95,7 +95,7 @@ class Visualizer:
             show_image(ax, image, self.mean, self.std)
             ax.plot(img_t[:, 0], img_t[:, 1], 'or', label='target')
             ax.plot(img_p[:, 0], img_p[:, 1], 'ob', label='prediction')
-            ax.set_title(f'mean pairwise distance: {distance:.2f}')
+            ax.set_title(f'mePD: {distance:.2f}')
             ax.set_axis_off()
 
         handles, labels = axis[-1].get_legend_handles_labels()

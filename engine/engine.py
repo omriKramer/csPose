@@ -16,15 +16,15 @@ from engine import metric_logger
 
 def get_args(args=None):
     """
-    Example of using with multiple GPU's
-    python3 -m torch.distributed.launch --nproc_per_node=NUM_GPU --use_env /path/to/scripty.py --world-size NUM_GPU
+    Example of using with DistributedDataParallel
+    python3 -m torch.distributed.launch --nproc_per_node=NUM_GPU --use_env /path/to/scripty.py
     """
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--device', default='cuda', choices=['cuda', 'cpu'], help='device')
     parser.add_argument('--num-workers', default=4, type=int, metavar='N', help='number of workers to use')
     parser.add_argument('-e', '--epochs', default=13, type=int, metavar='N', help='number of total epochs to run')
     parser.add_argument('-b', '--batch-size', default=2, type=int,
-                        help='images per gpu, the total batch size is $NGPU x batch_size')
+                        help='images per process, the total batch size is $processes x batch_size')
     parser.add_argument('--resume', default='')
 
     # optimization parameters
@@ -38,9 +38,10 @@ def get_args(args=None):
 
     # output parameters
     parser.add_argument('--output-dir', default='.', help='path where to save')
-    parser.add_argument('--print-freq', default=100, type=int, help='print frequency')
+    parser.add_argument('--print-freq', default=1000, type=int, help='print frequency')
     parser.add_argument('--plot-freq', type=int, help='plot frequency in epochs')
-    parser.add_argument('--out-file', help='name of log file')
+    parser.add_argument('--out-file', action='store_true', help='output to a file instead of stdout')
+    parser.add_argument('--flush', action='store_true')
 
     # distributed training parameters
     parser.add_argument('--dist-url', default='env://', help='url used to set up distributed training')
@@ -104,10 +105,10 @@ def infer_checkpoint(output_dir: Path):
 class Engine:
 
     def __init__(self, lr, momentum, weight_decay, lr_steps, lr_gamma,
-                 data_path='.', output_dir='.', out_file=None, batch_size=32, device='cpu', epochs=1,
+                 data_path='.', output_dir='.', out_file=False, flush=False, batch_size=32, device='cpu', epochs=1,
                  resume='', num_workers=4, dist_url='env://', print_freq=100,
                  plot_freq=None, data_parallel=False, ):
-        self._setup_output(output_dir, out_file)
+        self._setup_output(output_dir, out_file, flush)
 
         self.lr = lr
         self.momentum = momentum
@@ -399,14 +400,15 @@ class Engine:
         self.writer.add_hparams(hparams_dict, metrics_dict)
 
     def print(self, *objects):
-        print(*objects, file=self.out_file)
+        print(*objects, file=self.out_file, flush=self.flush)
 
-    def _setup_output(self, output_dir, out_file):
+    def _setup_output(self, output_dir, out_file, flush):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True)
+        self.flush = flush
         self.out_file = None
         if utils.is_main_process():
             if out_file:
-                self.out_file = (self.output_dir / out_file).open('a')
+                self.out_file = (self.output_dir / 'train.txt').open('a')
 
             self.writer = SummaryWriter(output_dir)
