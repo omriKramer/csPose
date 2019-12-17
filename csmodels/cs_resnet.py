@@ -88,6 +88,7 @@ class CSConv(CSBlock):
 
 class BasicBlock(CSBlock):
     expansion = 1
+    depth = 2
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, upsample=None, groups=1,
                  base_width=64, dilation=1, norm_layer=None):
@@ -169,6 +170,7 @@ class BasicBlock(CSBlock):
 
 class Bottleneck(CSBlock):
     expansion = 4
+    depth = 3
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, upsample=None,
                  base_width=64, norm_layer=None):
@@ -289,6 +291,9 @@ class CsResNet(CSBlock):
             elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
+
+        depth = (sum(layers) + 2) * block.depth
+        self.name = self.__class__.__name__ + str(depth)
 
     def _make_layer(self, block, planes, blocks, stride=1):
         norm_layer = self._norm_layer

@@ -91,7 +91,6 @@ class Visualizer:
         targets = targets.cpu().numpy()
 
         fig, axis = plt.subplots(1, min(len(images), 4))
-        fig.set_tight_layout(True)
         for ax, distance, image, img_t, img_p in zip(axis, batch_results['mean_distance'], images, targets, preds):
             show_image(ax, image, self.mean, self.std)
             ax.plot(img_t[:, 0], img_t[:, 1], 'or', label='target')

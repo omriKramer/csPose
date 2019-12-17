@@ -14,6 +14,12 @@ class SequentialInstructor(nn.Module):
         self.register_buffer('instructions', torch.tensor(range(n_instructions), dtype=torch.long))
         self.td_head = td_head
 
+    @property
+    def name(self):
+        has_head = bool(self.td_head)
+        name = f'{self.__class__.__name__}({self.model.name}, {len(self.instructions)}, head={has_head})'
+        return name
+
     def forward(self, x):
         """
         out shape: b * n_instructions [* td_layers_out] * h * w

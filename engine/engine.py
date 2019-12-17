@@ -169,6 +169,9 @@ class Engine:
         if self.checkpoint:
             print(f'Loading from checkpoint {self.checkpoint}')
             self.start_epoch = load_from_checkpoint(self.checkpoint, model, self.device, optimizer, lr_scheduler)
+        else:
+            self.record_hparams()
+
         train_loader, val_loader = self.create_loaders(train_ds, val_ds, collate_fn)
 
         print('Start training...')
@@ -179,7 +182,6 @@ class Engine:
 
             self.train_one_epoch(model, optimizer, train_loader, evaluator, epoch)
             meters = self.evaluate(model, val_loader, val_evaluator, epoch, plot_fn)
-            self.record_hparams(meters)
             iterations = (epoch + 1) * len(train_ds)
             self.write_scalars(meters, iterations, name='val')
             lr_scheduler.step()
@@ -264,7 +266,8 @@ class Engine:
         return False
 
     def setup_model(self, model):
-        print('setup mode...')
+        print('setup model...')
+        print(model.name)
         if self.data_parallel:
             model = nn.DataParallel(model)
             print("Using DataParallel with", torch.cuda.device_count(), "GPUs")
@@ -364,14 +367,11 @@ class Engine:
 
     def __repr__(self):
         d = {
-            'optimization':
-                {
-                    'lr': self.lr,
-                    'momentum': self.momentum,
-                    'weight decay': self.weight_decay,
-                    'lr steps': self.lr_steps,
-                    'gamma': self.lr_gamma
-                },
+            'lr': self.lr,
+            'momentum': self.momentum,
+            'weight decay': self.weight_decay,
+            'lr steps': self.lr_steps,
+            'gamma': self.lr_gamma,
             'batch size': self.batch_size,
             'epochs': self.epochs,
             'world_size': self.world_size,
@@ -382,7 +382,10 @@ class Engine:
 
         return repr(d)
 
-    def record_hparams(self, metrics):
+    def record_hparams(self, metrics=None):
+        if not metrics:
+            metrics = {}
+
         if not utils.is_main_process():
             return
 
