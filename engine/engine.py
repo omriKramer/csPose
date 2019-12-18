@@ -215,6 +215,7 @@ class Engine:
             logger.update(batch_results, len(images), reduce=True)
             if i % self.print_freq == self.print_freq - 1:
                 meters = logger.emit()
+                meters['lr'] = optimizer.param_groups[0]["lr"]
                 self.print(get_train_msg(meters, iter_time, data_time, len(data_loader), epoch, i))
                 iterations = epoch * len(data_loader.dataset) + self.batch_size * self.world_size * (i + 1)
                 self.write_scalars(meters, iterations, name='train')
@@ -396,6 +397,9 @@ class Engine:
             'gamma': self.lr_gamma,
             'bsize': self.batch_size * self.world_size,
         }
+        if self.lr_steps:
+            hparams_dict['lr_steps'] = ', '.join(str(s) for s in self.lr_steps)
+
         metrics_dict = {f'hparam/{name}': value for name, value in metrics.items()}
         self.writer.add_hparams(hparams_dict, metrics_dict)
 
