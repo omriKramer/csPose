@@ -13,16 +13,26 @@ IMAGE_SIZE = 128, 128
 data_path, remaining_args = utils.get_data_path()
 engine = eng.Engine.command_line_init(args=remaining_args)
 
-data_transform = transform.Compose([
-    transform.ResizeKPS(IMAGE_SIZE),
-    transform.extract_keypoints,
-    transform.ToTensor(),
-    transform.ImageTargetWrapper(T.Normalize(CocoSingleKPS.MEAN, CocoSingleKPS.STD))
-])
-
 selected_kps = ['left_eye']
-coco_train = CocoSingleKPS.from_data_path(data_path, train=True, transforms=data_transform, keypoints=selected_kps)
-coco_val = CocoSingleKPS.from_data_path(data_path, train=False, transforms=data_transform, keypoints=selected_kps)
+
+
+def get_transforms(train):
+    t = [
+        transform.ResizeKPS(IMAGE_SIZE),
+        transform.ToTensor(),
+        transform.ImageTargetWrapper(T.Normalize(CocoSingleKPS.MEAN, CocoSingleKPS.STD)),
+        transform.ConvertCocoKps(),
+    ]
+    if train:
+        t.append(transform.RandomHorizontalFlip(0.5))
+    t.append(transform.ExtractKeypoints(selected_kps))
+    return transform.Compose(t)
+
+
+coco_train = CocoSingleKPS.from_data_path(data_path, train=True, transforms=get_transforms(True),
+                                          keypoints=selected_kps)
+coco_val = CocoSingleKPS.from_data_path(data_path, train=False, transforms=get_transforms(False),
+                                        keypoints=selected_kps)
 
 num_instructions = len(selected_kps)
 model = csmodels.resnet18(td_outplanes=64, num_instructions=num_instructions)

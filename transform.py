@@ -5,13 +5,19 @@ import torch
 from pycocotools import mask as coco_mask
 from torchvision import transforms as T
 
-from coco_utils import decode_keypoints
+import coco_utils
+
+
+class BasicTransform:
+    def __repr__(self):
+        properties_str = ', '.join(f'{n}={v}' for n, v in self.__dict__.items())
+        return f'{self.__class__.__name__}({properties_str})'
 
 
 def resize_keypoints(keypoints, ratios, new_size):
     ratio_h, ratio_w = ratios
     new_keypoints = np.array(keypoints, dtype=np.float32)
-    x, y, v = decode_keypoints(new_keypoints)
+    x, y, v = coco_utils.decode_keypoints(new_keypoints)
     x *= ratio_w
     y *= ratio_h
     x = np.clip(x, 0, new_size[1] - 1)
@@ -40,7 +46,7 @@ def resize(img, target, new_size):
     return new_img, target
 
 
-class ResizeKPS:
+class ResizeKPS(BasicTransform):
 
     def __init__(self, size):
         self.size = size
@@ -48,11 +54,8 @@ class ResizeKPS:
     def __call__(self, img, target):
         return resize(img, target, self.size)
 
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self.size})'
 
-
-class ToTensor:
+class ToTensor(BasicTransform):
 
     def __init__(self, keys=None):
         self.keys = keys
@@ -65,13 +68,10 @@ class ToTensor:
 
         return img, target
 
-    def __repr__(self):
-        return f'{self.__class__.__name__}(keys={self.keys})'
-
 
 def _flip_coco_person_keypoints(kps, width):
     flip_inds = [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15]
-    flipped_data = kps[:, flip_inds]
+    flipped_data = kps[flip_inds]
     flipped_data[..., 0] = width - flipped_data[..., 0]
     # Maintain COCO convention that if visibility == 0, then x, y = 0
     inds = flipped_data[..., 2] == 0
@@ -79,7 +79,7 @@ def _flip_coco_person_keypoints(kps, width):
     return flipped_data
 
 
-class RandomHorizontalFlip(object):
+class RandomHorizontalFlip(BasicTransform):
     def __init__(self, prob):
         self.prob = prob
 
@@ -99,11 +99,8 @@ class RandomHorizontalFlip(object):
                 target["keypoints"] = keypoints
         return image, target
 
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self.prob})'
 
-
-class Compose:
+class Compose(BasicTransform):
     def __init__(self, transforms):
         self.transforms = transforms
 
@@ -111,9 +108,6 @@ class Compose:
         for t in self.transforms:
             image, target = t(image, target)
         return image, target
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self.transforms})'
 
 
 def convert_coco_poly_to_mask(segmentations, height, width):
@@ -131,6 +125,15 @@ def convert_coco_poly_to_mask(segmentations, height, width):
     else:
         masks = torch.zeros((0, height, width), dtype=torch.uint8)
     return masks
+
+
+class ConvertCocoKps(BasicTransform):
+    def __call__(self, image, target):
+        keypoints = target['keypoints']
+        keypoints = torch.as_tensor(keypoints, dtype=torch.float32)
+        keypoints = keypoints.view(-1, 3)
+        target['keypoints'] = keypoints
+        return image, target
 
 
 class ConvertCocoPolysToMask(object):
@@ -187,7 +190,7 @@ class ConvertCocoPolysToMask(object):
         return f'{self.__class__.__name__}()'
 
 
-class ImageTargetWrapper:
+class ImageTargetWrapper(BasicTransform):
 
     def __init__(self, transform):
         self.t = transform
@@ -195,11 +198,15 @@ class ImageTargetWrapper:
     def __call__(self, image, target):
         return self.t(image), target
 
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self.t}'
 
+class ExtractKeypoints(BasicTransform):
 
-def extract_keypoints(image, target):
-    keypoints = np.array((target['keypoints'])).reshape(-1, 3)
-    keypoints = keypoints[:, :2]
-    return image, keypoints
+    def __init__(self, keypoints):
+        self.keypoints = keypoints
+        self.indices = [coco_utils.KEYPOINTS.index(keypoint_name) for keypoint_name in self.keypoints]
+
+    def __call__(self, image, target):
+        keypoints = target['keypoints']
+        keypoints = keypoints[:, :2]
+        keypoints = keypoints[self.indices]
+        return image, keypoints

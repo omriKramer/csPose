@@ -77,9 +77,6 @@ class CocoSingleKPS(torchvision.datasets.VisionDataset):
             kps = np.array(an['keypoints'])
             x, y, v = coco_utils.decode_keypoints(kps)
             if np.all(v[indices]):
-                relevant_kps = np.concatenate([kps[3 * i:3 * (i + 1)] for i in indices])
-                an['keypoints'] = list(relevant_kps)
-                an['num_keypoints'] = len(self.keypoints)
                 filtered.append(an)
 
         return filtered
