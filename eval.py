@@ -76,16 +76,20 @@ def ce_loss(heatmap, targets):
     return loss
 
 
-def show_image(ax, image, mean, std):
-    image = std * image + mean
-    image = image.clip(0, 1)
-    ax.imshow(image)
-
-
 class Visualizer:
-    def __init__(self, mean, std):
+    def __init__(self, mean=None, std=None):
+        if mean is None:
+            mean = 0
+        if std is None:
+            std = 1
+
         self.std = std
         self.mean = mean
+
+    def _unnormalize(self, image):
+        image = self.std * image + self.mean
+        image = image.clip(0, 1)
+        return image
 
     def __call__(self, batch_results, images, targets, preds):
         images = images.permute(0, 2, 3, 1).cpu().numpy()
@@ -94,7 +98,8 @@ class Visualizer:
 
         fig, axis = plt.subplots(1, min(len(images), 4))
         for ax, distance, image, img_t, img_p in zip(axis, batch_results['mean_distance'], images, targets, preds):
-            show_image(ax, image, self.mean, self.std)
+            image = self._unnormalize(image)
+            ax.imshow(image)
             ax.plot(img_t[:, 0], img_t[:, 1], 'or', label='target')
             ax.plot(img_p[:, 0], img_p[:, 1], 'ob', label='prediction')
             ax.set_title(f'mPD: {distance:.2f}')

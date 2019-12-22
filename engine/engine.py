@@ -188,9 +188,9 @@ class Engine:
         self.print(f'Total time {total_time // 60:.0f}m {total_time % 60:.0f}s')
 
         if utils.is_main_process():
-            self.writer.close()
             if self.out_file:
                 self.out_file.close()
+            self.writer.close()
 
     def train_one_epoch(self, model, optimizer, data_loader, evaluator, epoch):
         model.train()

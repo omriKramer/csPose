@@ -14,6 +14,7 @@ data_path, remaining_args = utils.get_data_path()
 engine = eng.Engine.command_line_init(args=remaining_args)
 
 selected_kps = ['left_eye']
+filter_kps = ['left_eye', 'right_eye']
 
 
 def get_transforms(train):
@@ -30,9 +31,9 @@ def get_transforms(train):
 
 
 coco_train = CocoSingleKPS.from_data_path(data_path, train=True, transforms=get_transforms(True),
-                                          keypoints=selected_kps)
+                                          keypoints=filter_kps)
 coco_val = CocoSingleKPS.from_data_path(data_path, train=False, transforms=get_transforms(False),
-                                        keypoints=selected_kps)
+                                        keypoints=filter_kps)
 
 num_instructions = len(selected_kps)
 model = csmodels.resnet18(td_outplanes=64, num_instructions=num_instructions)

@@ -110,6 +110,15 @@ class Compose(BasicTransform):
         return image, target
 
 
+class ConvertCocoKps(BasicTransform):
+    def __call__(self, image, target):
+        keypoints = target['keypoints']
+        keypoints = torch.as_tensor(keypoints, dtype=torch.float32)
+        keypoints = keypoints.view(-1, 3)
+        target['keypoints'] = keypoints
+        return image, target
+
+
 def convert_coco_poly_to_mask(segmentations, height, width):
     masks = []
     for polygons in segmentations:
@@ -125,15 +134,6 @@ def convert_coco_poly_to_mask(segmentations, height, width):
     else:
         masks = torch.zeros((0, height, width), dtype=torch.uint8)
     return masks
-
-
-class ConvertCocoKps(BasicTransform):
-    def __call__(self, image, target):
-        keypoints = target['keypoints']
-        keypoints = torch.as_tensor(keypoints, dtype=torch.float32)
-        keypoints = keypoints.view(-1, 3)
-        target['keypoints'] = keypoints
-        return image, target
 
 
 class ConvertCocoPolysToMask(object):
