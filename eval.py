@@ -27,9 +27,10 @@ def resize_kps(kps, new_size, original_size):
     return new_kps
 
 
-class Evaluator:
+class Evaluator(nn.Module):
 
     def __init__(self, original_size=None, loss='ce'):
+        super(Evaluator, self).__init__()
         self.original_size = original_size
         if loss == 'ce':
             self.loss = ce_loss
@@ -38,7 +39,7 @@ class Evaluator:
         else:
             raise ValueError(f'Got loss {loss}, expected ce or kl.')
 
-    def __call__(self, outputs, targets):
+    def forward(self, outputs, targets):
         """
         outputs: (N, K, H, W)
         targets: (N, K, 2)
@@ -92,9 +93,10 @@ def one_hot2d(x, h, w):
     return out
 
 
-class KLLoss:
+class KLLoss(nn.Module):
 
     def __init__(self):
+        super(KLLoss, self).__init__()
         self.smooth = utils.GaussianSmoothing(0.5)
         self.kl_div_loss = nn.KLDivLoss(reduction='batchmean')
         self.log_softmax = nn.LogSoftmax(dim=2)

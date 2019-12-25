@@ -142,7 +142,7 @@ class Engine:
         engine = cls(**vars(args), **kwargs)
         return engine
 
-    def run(self, model, train_ds, val_ds, evaluator, val_evaluator, collate_fn=None, plot_fn=None):
+    def run(self, model, train_ds, val_ds, evaluator, collate_fn=None, plot_fn=None):
         title = '| Engine Run started |'
         self.print('-' * len(title))
         self.print(title)
@@ -156,8 +156,11 @@ class Engine:
         self.print(f'Validation: {val_ds}')
         self.print()
 
+        if isinstance(evaluator, torch.nn.Module):
+            evaluator.to(self.device)
         model = self.setup_model(model)
         optimizer, lr_scheduler = self.setup_optimizer(model)
+
         self.print(f'Training info')
         self.print('-' * 10)
         self.print(self)
@@ -177,7 +180,7 @@ class Engine:
                 train_loader.batch_sampler.sampler.set_epoch(epoch)
 
             self.train_one_epoch(model, optimizer, train_loader, evaluator, epoch)
-            meters = self.evaluate(model, val_loader, val_evaluator, epoch, plot_fn)
+            meters = self.evaluate(model, val_loader, evaluator, epoch, plot_fn)
             iterations = (epoch + 1) * len(train_ds)
             self.write_scalars(meters, iterations, name='val')
             lr_scheduler.step()
