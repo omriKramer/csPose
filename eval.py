@@ -1,6 +1,9 @@
 import torch
 from matplotlib import pyplot as plt
+from torch import nn
 from torch.nn import functional as F
+
+import utils
 
 
 def heatmap_to_preds(heatmap):
@@ -26,19 +29,24 @@ def resize_kps(kps, new_size, original_size):
 
 class Evaluator:
 
-    def __init__(self, original_size=None):
+    def __init__(self, original_size=None, loss='ce'):
         self.original_size = original_size
+        if loss == 'ce':
+            self.loss = ce_loss
+        elif loss == 'kl':
+            self.loss = KLLoss()
+        else:
+            raise ValueError(f'Got loss {loss}, expected ce or kl.')
 
     def __call__(self, outputs, targets):
         """
         outputs: (N, K, H, W)
         targets: (N, K, 2)
         """
-        ce_targets = targets
+        loss_targets = targets
         if self.original_size:
-            ce_targets = resize_kps(targets, outputs.shape[-2:], self.original_size)
-        ce_targets = ce_targets.round().long()
-        loss = ce_loss(outputs, ce_targets)
+            loss_targets = resize_kps(targets, outputs.shape[-2:], self.original_size)
+        loss = self.loss(outputs, loss_targets)
 
         with torch.no_grad():
             preds = heatmap_to_preds(outputs).float()
@@ -71,9 +79,33 @@ def ce_loss(heatmap, targets):
     h, w = heatmap.shape[-2:]
     heatmap = heatmap.flatten(start_dim=-2)
     heatmap = heatmap.permute(0, 2, 1)
+    targets = targets.round().long()
     targets = targets[..., 1] * w + targets[..., 0]
     loss = F.cross_entropy(heatmap, targets)
     return loss
+
+
+def one_hot2d(x, h, w):
+    out = x[..., 1] * w + x[..., 0]
+    out = F.one_hot(out, h * w)
+    out = out.reshape(*x.shape[:-1], h, w)
+    return out
+
+
+class KLLoss:
+
+    def __init__(self):
+        self.smooth = utils.GaussianSmoothing(0.5)
+        self.kl_div_loss = nn.KLDivLoss(reduction='batchmean')
+        self.log_softmax = nn.LogSoftmax(dim=2)
+
+    def __call__(self, heatmap, targets):
+        heatmap = self.log_softmax(heatmap.flatten(start_dim=-2)).reshape_as(heatmap)
+        targets = targets.round().long()
+        targets = one_hot2d(targets, heatmap.shape[-2], heatmap.shape[-1])
+        targets = self.smooth(targets.float())
+        loss = self.kl_div_loss(heatmap, targets)
+        return loss
 
 
 class Visualizer:

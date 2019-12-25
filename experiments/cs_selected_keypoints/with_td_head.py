@@ -74,7 +74,6 @@ class TDHead(nn.Module):
 td_head = TDHead()
 model = csmodels.SequentialInstructor(model, num_instructions, td_head=td_head)
 
-train_eval = eval.Evaluator(original_size=IMAGE_SIZE)
-val_eval = eval.Evaluator(original_size=IMAGE_SIZE)
+evaluator = eval.Evaluator(original_size=IMAGE_SIZE, loss='kl')
 plot = eval.Visualizer(CocoSingleKPS.MEAN, CocoSingleKPS.STD)
-engine.run(model, coco_train, coco_val, train_eval, val_eval, plot_fn=plot)
+engine.run(model, coco_train, coco_val, evaluator, evaluator, plot_fn=plot)

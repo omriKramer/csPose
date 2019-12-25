@@ -1,7 +1,10 @@
 import argparse
+import math
+import numbers
 
 import torch
 import torch.distributed as dist
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 
@@ -95,21 +98,48 @@ def dataset_mean_and_std(dataset):
     return mean, std
 
 
-def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█'):
+class GaussianSmoothing(torch.nn.Module):
     """
-    Call in a loop to create terminal progress bar
-    @params:
-        iteration   - Required  : current iteration (Int)
-        total       - Required  : total iterations (Int)
-        prefix      - Optional  : prefix string (Str)
-        suffix      - Optional  : suffix string (Str)
-        decimals    - Optional  : positive number of decimals in percent complete (Int)
-        length      - Optional  : character length of bar (Int)
-        fill        - Optional  : bar fill character (Str)
+    Apply gaussian smoothing on a 2d tensor.
+    Filtering is performed seperately for each channel
+    in the input using a depthwise convolution.
+    Arguments:
+        kernel_size (int): Size of the gaussian kernel.
+        sigma (float, sequence): Standard deviation of the gaussian kernel.
     """
-    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
-    filled_length = int(length * iteration // total)
-    bar = fill * filled_length + '-' * (length - filled_length)
-    print('%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end="\r")
-    if iteration == total:
-        print()
+
+    def __init__(self, sigma, kernel_size=3):
+        super(GaussianSmoothing, self).__init__()
+
+        if isinstance(sigma, numbers.Number):
+            sigma = [sigma] * 2
+
+        # The gaussian kernel is the product of the  gaussian function of each dimension.
+        kernel = 1
+        meshgrids = torch.meshgrid([torch.arange(size, dtype=torch.float32) for size in (kernel_size, kernel_size)])
+
+        for std, mgrid in zip(sigma, meshgrids):
+            mean = (kernel_size - 1) / 2
+            kernel *= 1 / (std * math.sqrt(2 * math.pi)) * torch.exp(-((mgrid - mean) / std) ** 2 / 2)
+
+        # Make sure sum of values in gaussian kernel equals 1.
+        kernel = kernel / torch.sum(kernel)
+
+        kernel = kernel.view(1, 1, *kernel.size())
+        self.register_buffer('kernel', kernel)
+        self.padding = kernel_size // 2
+
+    def forward(self, x):
+        """
+        Apply gaussian filter to input.
+        Arguments:
+            x (torch.Tensor): Input to apply gaussian filter on.
+        Returns:
+            filtered (torch.Tensor): Filtered output.
+        """
+
+        channels = x.shape[1]
+        weight = self.kernel.repeat(channels, *[1] * (self.kernel.dim() - 1))
+        out = F.conv2d(x, weight, groups=channels, padding=self.padding)
+        out /= out.sum(dim=(2, 3))[:, :, None, None]
+        return out
