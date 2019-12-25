@@ -1,6 +1,7 @@
 import argparse
 import math
 import numbers
+from pathlib import Path
 
 import torch
 import torch.distributed as dist
@@ -78,7 +79,7 @@ def get_data_path():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data-path', default='~/weizmann/coco/dev', help='dataset location')
     parsed, remaining_args = parser.parse_known_args()
-    return parsed.data_path, remaining_args
+    return Path(parsed.data_path).expanduser(), remaining_args
 
 
 def dataset_mean_and_std(dataset):

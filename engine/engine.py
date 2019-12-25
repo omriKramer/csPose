@@ -25,7 +25,6 @@ def get_args(args=None):
     parser.add_argument('-e', '--epochs', default=13, type=int, metavar='N', help='number of total epochs to run')
     parser.add_argument('-b', '--batch-size', default=2, type=int,
                         help='images per process, the total batch size is $processes x batch_size')
-    parser.add_argument('--resume', default='')
 
     # optimization parameters
     parser.add_argument('--lr', default=0.02, type=float, help='initial learning rate')
@@ -104,10 +103,10 @@ def infer_checkpoint(output_dir: Path):
 
 class Engine:
 
-    def __init__(self, lr, momentum, weight_decay, lr_steps, lr_gamma,
+    def __init__(self, lr=0.02, momentum=0.9, weight_decay=1e-4, lr_steps=None, lr_gamma=0.1,
                  data_path='.', output_dir='.', out_file=False, flush=False, batch_size=32, device='cpu', epochs=1,
-                 resume='', num_workers=4, dist_url='env://', print_freq=100,
-                 plot_freq=None, data_parallel=False, ):
+                 num_workers=4, dist_url='env://', print_freq=100,
+                 plot_freq=None, data_parallel=False):
         self._setup_output(output_dir, out_file, flush)
 
         self.lr = lr
@@ -131,10 +130,7 @@ class Engine:
         self.data_parallel = data_parallel
         assert not (self.data_parallel and self.distributed), 'use either DataParallel or DistributedDataParallel'
 
-        if resume == 'auto':
-            self.checkpoint = infer_checkpoint(self.output_dir)
-        else:
-            self.checkpoint = resume
+        self.checkpoint = infer_checkpoint(self.output_dir)
 
     @classmethod
     def command_line_init(cls, args=None, **kwargs):
