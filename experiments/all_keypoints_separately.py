@@ -13,9 +13,6 @@ IMAGE_SIZE = 128, 128
 data_path, remaining_args = utils.get_data_path()
 engine = eng.Engine.command_line_init(args=remaining_args)
 
-selected_kps = ['left_eye']
-train_filter_kps = ['left_eye', 'right_eye']
-
 
 def get_transforms(train):
     t = [
@@ -26,14 +23,12 @@ def get_transforms(train):
     ]
     if train:
         t.append(transform.RandomHorizontalFlip(0.5))
-    t.append(transform.ExtractKeypoints(selected_kps))
+        t.append(transform.ExtractRandomKeypoint())
     return transform.Compose(t)
 
 
-coco_train = CocoSingleKPS.from_data_path(data_path, train=True, transforms=get_transforms(True),
-                                          keypoints=train_filter_kps)
-coco_val = CocoSingleKPS.from_data_path(data_path, train=False, transforms=get_transforms(False),
-                                        keypoints=selected_kps)
+coco_train = CocoSingleKPS.from_data_path(data_path, train=True, transforms=get_transforms(True))
+coco_val = CocoSingleKPS.from_data_path(data_path, train=False, transforms=get_transforms(False))
 
 num_instructions = len(selected_kps)
 model = csmodels.resnet18(td_outplanes=64, num_instructions=num_instructions)
@@ -72,7 +67,7 @@ class TDHead(nn.Module):
 
 
 td_head = TDHead()
-model = csmodels.SequentialInstructor(model, num_instructions, td_head=td_head, one_hot=True)
+model = csmodels.SequentialInstructor(model, num_instructions, td_head=td_head)
 
 evaluator = eval.Evaluator(original_size=IMAGE_SIZE, loss='kl')
 plot = eval.Visualizer(CocoSingleKPS.MEAN, CocoSingleKPS.STD)

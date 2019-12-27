@@ -125,7 +125,7 @@ class Visualizer:
         image = image.clip(0, 1)
         return image
 
-    def __call__(self, batch_results, images, targets, preds):
+    def __call__(self, batch_results, targets, preds, images):
         images = images.permute(0, 2, 3, 1).cpu().numpy()
         preds = preds.cpu().numpy()
         targets = targets.cpu().numpy()

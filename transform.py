@@ -199,6 +199,13 @@ class ImageTargetWrapper(BasicTransform):
         return self.t(image), target
 
 
+def extract_keypoints(target, indices):
+    keypoints = target['keypoints']
+    keypoints = keypoints[:, :2]
+    keypoints = keypoints[indices]
+    return keypoints
+
+
 class ExtractKeypoints(BasicTransform):
 
     def __init__(self, keypoints):
@@ -206,7 +213,14 @@ class ExtractKeypoints(BasicTransform):
         self.indices = [coco_utils.KEYPOINTS.index(keypoint_name) for keypoint_name in self.keypoints]
 
     def __call__(self, image, target):
-        keypoints = target['keypoints']
-        keypoints = keypoints[:, :2]
-        keypoints = keypoints[self.indices]
+        keypoints = extract_keypoints(target, self.indices)
         return image, keypoints
+
+
+class ExtractRandomKeypoint(BasicTransform):
+
+    def __call__(self, image, target):
+        visible = target[:, 2].nonzero(as_tuple=True)[0]
+        keypoint_idx = random.choice(visible)
+        kps = extract_keypoints(target, [keypoint_idx])
+        return (image, keypoint_idx), kps

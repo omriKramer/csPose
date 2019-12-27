@@ -16,7 +16,11 @@ class CocoEval:
         self.sigmas = sigmas
         self.eps = torch.tensor(np.spacing(1, dtype=np.float32))
 
-    def compute_oks(self, gt, dt, area):
+    def __call__(self, gt, dt, area):
+        if isinstance(gt, list):
+            gt = torch.tensor(gt)
+        if isinstance(dt, list):
+            dt = torch.tensor(dt)
         if dt.nelement() == 0:
             return 0
 

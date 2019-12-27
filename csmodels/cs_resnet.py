@@ -279,8 +279,8 @@ class CsResNet(CSBlock):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
-        self.embedding = nn.Embedding(num_instructions, 512)
-        self.td_fc = nn.Linear(512 + (512 * block.expansion), 512 * block.expansion)
+        self.td_fc1 = nn.Linear(num_instructions, 512)
+        self.td_fc2 = nn.Linear(512 + (512 * block.expansion), 512 * block.expansion)
 
         self.pre_pooling_shape = None
         self.bu_features = None
@@ -329,10 +329,10 @@ class CsResNet(CSBlock):
         return None
 
     def _top_down(self, x):
-        out = self.embedding(x)
+        out = self.td_fc1(x)
         out = torch.cat((out, self.bu_features), dim=1)
 
-        out = self.td_fc(out)
+        out = self.td_fc2(out)
         out = self.relu(out)
 
         out = out[:, :, None, None].expand(self.pre_pooling_shape)

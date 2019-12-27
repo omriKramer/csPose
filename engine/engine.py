@@ -1,6 +1,7 @@
 import argparse
 import datetime
 import os
+import shutil
 import time
 from pathlib import Path
 
@@ -41,6 +42,7 @@ def get_args(args=None):
     parser.add_argument('--plot-freq', type=int, help='plot frequency in epochs')
     parser.add_argument('--out-file', action='store_true', help='output to a file instead of stdout')
     parser.add_argument('--flush', action='store_true')
+    parser.add_argument('--overwrite', action='store_true')
 
     # distributed training parameters
     parser.add_argument('--dist-url', default='env://', help='url used to set up distributed training')
@@ -106,9 +108,8 @@ class Engine:
     def __init__(self, lr=0.02, momentum=0.9, weight_decay=1e-4, lr_steps=None, lr_gamma=0.1,
                  data_path='.', output_dir='.', out_file=False, flush=False, batch_size=32, device='cpu', epochs=1,
                  num_workers=4, dist_url='env://', print_freq=100,
-                 plot_freq=None, data_parallel=False):
-        self._setup_output(output_dir, out_file, flush)
-
+                 plot_freq=None, data_parallel=False, overwrite=False):
+        self._setup_output(output_dir, out_file, flush, overwrite)
         self.lr = lr
         self.momentum = momentum
         self.weight_decay = weight_decay
@@ -199,19 +200,19 @@ class Engine:
         iter_time = metric_logger.SmoothedValue(fmt='{avg:.4f}')
         data_time = metric_logger.SmoothedValue(fmt='{avg:.4f}')
 
-        for i, (images, targets) in enumerate(data_loader):
+        for i, (inputs, targets) in enumerate(data_loader):
             data_time.update(time.time() - end)
 
             optimizer.zero_grad()
-            images, targets = self.to_device(images, targets)
-            outputs = model(images)
+            inputs, targets = self.prepare_inputs(inputs, targets)
+            outputs = model(*inputs)
             batch_results, _ = evaluator(outputs, targets)
             loss = batch_results['loss']
             assert torch.isfinite(loss), f'Loss is {loss} on epoch {epoch} iter {i}'
             loss.backward()
             optimizer.step()
 
-            logger.update(batch_results, len(images), reduce=True)
+            logger.update(batch_results, data_loader.batch_sampler.batch_size, reduce=True)
             if i % self.print_freq == self.print_freq - 1:
                 meters = logger.emit()
                 meters['lr'] = optimizer.param_groups[0]["lr"]
@@ -232,14 +233,14 @@ class Engine:
         logger = metric_logger.MetricLogger()
         start_time = time.time()
 
-        for i, (images, targets) in enumerate(data_loader):
-            images, targets = self.to_device(images, targets)
-            outputs = model(images)
+        for i, (inputs, targets) in enumerate(data_loader):
+            inputs, targets = self.prepare_inputs(inputs, targets)
+            outputs = model(*inputs)
 
             batch_results, preds = evaluator(outputs, targets)
-            logger.update(batch_results, len(images))
+            logger.update(batch_results, data_loader.batch_size)
             if plot_fn and self._should_plot(epoch, i, len(data_loader)):
-                title, fig = plot_fn(batch_results, images, targets, preds)
+                title, fig = plot_fn(batch_results, targets, preds, *inputs)
                 title += f'/{i}'
                 self.writer.add_figure(title, fig, epoch)
 
@@ -288,11 +289,11 @@ class Engine:
 
         return optimizer, lr_scheduler
 
-    def to_device(self, images, targets):
-        if torch.is_tensor(images):
-            images = images.to(self.device)
+    def prepare_inputs(self, inputs, targets):
+        if torch.is_tensor(inputs):
+            inputs = [inputs.to(self.device)]
         else:
-            images = [img.to(self.device) for img in images]
+            inputs = [inp.to(self.device) for inp in inputs]
 
         if torch.is_tensor(targets):
             targets = targets.to(self.device)
@@ -301,7 +302,7 @@ class Engine:
         else:
             targets = [{k: v.to(self.device) for k, v in d.items()} for d in targets]
 
-        return images, targets
+        return inputs, targets
 
     def create_loaders(self, train_ds, val_ds, collate_fn):
         if self.distributed:
@@ -405,12 +406,18 @@ class Engine:
     def print(self, *objects):
         print(*objects, file=self.out_file, flush=self.flush)
 
-    def _setup_output(self, output_dir, out_file, flush):
+    def _setup_output(self, output_dir, out_file, flush, overwrite=False):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.flush = flush
         self.out_file = None
         if utils.is_main_process():
+            if overwrite:
+                for filename in self.output_dir.iterdir():
+                    if filename.is_dir():
+                        shutil.rmtree(filename)
+                    elif filename.is_file():
+                        filename.unlink()
             if out_file:
                 self.out_file = (self.output_dir / 'train.txt').open('a')
 
