@@ -212,7 +212,7 @@ class Engine:
             loss.backward()
             optimizer.step()
 
-            logger.update(batch_results, data_loader.batch_sampler.batch_size, reduce=True)
+            logger.update(batch_results, reduce=True)
             if i % self.print_freq == self.print_freq - 1:
                 meters = logger.emit()
                 meters['lr'] = optimizer.param_groups[0]["lr"]
@@ -247,7 +247,7 @@ class Engine:
         total_time = time.time() - start_time
         self.print(end_epoch_msg('Val', data_loader, epoch, total_time))
 
-        logger.synchronize_between_processes(self.device)
+        logger.synchronize_between_processes()
         meters = logger.emit()
         self.print(meters_to_string(meters))
         self.print()

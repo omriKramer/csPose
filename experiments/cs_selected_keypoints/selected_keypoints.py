@@ -1,8 +1,8 @@
 import torchvision.transforms as T
 
-import csmodels
 import engine as eng
 import eval
+import models
 import transform
 import utils
 from datasets import CocoSingleKPS
@@ -24,10 +24,10 @@ coco_train = CocoSingleKPS.from_data_path(data_path, train=True, transforms=data
 coco_val = CocoSingleKPS.from_data_path(data_path, train=False, transforms=data_transform, keypoints=selected_kps)
 
 num_instructions = len(selected_kps)
-model = csmodels.resnet50(td_outplanes=1, num_instructions=num_instructions)
+model = models.resnet50(td_outplanes=1, num_instructions=num_instructions)
 if len(selected_kps) == 1:
     model.one_iteration()
-model = csmodels.SequentialInstructor(model, num_instructions)
+model = models.SequentialInstructor(model, num_instructions)
 
 train_eval = eval.Evaluator()
 val_eval = eval.Evaluator()

@@ -201,15 +201,18 @@ class ImageTargetWrapper(BasicTransform):
 
 def extract_keypoints(target, indices):
     keypoints = target['keypoints']
-    keypoints = keypoints[:, :2]
     keypoints = keypoints[indices]
     return keypoints
 
 
 class ExtractKeypoints(BasicTransform):
 
-    def __init__(self, keypoints):
-        self.keypoints = keypoints
+    def __init__(self, keypoints=None):
+        if keypoints:
+            self.keypoints = keypoints
+        else:
+            self.keypoints = coco_utils.KEYPOINTS
+
         self.indices = [coco_utils.KEYPOINTS.index(keypoint_name) for keypoint_name in self.keypoints]
 
     def __call__(self, image, target):

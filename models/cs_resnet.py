@@ -5,7 +5,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from csmodels.counter_stream import CSBlock
+from models.counter_stream import CSBlock
 
 
 def conv_transpose3x3(in_planes, out_planes, stride=1):

@@ -116,3 +116,35 @@ class CocoSingleKPS(torchvision.datasets.VisionDataset):
         root = data_path / '{}2017'.format(image_set)
         ann_file = data_path / 'annotations/person_keypoints_{}2017.json'.format(image_set)
         return cls(root, ann_file, **kwargs)
+
+
+class SingleKeypoints(CocoSingleKPS):
+    def __init__(self, root, ann_file, transform=None, target_transform=None, transforms=None, keypoints=None):
+        super().__init__(root, ann_file, transform, target_transform, transforms, keypoints)
+        single_keypoint_anns = []
+        for ann in self.annotations:
+            keypoints = np.array(ann['keypoints'])
+            visible = keypoints[2:3]
+            visible_idx = visible.nonzero()[0]
+            all_keypoints = [(ann, idx) for idx in visible_idx]
+            single_keypoint_anns.extend(all_keypoints)
+
+        self.annotations = single_keypoint_anns
+
+    def __getitem__(self, index):
+        annotation, keypoints_idx = self.annotations[index]
+        kps = np.array(annotation['keypoints'])
+        frame = make_frame(annotation['bbox'], annotation['segmentation'], kps)
+
+        img = self.coco.get_img(annotation['image_id'])
+        img = img.crop(frame)
+
+        kps = list(fix_kps(kps, frame))
+        start = keypoints_idx * 3
+        target = kps[start:start + 3]
+
+        inp = img, keypoints_idx
+        if self.transforms is not None:
+            inp, target = self.transforms(inp, target)
+
+        return inp, kps

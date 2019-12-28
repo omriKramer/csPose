@@ -1,5 +1,6 @@
 from collections import deque, defaultdict
 
+import numpy as np
 import torch
 import torch.distributed as dist
 
@@ -29,13 +30,13 @@ class SmoothedValue(object):
         self.count = 0
         self.deque.clear()
 
-    def synchronize_between_processes(self, device):
+    def synchronize_between_processes(self):
         """
         Warning: does not synchronize the deque!
         """
         if not utils.is_dist_avail_and_initialized():
             return
-        t = torch.tensor([self.count, self.total], dtype=torch.float64, device=device)
+        t = torch.tensor([self.count, self.total], dtype=torch.float64)
         dist.barrier()
         dist.all_reduce(t)
         t = t.tolist()
@@ -77,15 +78,15 @@ class MetricLogger:
     def __init__(self):
         self.meters = defaultdict(lambda: SmoothedValue(fmt="{global_avg:.4f}"))
 
-    @torch.no_grad()
-    def update(self, batch_results, size, reduce=False):
-        batch_results = {k: v.mean() for k, v in batch_results.items()}
-        if reduce:
-            batch_results = utils.reduce_dict(batch_results)
-            size *= utils.get_world_size()
+    def update(self, batch_results, reduce=False):
+        batch_results = {k: v.detach().cpu().numpy() if torch.is_tensor(v) else v for k, v in batch_results.items()}
 
         for k, v in batch_results.items():
-            self.meters[k].update(v.item(), n=size)
+            size = np.count_nonzero(~np.isnan(v))
+            self.meters[k].update(np.nanmean(v), n=size)
+
+        if reduce:
+            self.synchronize_between_processes()
 
     def emit(self):
         meters = {name: meter.global_avg for name, meter in self.meters.items()}
@@ -95,6 +96,6 @@ class MetricLogger:
     def reset(self):
         self.meters.clear()
 
-    def synchronize_between_processes(self, device):
+    def synchronize_between_processes(self):
         for key in sorted(self.meters.keys()):
-            self.meters[key].synchronize_between_processes(device)
+            self.meters[key].synchronize_between_processes()

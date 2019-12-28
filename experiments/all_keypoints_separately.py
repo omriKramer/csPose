@@ -1,9 +1,9 @@
 import torchvision.transforms as T
-from torch import nn
 
-import csmodels
+import coco_utils
 import engine as eng
 import eval
+import models
 import transform
 import utils
 from datasets import CocoSingleKPS
@@ -23,52 +23,18 @@ def get_transforms(train):
     ]
     if train:
         t.append(transform.RandomHorizontalFlip(0.5))
-        t.append(transform.ExtractRandomKeypoint())
+    t.append(transform.ExtractKeypoints())
     return transform.Compose(t)
 
 
 coco_train = CocoSingleKPS.from_data_path(data_path, train=True, transforms=get_transforms(True))
 coco_val = CocoSingleKPS.from_data_path(data_path, train=False, transforms=get_transforms(False))
 
-num_instructions = len(selected_kps)
-model = csmodels.resnet18(td_outplanes=64, num_instructions=num_instructions)
-if len(selected_kps) == 1:
-    model.one_iteration()
+num_instructions = len(coco_utils.KEYPOINTS)
+model = models.resnet18(td_outplanes=64, num_instructions=num_instructions)
+td_head = models.TDHead()
+model = models.SequentialInstructor(model, num_instructions, td_head=td_head, skip_lateral=True)
 
-
-def block(in_planes, out_planes, stride=1):
-    return nn.Sequential(
-        nn.Conv2d(in_planes, out_planes, kernel_size=3, padding=1, stride=stride),
-        nn.BatchNorm2d(out_planes, out_planes),
-        nn.ReLU()
-    )
-
-
-class TDHead(nn.Module):
-
-    def __init__(self):
-        super(TDHead, self).__init__()
-        self.head = nn.Sequential(
-            nn.BatchNorm2d(64, 64),
-            nn.ReLU(),
-            block(64, 64),
-            block(64, 32, stride=2),
-            block(32, 32),
-            block(32, 16, stride=2),
-            block(16, 16),
-            nn.Conv2d(16, 1, kernel_size=1),
-        )
-
-    def forward(self, x):
-        x = self.head(x)
-        x = nn.functional.interpolate(x, scale_factor=2, mode='bilinear', align_corners=False)
-        x = x.squeeze(dim=1)
-        return x
-
-
-td_head = TDHead()
-model = csmodels.SequentialInstructor(model, num_instructions, td_head=td_head)
-
-evaluator = eval.Evaluator(original_size=IMAGE_SIZE, loss='kl')
+evaluator = eval.Evaluator(original_size=IMAGE_SIZE, loss='ce')
 plot = eval.Visualizer(CocoSingleKPS.MEAN, CocoSingleKPS.STD)
 engine.run(model, coco_train, coco_val, evaluator, plot_fn=plot)

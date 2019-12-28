@@ -1,8 +1,10 @@
+import numpy as np
 import torch
 from matplotlib import pyplot as plt
 from torch import nn
 from torch.nn import functional as F
 
+import coco_utils
 import utils
 
 
@@ -12,7 +14,8 @@ def heatmap_to_preds(heatmap):
     preds = heatmap.argmax(dim=-1)
     y = preds // w
     x = preds.remainder(w)
-    preds = torch.stack((x, y), dim=-1)
+    visible = torch.ones_like(x)
+    preds = torch.stack((x, y, visible), dim=-1)
     return preds
 
 
@@ -23,7 +26,9 @@ def resize_kps(kps, new_size, original_size):
     new_y = kps[..., 1] * scale_y
     new_x = new_x.clamp(0, new_size[1] - 1)
     new_y = new_y.clamp(0, new_size[0] - 1)
-    new_kps = torch.stack((new_x, new_y), dim=-1)
+    new_kps = torch.stack((new_x, new_y, kps[..., 2]), dim=-1)
+    inds = new_kps[..., 2] == 0
+    new_kps[inds] = 0
     return new_kps
 
 
@@ -53,19 +58,25 @@ class Evaluator(nn.Module):
             preds = heatmap_to_preds(outputs).float()
             if self.original_size:
                 preds = resize_kps(preds, self.original_size, outputs.shape[-2:])
-            distances = pairwise_distance(preds, targets)
-        meters = {
-            'loss': loss,
-            'mean_distance': distances,
-        }
+            distances, mean_distance = pairwise_distance(preds, targets)
+            distances = dict(zip(coco_utils.KEYPOINTS, distances))
+        meters = {'loss': loss, 'mean_distance': mean_distance}
+        meters.update(distances)
         return meters, preds
 
 
 def pairwise_distance(preds, targets):
-    distances = [F.pairwise_distance(p, t) for p, t in zip(preds, targets)]
-    distances = torch.stack(distances)
-    distances = distances.mean(dim=1)
-    return distances
+    preds = preds.cpu().numpy()
+    targets = targets.cpu().numpy()
+    visible = targets[..., 2] > 0
+    preds = preds[..., :2]
+    targets = targets[..., :2]
+
+    distances = np.array([np.linalg.norm(p - t, axis=1) for p, t in zip(preds, targets)])
+    distances[~visible] = None
+    mean_distance = np.nanmean(distances, axis=1)
+    distance_by_keypoints = distances.T
+    return distance_by_keypoints, mean_distance
 
 
 def mse(heatmap, targets):
@@ -77,12 +88,13 @@ def mse(heatmap, targets):
 
 def ce_loss(heatmap, targets):
     assert not torch.isnan(heatmap).any(), 'Output of model has nans'
-    h, w = heatmap.shape[-2:]
-    heatmap = heatmap.flatten(start_dim=-2)
-    heatmap = heatmap.permute(0, 2, 1)
+    n, k, h, w = heatmap.shape
+    heatmap = heatmap.view(n * k, h * w)
+    targets = targets.view(n * k, - 1)
     targets = targets.round().long()
+    visible = targets[..., 2] > 0
     targets = targets[..., 1] * w + targets[..., 0]
-    loss = F.cross_entropy(heatmap, targets)
+    loss = F.cross_entropy(heatmap[visible], targets[visible])
     return loss
 
 
@@ -104,9 +116,10 @@ class KLLoss(nn.Module):
     def __call__(self, heatmap, targets):
         heatmap = self.log_softmax(heatmap.flatten(start_dim=-2)).reshape_as(heatmap)
         targets = targets.round().long()
-        targets = one_hot2d(targets, heatmap.shape[-2], heatmap.shape[-1])
+        visible = targets[..., 2]
+        targets = one_hot2d(targets[..., :2], heatmap.shape[-2], heatmap.shape[-1])
         targets = self.smooth(targets.float())
-        loss = self.kl_div_loss(heatmap, targets)
+        loss = self.kl_div_loss(heatmap[visible], targets[visible])
         return loss
 
 
