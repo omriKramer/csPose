@@ -4,7 +4,6 @@ from matplotlib import pyplot as plt
 from torch import nn
 from torch.nn import functional as F
 
-import coco_utils
 import utils
 
 
@@ -58,10 +57,8 @@ class Evaluator(nn.Module):
             preds = heatmap_to_preds(outputs).float()
             if self.original_size:
                 preds = resize_kps(preds, self.original_size, outputs.shape[-2:])
-            distances, mean_distance = pairwise_distance(preds, targets)
-            distances = dict(zip(coco_utils.KEYPOINTS, distances))
+            mean_distance = pairwise_distance(preds, targets)
         meters = {'loss': loss, 'mean_distance': mean_distance}
-        meters.update(distances)
         return meters, preds
 
 
@@ -75,8 +72,8 @@ def pairwise_distance(preds, targets):
     distances = np.array([np.linalg.norm(p - t, axis=1) for p, t in zip(preds, targets)])
     distances[~visible] = None
     mean_distance = np.nanmean(distances, axis=1)
-    distance_by_keypoints = distances.T
-    return distance_by_keypoints, mean_distance
+    assert np.all(~np.isnan(mean_distance))
+    return mean_distance
 
 
 def mse(heatmap, targets):
