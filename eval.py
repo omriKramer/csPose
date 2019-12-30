@@ -87,7 +87,7 @@ def ce_loss(heatmap, targets):
     assert not torch.isnan(heatmap).any(), 'Output of model has nans'
     n, k, h, w = heatmap.shape
     heatmap = heatmap.view(n * k, h * w)
-    targets = targets.view(n * k, - 1)
+    targets = targets.view(n * k, 3)
     targets = targets.round().long()
     visible = targets[..., 2] > 0
     targets = targets[..., 1] * w + targets[..., 0]

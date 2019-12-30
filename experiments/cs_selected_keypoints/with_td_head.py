@@ -12,7 +12,7 @@ IMAGE_SIZE = 128, 128
 data_path, remaining_args = utils.get_data_path()
 engine = eng.Engine.command_line_init(args=remaining_args)
 
-selected_kps = ['nose', 'left_eye', 'right_eye', 'left_ear', 'right_ear']
+selected_kps = ['left_eye', 'right_eye']
 
 
 def get_transforms(train):
@@ -28,8 +28,10 @@ def get_transforms(train):
     return transform.Compose(t)
 
 
-coco_train = CocoSingleKPS.from_data_path(data_path, train=True, transforms=get_transforms(True))
-coco_val = CocoSingleKPS.from_data_path(data_path, train=False, transforms=get_transforms(False))
+coco_train = CocoSingleKPS.from_data_path(data_path, train=True, transforms=get_transforms(True),
+                                          keypoints=selected_kps)
+coco_val = CocoSingleKPS.from_data_path(data_path, train=False, transforms=get_transforms(False),
+                                        keypoints=selected_kps)
 
 num_instructions = len(selected_kps)
 model = models.resnet18(td_outplanes=64, num_instructions=num_instructions)
