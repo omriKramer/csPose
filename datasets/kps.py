@@ -123,8 +123,8 @@ class SingleKeypoints(CocoSingleKPS):
         super().__init__(root, ann_file, transform, target_transform, transforms, keypoints)
         single_keypoint_anns = []
         for ann in self.annotations:
-            keypoints = np.array(ann['keypoints'])
-            visible = keypoints[2:3]
+            kps = np.array(ann['keypoints'])
+            visible = kps[2:3]
             visible_idx = visible.nonzero()[0]
             all_keypoints = [(ann, idx) for idx in visible_idx]
             single_keypoint_anns.extend(all_keypoints)
