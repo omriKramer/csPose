@@ -28,10 +28,8 @@ def get_transforms(train):
     return transform.Compose(t)
 
 
-coco_train = CocoSingleKPS.from_data_path(data_path, train=True, transforms=get_transforms(True),
-                                          keypoints=selected_kps)
-coco_val = CocoSingleKPS.from_data_path(data_path, train=False, transforms=get_transforms(False),
-                                        keypoints=selected_kps)
+coco_train = CocoSingleKPS.from_data_path(data_path, train=True, transforms=get_transforms(True))
+coco_val = CocoSingleKPS.from_data_path(data_path, train=False, transforms=get_transforms(False))
 
 num_instructions = len(selected_kps)
 model = models.resnet18(td_outplanes=64, num_instructions=num_instructions)
