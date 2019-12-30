@@ -188,8 +188,6 @@ class Engine:
         self.print(f'Total time {total_time // 60:.0f}m {total_time % 60:.0f}s')
 
         if utils.is_main_process():
-            if self.out_file:
-                self.out_file.close()
             self.writer.close()
 
     def train_one_epoch(self, model, optimizer, data_loader, evaluator, epoch):
@@ -404,13 +402,18 @@ class Engine:
         self.writer.add_hparams(hparams_dict, metrics_dict)
 
     def print(self, *objects):
-        print(*objects, file=self.out_file, flush=self.flush)
+        if self.out_file:
+            with self.out_file.open('a') as f:
+                print(*objects, file=f, flush=self.flush)
+        else:
+            print(*objects)
 
     def _setup_output(self, output_dir, out_file, flush, overwrite=False):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.flush = flush
         self.out_file = None
+
         if utils.is_main_process():
             if overwrite:
                 for filename in self.output_dir.iterdir():
@@ -419,6 +422,6 @@ class Engine:
                     elif filename.is_file():
                         filename.unlink()
             if out_file:
-                self.out_file = (self.output_dir / 'train.txt').open('a')
+                self.out_file = (self.output_dir / 'train.txt')
 
             self.writer = SummaryWriter(output_dir)
