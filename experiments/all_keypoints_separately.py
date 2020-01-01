@@ -10,7 +10,7 @@ from datasets import CocoSingleKPS
 
 IMAGE_SIZE = 128, 128
 
-data_path, remaining_args = utils.get_data_path()
+args, remaining_args = utils.get_args()
 engine = eng.Engine.command_line_init(args=remaining_args)
 
 
@@ -27,8 +27,8 @@ def get_transforms(train):
     return transform.Compose(t)
 
 
-coco_train = CocoSingleKPS.from_data_path(data_path, train=True, transforms=get_transforms(True))
-coco_val = CocoSingleKPS.from_data_path(data_path, train=False, transforms=get_transforms(False))
+coco_train = CocoSingleKPS.from_data_path(args.data_path, train=True, transforms=get_transforms(True))
+coco_val = CocoSingleKPS.from_data_path(args.data_path, train=False, transforms=get_transforms(False))
 
 num_instructions = len(coco_utils.KEYPOINTS)
 model = models.resnet18(td_outplanes=64, num_instructions=num_instructions)

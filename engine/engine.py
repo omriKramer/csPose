@@ -41,7 +41,6 @@ def get_args(args=None):
     parser.add_argument('--print-freq', default=1000, type=int, help='print frequency')
     parser.add_argument('--plot-freq', type=int, help='plot frequency in epochs')
     parser.add_argument('--out-file', action='store_true', help='output to a file instead of stdout')
-    parser.add_argument('--flush', action='store_true')
     parser.add_argument('--overwrite', action='store_true')
 
     # distributed training parameters
@@ -106,10 +105,10 @@ def infer_checkpoint(output_dir: Path):
 class Engine:
 
     def __init__(self, lr=0.02, momentum=0.9, weight_decay=1e-4, lr_steps=None, lr_gamma=0.1,
-                 data_path='.', output_dir='.', out_file=False, flush=False, batch_size=32, device='cpu', epochs=1,
+                 data_path='.', output_dir='.', out_file=False, batch_size=32, device='cpu', epochs=1,
                  num_workers=4, dist_url='env://', print_freq=100,
                  plot_freq=None, data_parallel=False, overwrite=False):
-        self._setup_output(output_dir, out_file, flush, overwrite)
+        self._setup_output(output_dir, out_file, overwrite)
         self.lr = lr
         self.momentum = momentum
         self.weight_decay = weight_decay
@@ -404,14 +403,13 @@ class Engine:
     def print(self, *objects):
         if self.out_file:
             with self.out_file.open('a') as f:
-                print(*objects, file=f, flush=self.flush)
+                print(*objects, file=f)
         else:
             print(*objects)
 
-    def _setup_output(self, output_dir, out_file, flush, overwrite=False):
+    def _setup_output(self, output_dir, out_file, overwrite=False):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.flush = flush
         self.out_file = None
 
         if utils.is_main_process():

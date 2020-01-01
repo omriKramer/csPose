@@ -9,7 +9,7 @@ from datasets import CocoSingleKPS
 
 IMAGE_SIZE = 256, 256
 
-data_path, remaining_args = utils.get_data_path()
+data_path, remaining_args = utils.get_args()
 engine = eng.Engine.command_line_init(args=remaining_args)
 
 data_transform = transform.Compose([

@@ -113,7 +113,7 @@ class KLLoss(nn.Module):
     def __call__(self, heatmap, targets):
         heatmap = self.log_softmax(heatmap.flatten(start_dim=-2)).reshape_as(heatmap)
         targets = targets.round().long()
-        visible = targets[..., 2]
+        visible = targets[..., 2] > 0
         targets = one_hot2d(targets[..., :2], heatmap.shape[-2], heatmap.shape[-1])
         targets = self.smooth(targets.float())
         loss = self.kl_div_loss(heatmap[visible], targets[visible])

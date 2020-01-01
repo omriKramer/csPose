@@ -31,8 +31,8 @@ class Logger:
 
 
 def main():
-    root, args = utils.get_data_path()
-    ds = datasets.get_coco_kp(root, 'val', transform.ToTensor())
+    args, args = utils.get_args()
+    ds = datasets.get_coco_kp(args.data_path, 'val', transform.ToTensor())
     data_loader = torch.utils.data.DataLoader(ds, batch_size=2, collate_fn=collate_fn)
 
     eng = engine.Engine.command_line_init(args)
