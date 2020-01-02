@@ -4,6 +4,8 @@ import numpy as np
 from pycocotools.coco import COCO
 
 import coco_utils
+from datasets import kps
+from transform import resize_keypoints
 
 with open('../coco/keypoints_rcnn_val.json') as f:
     results = json.load(f)
@@ -12,6 +14,7 @@ results = {int(k): {'keypoints': np.array(v['keypoints']), 'scores': v['scores']
 coco = COCO('/Volumes/waic/shared/coco/annotations/person_keypoints_val2017.json')
 
 sigmas = np.array([.26, .25, .25, .35, .35, .79, .79, .72, .72, .62, .62, 1.07, 1.07, .87, .87, .89, .89]) / 10.0
+IMAGE_SIZE = 128, 128
 
 
 def compute_oks(dt, ann):
@@ -44,14 +47,23 @@ def match_detections(detections, gt):
     return matches
 
 
-def distance(dt, ann):
-    gt = ann['keypoints']
+def distance(dt, ann, original_size):
+    frame = kps.make_frame(ann['bbox'], ann['segmentation'], ann['keypoints'].reshape(-1))
+    ratios = [original_size[i] / IMAGE_SIZE[i] for i in range(2)]
+
+    dt = kps.fix_kps(dt.reshape(-1), frame)
+    dt = resize_keypoints(dt, ratios, IMAGE_SIZE).reshape(-1, 3)
+
+    gt = kps.fix_kps(ann['keypoints'].reshape(-1), frame)
+    gt = resize_keypoints(gt, ratios, IMAGE_SIZE).reshape(-1, 3)
+
     v = gt[:, 2]
     dt = dt[:, :2]
     gt = gt[:, :2]
     res = np.linalg.norm((dt - gt), axis=1)
     assert len(res) == 17
     res[v == 0] = None
+    res = np.append(res, np.nanmean(res))
     return res
 
 
@@ -69,17 +81,23 @@ def main():
         image_matches = match_detections(detections, gt)
         matches.extend(image_matches)
 
-    distances = [distance(detection, ann) for detection, ann in matches]
+    distances = []
+    for detection, ann in matches:
+        image = coco.loadImgs([ann['image_id']])[0]
+        original_size = image['height'], image['width']
+        distances.append(distance(detection, ann, original_size))
+
     distances = np.array(distances)
     distances = np.nanmean(distances, axis=0)
-    return dict(zip(coco_utils.KEYPOINTS, distances))
+    cat = coco_utils.KEYPOINTS.copy()
+    cat.append('mean_distance')
+    return dict(zip(cat, distances))
 
 
 print(main())
-#
-# {'nose': 25.430961373399665, 'left_eye': 25.356712569779198, 'right_eye': 26.229808541150103,
-#  'left_ear': 24.023034601320667, 'right_ear': 27.828080306797183, 'left_shoulder': 33.266949965986704,
-#  'right_shoulder': 33.62888398110362, 'left_elbow': 30.065678281119123, 'right_elbow': 31.892165830442195,
-#  'left_wrist': 35.77970678647127, 'right_wrist': 35.61240224901763, 'left_hip': 36.73840208764587,
-#  'right_hip': 36.698881362383524, 'left_knee': 33.27601767317778, 'right_knee': 34.53142868747248,
-#  'left_ankle': 35.78155198948934, 'right_ankle': 35.86249350592035}
+
+# {'nose': 14.78428, 'left_eye': 15.316996, 'right_eye': 15.375622, 'left_ear': 14.923258, 'right_ear': 16.169493,
+#  'left_shoulder': 17.448637, 'right_shoulder': 19.353815, 'left_elbow': 13.72023, 'right_elbow': 17.824326,
+#  'left_wrist': 15.288893, 'right_wrist': 17.951794, 'left_hip': 15.128732, 'right_hip': 16.5737,
+#  'left_knee': 14.553558, 'right_knee': 16.662119, 'left_ankle': 15.416061, 'right_ankle': 16.400297,
+#  'mean_distance': 20.220213}
