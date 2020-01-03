@@ -1,11 +1,9 @@
-import torchvision.transforms as T
-
 import engine as eng
 import eval
 import models
-import transform
 import utils
 from datasets import CocoSingleKPS
+from transform import get_single_kps_transforms
 
 IMAGE_SIZE = 128, 128
 
@@ -15,24 +13,18 @@ engine = eng.Engine.command_line_init(args=remaining_args)
 
 selected_kps = ['left_eye', 'right_eye']
 
-
-def get_transforms(train):
-    t = [
-        transform.ResizeKPS(IMAGE_SIZE),
-        transform.ToTensor(),
-        transform.ImageTargetWrapper(T.Normalize(CocoSingleKPS.MEAN, CocoSingleKPS.STD)),
-        transform.ConvertCocoKps(),
-    ]
-    if train:
-        t.append(transform.RandomHorizontalFlip(0.5))
-    t.append(transform.ExtractKeypoints(selected_kps))
-    return transform.Compose(t)
-
-
-coco_train = CocoSingleKPS.from_data_path(data_path, train=True, transforms=get_transforms(True),
-                                          keypoints=selected_kps)
-coco_val = CocoSingleKPS.from_data_path(data_path, train=False, transforms=get_transforms(False),
-                                        keypoints=selected_kps)
+mean = CocoSingleKPS.MEAN
+std = CocoSingleKPS.STD
+coco_train = CocoSingleKPS.from_data_path(
+    data_path,
+    train=True,
+    transforms=get_single_kps_transforms(True, IMAGE_SIZE, mean, std, keypoints=selected_kps)
+)
+coco_val = CocoSingleKPS.from_data_path(
+    data_path,
+    train=False,
+    transforms=get_single_kps_transforms(False, IMAGE_SIZE, mean, std, keypoints=selected_kps)
+)
 
 num_instructions = len(selected_kps)
 model = models.resnet18(td_outplanes=64, num_instructions=num_instructions)
@@ -41,5 +33,5 @@ td_head = models.TDHead()
 model = models.SequentialInstructor(model, num_instructions, td_head=td_head, skip_lateral=True)
 
 evaluator = eval.Evaluator(original_size=IMAGE_SIZE, loss=args.lose)
-plot = eval.Visualizer(CocoSingleKPS.MEAN, CocoSingleKPS.STD)
+plot = eval.Visualizer(mean, std)
 engine.run(model, coco_train, coco_val, evaluator, plot_fn=plot)

@@ -227,3 +227,16 @@ class ExtractRandomKeypoint(BasicTransform):
         keypoint_idx = random.choice(visible)
         kps = extract_keypoints(target, [keypoint_idx])
         return (image, keypoint_idx), kps
+
+
+def get_single_kps_transforms(train, image_size, mean, std, keypoints=None):
+    t = [
+        ResizeKPS(image_size),
+        ToTensor(),
+        ImageTargetWrapper(T.Normalize(mean, std)),
+        ConvertCocoKps(),
+    ]
+    if train:
+        t.append(RandomHorizontalFlip(0.5))
+    t.append(ExtractKeypoints(keypoints))
+    return Compose(t)
