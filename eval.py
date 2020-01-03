@@ -144,9 +144,12 @@ class Visualizer:
         for ax, distance, image, img_t, img_p in zip(axis, batch_results['mean_distance'], images, targets, preds):
             image = self._unnormalize(image)
             ax.imshow(image)
+
             ms = 2.5
-            ax.plot(img_t[:, 0], img_t[:, 1], 'or', label='target', markersize=ms)
-            ax.plot(img_p[:, 0], img_p[:, 1], 'ob', label='prediction', markersize=ms)
+            visible = img_t[:, 2] > 0
+            ax.plot(img_t[visible, 0], img_t[visible, 1], 'or', label='target', markersize=ms)
+            ax.plot(img_p[visible, 0], img_p[visible, 1], 'ob', label='prediction', markersize=ms)
+
             ax.set_title(f'mPD: {distance:.2f}')
             ax.set_axis_off()
 
