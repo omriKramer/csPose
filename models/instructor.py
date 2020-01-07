@@ -13,6 +13,8 @@ def feed_forward(model, x, instructions, td_head, skip_lateral):
 
         td_out = model(inst, 'TD')
         td_out = td_head(td_out)
+        index = inst.argmax(dim=1)
+        td_out = td_out[range(td_out.shape[0]), index]
         td.append(td_out)
 
         if skip_lateral:
