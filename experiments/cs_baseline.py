@@ -20,6 +20,6 @@ coco_val = CocoSingleKPS.from_data_path(data_path, train=False,
 
 model = models.CSBaseline()
 
-evaluator = eval.Evaluator(original_size=IMAGE_SIZE, loss=args.lose)
+evaluator = eval.Evaluator(original_size=IMAGE_SIZE, loss=args.loss)
 plot = eval.Visualizer(mean, std)
 engine.run(model, coco_train, coco_val, evaluator, plot_fn=plot)

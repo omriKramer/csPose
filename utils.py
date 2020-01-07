@@ -74,7 +74,7 @@ def setup_for_distributed(is_master):
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data-path', default='~/weizmann/coco/dev', help='dataset location')
-    parser.add_argument('--lose', default='ce', choices=['ce', 'kl'], help='which lose to use')
+    parser.add_argument('--loss', default='ce', choices=['ce', 'kl'], help='which lose to use')
     args, remaining_args = parser.parse_known_args()
     return args, remaining_args
 
