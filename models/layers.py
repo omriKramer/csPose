@@ -20,21 +20,21 @@ class TDHead(nn.Module):
         self.head = nn.Sequential(
             nn.BatchNorm2d(64, 64),
             nn.ReLU(),
-            nn.Conv2d(64, 512, kernel_size=3, padding=1),
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.Conv2d(512, 512, kernel_size=3, stride=2, padding=1),
+            nn.Conv2d(128, 128, kernel_size=3, stride=2, padding=1),
             nn.ReLU(),
-            nn.Conv2d(512, 512, kernel_size=3, padding=1),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.Conv2d(512, 512, kernel_size=3, stride=2, padding=1),
+            nn.Conv2d(128, 128, kernel_size=3, stride=2, padding=1),
             nn.ReLU(),
-            nn.Conv2d(512, 512, kernel_size=3, padding=1),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.Conv2d(512, 512, kernel_size=3, stride=2, padding=1),
+            nn.Conv2d(128, 128, kernel_size=3, stride=2, padding=1),
             nn.ReLU(),
-            nn.Conv2d(512, 512, kernel_size=3, padding=1),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.ConvTranspose2d(512, num_channels, kernel_size=4, stride=2, padding=1)
+            nn.ConvTranspose2d(128, num_channels, kernel_size=4, stride=2, padding=1)
         )
 
     def forward(self, x):
