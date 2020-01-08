@@ -20,7 +20,7 @@ coco_val = CocoSingleKPS.from_data_path(args.data_path, train=False,
 num_instructions = len(coco_utils.KEYPOINTS)
 model = models.resnet18(td_outplanes=64, num_instructions=num_instructions)
 td_head = models.TDHead(num_channels=num_instructions)
-model = models.SequentialInstructor(model, num_instructions, td_head=td_head, skip_lateral=True)
+model = models.SequentialInstructor(model, num_instructions, td_head=td_head, skip_lateral=args.skip_lateral)
 
 evaluator = eval.Evaluator(original_size=IMAGE_SIZE, loss=args.loss)
 plot = eval.Visualizer(CocoSingleKPS.MEAN, CocoSingleKPS.STD)

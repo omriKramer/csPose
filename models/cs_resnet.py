@@ -292,7 +292,7 @@ class CsResNet(CSBlock):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-        depth = (sum(layers) + 2) * block.depth
+        depth = sum(layers) * block.depth + 2
         self.name = self.__class__.__name__ + str(depth)
 
     def _make_layer(self, block, planes, blocks, stride=1):

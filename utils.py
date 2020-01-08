@@ -75,6 +75,7 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data-path', default='~/weizmann/coco/dev', help='dataset location')
     parser.add_argument('--loss', default='ce', choices=['ce', 'kl'], help='which lose to use')
+    parser.add_argument('--skip-lateral', action='store_true', help='whether to skip latter connections')
     args, remaining_args = parser.parse_known_args()
     return args, remaining_args
 
