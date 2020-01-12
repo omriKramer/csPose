@@ -72,12 +72,12 @@ class CSConv(CSBlock):
         if self.td_in is not None:
             x = x + self.bu_lateral(self.td_in)
 
-        self.bu_out = x
+        self.bu_out = x.detach()
         return x
 
     def _top_down(self, x):
         x = x + self.td_lateral(self.bu_out)
-        self.td_in = x
+        self.td_in = x.detach()
 
         x = self.td_conv(x)
         return x
@@ -145,13 +145,13 @@ class BasicBlock(CSBlock):
         if self.td_in is not None:
             out = self.bu_lateral(self.td_in) + out
 
-        self.bu_out = out
+        self.bu_out = out.detach()
         return out
 
     def _top_down(self, x):
         x = self.td_lateral(self.bu_out) + x
         identity = x
-        self.td_in = identity
+        self.td_in = identity.detach()
 
         out = self.td_conv1(x)
         out = self.td_bn1(out)
@@ -233,13 +233,13 @@ class Bottleneck(CSBlock):
         if self.td_in is not None:
             out = self.bu_lateral(self.td_in) + out
 
-        self.bu_out = out
+        self.bu_out = out.detach()
         return out
 
     def _top_down(self, x):
         x = x + self.td_lateral(self.bu_out)
         identity = x
-        self.td_in = x
+        self.td_in = x.detach()
 
         out = self.td_conv1(x)
         out = self.td_bn1(out)
