@@ -6,10 +6,10 @@ from .layers import TDHead
 
 
 class CSBaseline(nn.Module):
-    def __init__(self):
+    def __init__(self, n_channels=17):
         super().__init__()
         self.backbone = resnet18(td_outplanes=64, num_instructions=1)
-        self.td_head = TDHead(num_channels=17)
+        self.td_head = TDHead(num_channels=n_channels)
         self.backbone.one_iteration()
         instruction = torch.ones(1, dtype=torch.float)
         self.register_buffer('instruction', instruction)

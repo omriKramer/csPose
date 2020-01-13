@@ -29,9 +29,9 @@ coco_val = CocoSingleKPS.from_data_path(
 num_instructions = len(selected_kps)
 model = models.resnet18(td_outplanes=64, num_instructions=num_instructions)
 
-td_head = models.TDHead()
-model = models.SequentialInstructor(model, num_instructions, td_head=td_head, skip_lateral=True)
+td_head = models.TDHead(num_channels=num_instructions)
+model = models.SequentialInstructor(model, num_instructions, td_head=td_head, skip_lateral=args.skip_lateral)
 
-evaluator = eval.Evaluator(original_size=IMAGE_SIZE, loss=args.lose)
+evaluator = eval.Evaluator(original_size=IMAGE_SIZE, loss=args.loss)
 plot = eval.Visualizer(mean, std)
 engine.run(model, coco_train, coco_val, evaluator, plot_fn=plot)
