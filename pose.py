@@ -1,6 +1,7 @@
 from typing import Optional, Tuple
 
 import matplotlib.pyplot as plt
+import pandas as pd
 import torch
 from fastai.vision import ItemList, Tensor, Any, ImagePoints, FlowField, scale_flow, LearnerCallback, add_metrics, \
     ImageList
@@ -23,6 +24,21 @@ def _mark_points_out(flow, visible):
     pad_mask = (flow.flow[:, 0] >= -1) * (flow.flow[:, 0] <= 1) * (flow.flow[:, 1] >= -1) * (flow.flow[:, 1] <= 1)
     visible = visible.where(pad_mask, torch.zeros(1))
     return visible
+
+
+class LIPLabel:
+
+    def __init__(self, ann_folder):
+        self.train_df = pd.read_csv(ann_folder / 'lip_train_set.csv', index_col=0, header=None)
+        self.val_df = pd.read_csv(ann_folder / 'lip_val_set.csv', index_col=0, header=None)
+
+    def __call__(self, o):
+        phase = o.parent.name.partition('_')[0]
+        df = self.train_df if phase == 'train' else self.val_df
+        pose = df.loc[o.name].values
+        pose = torch.tensor(pose, dtype=torch.float).reshape(-1, 3)
+        pose = torch.index_select(pose, 1, torch.tensor([1, 0, 2], dtype=torch.long))
+        return pose
 
 
 def output_to_scaled_pred(output):
