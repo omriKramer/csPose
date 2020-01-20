@@ -7,14 +7,17 @@ from torch.nn import functional as F
 import models.layers
 
 
-def heatmap_to_preds(heatmap):
+def heatmap_to_preds(heatmap, add_visibility=True):
     h, w = heatmap.shape[-2:]
     heatmap = heatmap.flatten(start_dim=-2)
     preds = heatmap.argmax(dim=-1)
     y = preds // w
     x = preds.remainder(w)
-    visible = torch.ones_like(x)
-    preds = torch.stack((x, y, visible), dim=-1)
+    columns = [x, y]
+    if add_visibility:
+        visible = torch.ones_like(x)
+        columns.append(visible)
+    preds = torch.stack(columns, dim=-1)
     return preds
 
 

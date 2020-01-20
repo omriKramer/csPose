@@ -2,7 +2,7 @@ import pytest
 
 
 def pytest_addoption(parser):
-    parser.addoption("--data-path", default="../coco/dev")
+    parser.addoption("--lip-root", default="/Volumes/waic/omrik/LIP")
 
 
 @pytest.fixture
