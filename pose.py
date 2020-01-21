@@ -198,6 +198,11 @@ class Pckh(LearnerCallback):
         thresholds = head_sizes / 2
         distances = torch.norm(preds - gt, dim=2)
         is_correct = (distances < thresholds[:, None]) * is_visible
+        self.update(is_correct, is_visible)
+
+    def update(self, is_correct, is_visible):
+        is_correct = is_correct.cpu()
+        is_visible = is_visible.cpu()
 
         # keypoints separately
         self.correct[:16] += is_correct.sum(dim=0)
