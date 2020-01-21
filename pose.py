@@ -177,14 +177,8 @@ class Pckh(LearnerCallback):
         self.learn.recorder.add_metric_names(metrics)
 
     def on_epoch_begin(self, **kwargs: Any) -> None:
-        self.correct = torch.zeros(16)
-        self.total = torch.zeros(16)
-
-        self.ubody_correct = 0.
-        self.ubody_total = 0.
-
-        self.all_keypoints_correct = 0.
-        self.all_keypoints_total = 0.
+        self.correct = torch.zeros(18)
+        self.total = torch.zeros(18)
 
     def on_batch_end(self, last_output, last_target, train, **kwargs) -> None:
         if train:
@@ -205,12 +199,17 @@ class Pckh(LearnerCallback):
         distances = torch.norm(preds - gt, dim=2)
         is_correct = (distances < thresholds[:, None]) * is_visible
 
-        self.correct += is_correct.sum(dim=0)
-        self.total += is_visible.sum(dim=0)
-        self.ubody_correct += is_correct[:, 8:].sum().item()
-        self.ubody_total += is_visible[:, 8:].sum().item()
-        self.all_keypoints_correct += is_correct[:, self.all_idx].sum().item()
-        self.all_keypoints_total += is_visible[:, self.all_idx].sum().item()
+        # keypoints separately
+        self.correct[:16] += is_correct.sum(dim=0)
+        self.total[:16] += is_visible.sum(dim=0)
+
+        # upper body
+        self.correct[16] += is_correct[:, 8:].sum()
+        self.total[16] += is_visible[:, 8:].sum()
+
+        # all keypoints
+        self.correct[17] += is_correct[:, self.all_idx].sum()
+        self.total[17] += is_visible[:, self.all_idx].sum()
 
     def on_epoch_end(self, last_metrics, **kwargs):
         idx_pairs = [(8, 9), (12, 13), (11, 14), (10, 15), (2, 3), (1, 4), (0, 5)]
@@ -218,7 +217,7 @@ class Pckh(LearnerCallback):
         pckh = [(accuracy[idx0] + accuracy[idx1]).item() / 2
                 for idx0, idx1
                 in idx_pairs]
-        pckh.extend([self.ubody_correct / self.ubody_total, self.all_keypoints_correct / self.all_keypoints_total])
+        pckh.extend([accuracy[16].item(), accuracy[17].item()])
         return add_metrics(last_metrics, pckh)
 
 
