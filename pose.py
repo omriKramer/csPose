@@ -1,10 +1,11 @@
 from typing import Optional, Tuple
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import torch
 from fastai.vision import ItemList, Tensor, Any, ImagePoints, FlowField, scale_flow, LearnerCallback, add_metrics, \
-    ImageList
+    ImageList, tensor, TfmPixel
 from fastai.vision import PreProcessor
 
 from eval import heatmap_to_preds
@@ -55,6 +56,7 @@ def output_to_scaled_pred(output):
 
 
 class Pose(ImagePoints):
+    switch_on_lr_flip = list(reversed(range(6))) + list(range(6, 10)) + list(reversed(range(10, 16)))
 
     def __init__(self, flow: FlowField, visible, scale: bool = True, y_first: bool = True, mode='LIP'):
         super().__init__(flow, scale, y_first)
@@ -101,6 +103,12 @@ class Pose(ImagePoints):
             ax.axis('off')
         if title:
             ax.set_title(title)
+
+    def flip_lr(self):
+        self.flow.flow[..., 0] *= -1
+        self.flow.flow = self.flow.flow[self.switch_on_lr_flip]
+        self.visible = self.visible[self.switch_on_lr_flip]
+        return self
 
 
 class PoseProcessor(PreProcessor):
@@ -212,3 +220,13 @@ class Pckh(LearnerCallback):
                 in idx_pairs]
         pckh.extend([self.ubody_correct / self.ubody_total, self.all_keypoints_correct / self.all_keypoints_total])
         return add_metrics(last_metrics, pckh)
+
+
+def _pose_flip_lr(x):
+    "Flip `x` horizontally."
+    if isinstance(x, Pose):
+        return x.flip_lr()
+    return tensor(np.ascontiguousarray(np.array(x)[..., ::-1]))
+
+
+pose_flip_lr = TfmPixel(_pose_flip_lr)
