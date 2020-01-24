@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
+import torch.nn.functional as F
 from fastai.vision import ItemList, Tensor, Any, ImagePoints, FlowField, scale_flow, LearnerCallback, add_metrics, \
     ImageList, tensor, TfmPixel
 from fastai.vision import PreProcessor
@@ -163,6 +164,25 @@ class PoseLoss:
         gt = target[..., :2][is_visible]
         output = output[is_visible]
         return self.loss_fn(output, gt)
+
+
+def ce_loss(heatmaps, targets):
+    h, w = heatmaps.shape[-2:]
+    heatmaps = heatmaps.view(-1, h * w)
+    targets = scale_targets(targets, (h, w)).round().long()
+    # y coordinates are first
+    targets = targets[..., 0] * w + targets[..., 1]
+    loss = F.cross_entropy(heatmaps, targets)
+    return loss
+
+
+def scale_targets(targets, size):
+    rescale = targets.new(size[0] / 2, size[1] / 2)[None, None]
+    targets = (targets + 1) * rescale
+    return targets
+
+
+ce_pose_loss = PoseLoss(ce_loss)
 
 
 class Pckh(LearnerCallback):
