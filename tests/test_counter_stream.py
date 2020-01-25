@@ -30,7 +30,7 @@ def databunch():
 
 @pytest.fixture(scope="module")
 def learn(databunch, arch):
-    return cs.cs_learner(databunch, arch)
+    return cs.cs_learner(databunch, arch, range(16))
 
 
 def test_counter_stream_init(bu):
@@ -58,3 +58,8 @@ def test_cs_learner_freeze(learn):
                              model.td_laterals.parameters(),
                              model.emb.parameters()):
         assert p.requires_grad
+
+
+def test_num_param(learn):
+    total_param = sum(p.numel() for p in learn.model.parameters())
+    pass

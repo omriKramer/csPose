@@ -142,7 +142,7 @@ class SequentialInstructor(fv.LearnerCallback):
     def on_batch_begin(self, last_input, **kwargs: Any):
         self.learn.model.clear()
         batch_size = last_input.shape[0]
-        instructions = last_input.new(self.instructions).long().expand(batch_size, len(self.instructions)).T
+        instructions = self.instructions.to(device=last_input.device).expand(batch_size, len(self.instructions)).T
         return {'last_input': (last_input, instructions)}
 
     def on_loss_begin(self, last_output, **kwargs):
