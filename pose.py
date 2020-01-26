@@ -180,8 +180,8 @@ def ce_loss(heatmaps, targets):
 def scale_targets(targets, size):
     rescale = targets.new([size[0] / 2, size[1] / 2])[None]
     targets = (targets + 1) * rescale
-    assert targets.min.item() >= -1
-    assert targets.max.item() <= size.max.item()
+    assert targets.min().item() >= -1
+    assert targets.max().item() <= size.max.item()
     targets = targets.clamp(0, size.max() - 1)
     return targets
 
