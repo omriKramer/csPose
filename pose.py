@@ -178,7 +178,7 @@ def ce_loss(heatmaps, targets):
 
 
 def scale_targets(targets, size):
-    rescale = targets.new(size[0] / 2, size[1] / 2)[None, None]
+    rescale = targets.new([size[0] / 2, size[1] / 2])[None, None]
     targets = (targets + 1) * rescale
     return targets
 
