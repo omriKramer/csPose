@@ -128,6 +128,7 @@ def cs_learner(data: fv.DataBunch, arch: Callable, c_out, instructor, pretrained
 
 
 class BaseInstructor(fv.Callback):
+    _order = 20
 
     def on_batch_begin(self, last_input, **kwargs):
         instructions = self.get_instructions(last_input)
