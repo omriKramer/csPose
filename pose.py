@@ -45,7 +45,7 @@ class LIPLabel:
 
 def output_to_scaled_pred(output):
     h, w = output.shape[-2:]
-    pred = heatmap_to_preds(output, add_visibility=False).flip(-1)
+    pred = heatmap_to_preds(output, add_visibility=False).flip(-1).float()
     s = pred.new([h / 2, w / 2])[None, None]
     pred = pred / s - 1
     return pred
