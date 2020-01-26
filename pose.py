@@ -44,11 +44,11 @@ class LIPLabel:
 
 
 def output_to_scaled_pred(output):
-        h, w = output.shape[-2:]
-        pred = heatmap_to_preds(output, add_visibility=False).flip(-1)
-        s = pred.new([h / 2, w / 2])[None, None]
-        pred = pred / s - 1
-        return pred
+    h, w = output.shape[-2:]
+    pred = heatmap_to_preds(output, add_visibility=False).flip(-1)
+    s = pred.new([h / 2, w / 2])[None, None]
+    pred = pred / s - 1
+    return pred
 
 
 class Pose(ImagePoints):
@@ -132,7 +132,7 @@ class PoseLabelList(ItemList):
         return Pose(flow, t[:, 2], scale=False, mode='COCO')
 
     def analyze_pred(self, pred: Tensor):
-        pred = output_to_scaled_pred(pred[None])[0]
+        pred = output_to_scaled_pred(pred[1][None])[0]
         pred.clamp_(-1, 1)
         visibility = pred.new_ones(pred.shape[:-1])
         pred = torch.cat((pred, visibility[..., None]), dim=-1)
