@@ -101,6 +101,7 @@ class CounterStream(nn.Module):
             lateral.origin_out = None
 
     def forward(self, img, instructions):
+        self.clear()
         td_out, bu_out = [], []
         for inst in instructions:
             current_bu = self.bu(img)
@@ -119,9 +120,7 @@ def cs_learner(data: fv.DataBunch, arch: Callable, c_out, instructor, pretrained
     body = fv.create_body(arch, pretrained, cut)
     size = next(iter(data.train_dl))[0].shape[-2:]
     model = fv.to_device(CounterStream(body, instructor.n_inst, c_out=c_out, img_size=size), data.device)
-    callback_fns = fv.listify(learn_kwargs.pop('callback_fns'))
-    callback_fns.append(instructor)
-    learn = fv.Learner(data, model, callback_fns=callback_fns, **learn_kwargs)
+    learn = fv.Learner(data, model, callbacks=instructor, **learn_kwargs)
     learn.split((learn.model.bu[3], learn.model.td[0]))
     if pretrained:
         learn.freeze()
@@ -129,15 +128,8 @@ def cs_learner(data: fv.DataBunch, arch: Callable, c_out, instructor, pretrained
 
 
 class BaseInstructor(fv.Callback):
-    def __init__(self, learn=None):
-        self.learn = learn
-
-    def __call__(self, learn):
-        self.learn = learn
-        return self
 
     def on_batch_begin(self, last_input, **kwargs):
-        self.learn.model.clear()
         instructions = self.get_instructions(last_input)
         return {'last_input': (last_input, instructions)}
 
@@ -154,8 +146,7 @@ class BaseInstructor(fv.Callback):
 
 
 class SequentialInstructor(BaseInstructor):
-    def __init__(self, instructions, learn=None):
-        super().__init__(learn)
+    def __init__(self, instructions):
         self.instructions = torch.tensor(instructions)
         self.reindex = self.instructions.argsort()
 
@@ -173,9 +164,7 @@ class SequentialInstructor(BaseInstructor):
 
 
 class SingleInstruction(BaseInstructor):
-    def __init__(self, learn=None):
-        super().__init__(learn)
-        self.n_inst = 1
+    n_inst = 1
 
     def get_instructions(self, last_input):
         batch_size = last_input.shape[0]

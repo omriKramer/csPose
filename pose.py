@@ -44,11 +44,6 @@ class LIPLabel:
 
 
 def output_to_scaled_pred(output):
-    if output.ndim == 2:
-        # flattened regression
-        return output.reshape(output.shape[0], -1, 2)
-    elif output.ndim == 4:
-        # heatmaps
         h, w = output.shape[-2:]
         pred = heatmap_to_preds(output, add_visibility=False).flip(-1)
         s = pred.new([h / 2, w / 2])[None, None]
