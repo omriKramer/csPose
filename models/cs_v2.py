@@ -119,7 +119,9 @@ def cs_learner(data: fv.DataBunch, arch: Callable, c_out, instructor, pretrained
     body = fv.create_body(arch, pretrained, cut)
     size = next(iter(data.train_dl))[0].shape[-2:]
     model = fv.to_device(CounterStream(body, instructor.n_inst, c_out=c_out, img_size=size), data.device)
-    learn = fv.Learner(data, model, callback_fns=instructor, **learn_kwargs)
+    callback_fns = fv.listify(learn_kwargs.pop('callback_fns'))
+    callback_fns.append(instructor)
+    learn = fv.Learner(data, model, callback_fns=callback_fns, **learn_kwargs)
     learn.split((learn.model.bu[3], learn.model.td[0]))
     if pretrained:
         learn.freeze()
