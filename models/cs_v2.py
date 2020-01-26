@@ -113,38 +113,69 @@ class CounterStream(nn.Module):
         return torch.cat(bu_out, dim=1), torch.cat(td_out, dim=1)
 
 
-def cs_learner(data: fv.DataBunch, arch: Callable, instructions, pretrained: bool = True, c_out=1,
+def cs_learner(data: fv.DataBunch, arch: Callable, c_out, instructor, pretrained: bool = True,
                cut: Union[int, Callable] = None, **learn_kwargs: Any) -> fv.Learner:
     """Build Counter Stream learner from `data` and `arch`."""
     body = fv.create_body(arch, pretrained, cut)
     size = next(iter(data.train_dl))[0].shape[-2:]
-    model = fv.to_device(CounterStream(body, len(instructions), c_out=c_out, img_size=size), data.device)
-    learn = fv.Learner(data, model, callback_fns=SequentialInstructor.partial(instructions), **learn_kwargs)
+    model = fv.to_device(CounterStream(body, instructor.n_inst, c_out=c_out, img_size=size), data.device)
+    learn = fv.Learner(data, model, callback_fns=instructor, **learn_kwargs)
     learn.split((learn.model.bu[3], learn.model.td[0]))
     if pretrained:
         learn.freeze()
     return learn
 
 
-class SequentialInstructor(fv.LearnerCallback):
-    def __init__(self, learn, instructions):
+class BaseInstructor(fv.Callback):
+    def __init__(self, learn=None):
+        self.learn = learn
+
+    def __call__(self, learn):
+        self.learn = learn
+        return self
+
+    def on_batch_begin(self, last_input, **kwargs):
+        self.learn.model.clear()
+        instructions = self.get_instructions(last_input)
+        return {'last_input': (last_input, instructions)}
+
+    def on_loss_begin(self, last_output, **kwargs: Any):
+        bu_out, td_out = last_output
+        bu_out, td_out = self.sort_output(bu_out, td_out)
+        return {'last_output': (bu_out, td_out)}
+
+    def get_instructions(self, last_input):
+        raise NotImplementedError
+
+    def sort_output(self, bu_out, td_out):
+        return bu_out, td_out
+
+
+class SequentialInstructor(BaseInstructor):
+    def __init__(self, instructions, learn=None):
         super().__init__(learn)
         self.instructions = torch.tensor(instructions)
         self.reindex = self.instructions.argsort()
 
-    @classmethod
-    def partial(cls, instructions):
-        def _inner(learn):
-            return cls(learn, instructions)
-
-        return _inner
-
-    def on_batch_begin(self, last_input, **kwargs: Any):
-        self.learn.model.clear()
+    def get_instructions(self, last_input):
         batch_size = last_input.shape[0]
         instructions = self.instructions.to(device=last_input.device).expand(batch_size, len(self.instructions)).T
-        return {'last_input': (last_input, instructions)}
+        return instructions
 
-    def on_loss_begin(self, last_output, **kwargs):
-        bu_out, td_out = last_output
-        return {'last_output': (bu_out[self.reindex], td_out[self.reindex])}
+    def sort_output(self, bu_out, td_out):
+        return bu_out[:, self.reindex], td_out[:, self.reindex]
+
+    @property
+    def n_inst(self):
+        return len(self.instructions)
+
+
+class SingleInstruction(BaseInstructor):
+    def __init__(self, learn=None):
+        super().__init__(learn)
+        self.n_inst = 1
+
+    def get_instructions(self, last_input):
+        batch_size = last_input.shape[0]
+        instructions = torch.zeros(1, batch_size, dtype=torch.long, device=last_input.device)
+        return instructions

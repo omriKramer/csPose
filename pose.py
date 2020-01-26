@@ -158,12 +158,13 @@ class PoseLoss:
         self.loss_fn = loss_fn
 
     def __call__(self, output, target):
-        if output.ndim == 2:
-            output = output.reshape(-1, 16, 2)
+        bu_out, td_out = output
+        if td_out.ndim == 2:
+            td_out = td_out.reshape(-1, 16, 2)
         is_visible = target[..., 2] > 0
         gt = target[..., :2][is_visible]
-        output = output[is_visible]
-        return self.loss_fn(output, gt)
+        td_out = td_out[is_visible]
+        return self.loss_fn(td_out, gt)
 
 
 def ce_loss(heatmaps, targets):
