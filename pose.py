@@ -209,7 +209,7 @@ class Pckh(LearnerCallback):
         if train:
             return
 
-        preds = output_to_scaled_pred(last_output)
+        preds = output_to_scaled_pred(last_output[1])
         is_visible = last_target[..., 2] > 0
         gt = last_target[..., :2]
 
