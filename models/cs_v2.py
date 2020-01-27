@@ -132,13 +132,6 @@ def cs_learner(data: fv.DataBunch, arch: Callable, c_out, instructor, pretrained
 class BaseInstructor(fv.Callback):
     _order = 20
 
-    def on_loss_begin(self, last_input, last_output, last_target, train, **kwargs: Any):
-        is_visible = last_target[..., 2] > 0
-        gt = last_target[..., :2][is_visible]
-        bu_out, td_out = last_output
-        td_out = td_out[is_visible]
-        return {'last_output': td_out, 'last_target': gt}
-
 
 class SequentialInstructor(BaseInstructor):
     def __init__(self, instructions):
@@ -163,7 +156,7 @@ class SequentialInstructor(BaseInstructor):
 class SingleInstruction(BaseInstructor):
     n_inst = 1
 
-    def on_batch_begin(self, last_input, **kwargs):
+    def on_batch_begin(self, last_input, last_target, train, **kwargs):
         batch_size = last_input.shape[0]
         instructions = torch.zeros(1, batch_size, dtype=torch.long, device=last_input.device)
         return {'last_input': (last_input, instructions)}

@@ -148,6 +148,13 @@ class PoseItemList(ImageList):
         super().show_xyzs(xs, ys, zs, imgsize, figsize, **kwargs)
 
 
+def pose_ce_loss(output, targets):
+    is_visible = targets[..., 2] > 0
+    gt = targets[..., :2]
+    output = output[is_visible]
+    return ce_loss(output, gt)
+
+
 def ce_loss(heatmaps, targets):
     h, w = heatmaps.shape[-2:]
     heatmaps = heatmaps.view(-1, h * w)
