@@ -54,8 +54,7 @@ def test_cs_learner_freeze(learn):
             assert p.requires_grad == should_require
 
     for p in itertools.chain(model.td.parameters(),
-                             model.bu_laterals.parameters(),
-                             model.td_laterals.parameters(),
+                             model.laterals.parameters(),
                              model.emb.parameters()):
         assert p.requires_grad
 
