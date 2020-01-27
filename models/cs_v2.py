@@ -132,21 +132,28 @@ def cs_learner(data: fv.DataBunch, arch: Callable, c_out, instructor, pretrained
 class BaseInstructor(fv.Callback):
     _order = 20
 
+    def on_loss_begin(self, last_input, last_output, last_target, train, **kwargs: Any):
+        is_visible = last_target[..., 2] > 0
+        gt = last_target[..., :2][is_visible]
+        bu_out, td_out = last_output
+        td_out = td_out[is_visible]
+        return {'last_output': td_out, 'last_target': gt}
+
 
 class SequentialInstructor(BaseInstructor):
     def __init__(self, instructions):
         self.instructions = torch.tensor(instructions)
         self.reindex = self.instructions.argsort()
 
-    def on_batch_begin(self, last_input, **kwargs):
+    def on_batch_begin(self, last_input, last_output, last_target, train, **kwargs):
         batch_size = last_input.shape[0]
         instructions = self.instructions.to(device=last_input.device).expand(batch_size, len(self.instructions)).T
         return {'last_input': (last_input, instructions)}
 
-    def on_loss_begin(self, last_output, **kwargs: Any):
+    def on_loss_begin(self, last_input, last_output, last_target, train, **kwargs: Any):
         bu_out, td_out = last_output
         bu_out, td_out = bu_out[:, self.reindex], td_out[:, self.reindex]
-        return {'last_output': (bu_out, td_out)}
+        return super().on_loss_begin(last_input, (bu_out, td_out), last_target, train, **kwargs)
 
     @property
     def n_inst(self):

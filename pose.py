@@ -148,27 +148,6 @@ class PoseItemList(ImageList):
         super().show_xyzs(xs, ys, zs, imgsize, figsize, **kwargs)
 
 
-class PoseLoss:
-    def __init__(self, loss_fn):
-        self.loss_fn = loss_fn
-
-    def __call__(self, output, target):
-        bu_out, td_out = output
-        if td_out.ndim == 2:
-            td_out = td_out.reshape(-1, 16, 2)
-        is_visible = target[..., 2] > 0
-        gt = target[..., :2][is_visible]
-
-        if td_out.shape[1] == gt.shape[1]:
-            # predicted all keypoints
-            td_out = td_out[is_visible]
-        else:
-            # predicted a single keypoint keypoints
-            assert td_out.shape[0] == gt.shape[0]
-            td_out = td_out.squeeze(dim=1)
-        return self.loss_fn(td_out, gt)
-
-
 def ce_loss(heatmaps, targets):
     h, w = heatmaps.shape[-2:]
     heatmaps = heatmaps.view(-1, h * w)
@@ -187,9 +166,6 @@ def scale_targets(targets, size):
     assert targets.max().item() <= max_size
     targets = targets.clamp(0, max_size - 1)
     return targets
-
-
-ce_pose_loss = PoseLoss(ce_loss)
 
 
 class Pckh(LearnerCallback):
