@@ -158,7 +158,14 @@ class PoseLoss:
             td_out = td_out.reshape(-1, 16, 2)
         is_visible = target[..., 2] > 0
         gt = target[..., :2][is_visible]
-        td_out = td_out[is_visible]
+
+        if td_out.shape[1] == gt.shape[1]:
+            # predicted all keypoints
+            td_out = td_out[is_visible]
+        else:
+            # predicted a single keypoint keypoints
+            assert td_out.shape[0] == gt.shape[0]
+            td_out = td_out.squeeze(dim=1)
         return self.loss_fn(td_out, gt)
 
 
