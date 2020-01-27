@@ -132,23 +132,16 @@ def cs_learner(data: fv.DataBunch, arch: Callable, c_out, instructor, pretrained
 class BaseInstructor(fv.Callback):
     _order = 20
 
-    def on_batch_begin(self, last_input, **kwargs):
-        instructions = self.get_instructions(last_input, **kwargs)
-        return {'last_input': (last_input, instructions)}
-
-    def get_instructions(self, last_input, **kwargs):
-        raise NotImplementedError
-
 
 class SequentialInstructor(BaseInstructor):
     def __init__(self, instructions):
         self.instructions = torch.tensor(instructions)
         self.reindex = self.instructions.argsort()
 
-    def get_instructions(self, last_input, **kwargs):
+    def on_batch_begin(self, last_input, **kwargs):
         batch_size = last_input.shape[0]
         instructions = self.instructions.to(device=last_input.device).expand(batch_size, len(self.instructions)).T
-        return instructions
+        return {'last_input': (last_input, instructions)}
 
     def on_loss_begin(self, last_output, **kwargs: Any):
         bu_out, td_out = last_output
@@ -163,7 +156,7 @@ class SequentialInstructor(BaseInstructor):
 class SingleInstruction(BaseInstructor):
     n_inst = 1
 
-    def get_instructions(self, last_input, **kwargs):
+    def on_batch_begin(self, last_input, **kwargs):
         batch_size = last_input.shape[0]
         instructions = torch.zeros(1, batch_size, dtype=torch.long, device=last_input.device)
-        return instructions
+        return {'last_input': (last_input, instructions)}
