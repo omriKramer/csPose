@@ -44,12 +44,13 @@ def learn(databunch, arch, bu_c, single_instructor):
 
 
 def test_counter_stream_init(bu, single_instructor):
-    td_c = 16
+    nk = 16
     img_size = 128, 128
-    cs_net = cs.CounterStream(bu, single_instructor, td_c, img_size=img_size)
+    cs_net = cs.CounterStream(bu, single_instructor, nk, bu_c=nk, img_size=img_size)
+    cs_net.eval()
     img = torch.rand(1, 3, *img_size)
     bu_out, td_out = cs_net(img)
-    td_out_size = 1, td_c, img_size[0] / 4, img_size[1] / 4
+    td_out_size = 1, nk, img_size[0] / 4, img_size[1] / 4
     assert td_out.shape == td_out_size
 
 

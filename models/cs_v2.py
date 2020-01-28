@@ -98,7 +98,7 @@ class CounterStream(nn.Module):
                 create_laterals(self.td[:-1], self.bu_body[1:], reversed(channels[:-1]), detach=detach))
 
         self.emb = embedding(instructor.n_inst, channels[-1])
-        self.bu_head = fv.create_head(channels[-1], bu_c) if bu_c else None
+        self.bu_head = fv.create_head(channels[-1] * 2, bu_c) if bu_c else None
         self.instructor = instructor
 
     def clear(self):
