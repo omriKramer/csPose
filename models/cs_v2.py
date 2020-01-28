@@ -77,25 +77,28 @@ class TDHead(nn.Sequential):
 
 
 class CounterStream(nn.Module):
-    def __init__(self, bu, n_instructions, c_out=1, detach=False, td_laterals=True,
+    def __init__(self, bu, n_instructions, td_c=1, bu_c=0, detach=False, td_laterals=True, embedding=fv.embedding,
                  img_size: Tuple[int, int] = (256, 256)):
         super().__init__()
         # first few layers are not in a block, we convert all layers up through MaxPool to a single block
         concat_idx = 4
-        self.bu = nn.Sequential(bu[:concat_idx], *bu[concat_idx:])
-        szs = fv.learner.model_sizes(self.bu, size=img_size)
+        self.bu_body = nn.Sequential(bu[:concat_idx], *bu[concat_idx:])
+        szs = fv.learner.model_sizes(self.bu_body, size=img_size)
 
         td = []
         for inp_size, out_size in zip(reversed(szs), reversed(szs[:-1])):
             upsample = inp_size[-1] != out_size[-1]
             td.append(TDBlock(inp_size[1], out_size[1], upsample=upsample))
         channels = [s[1] for s in szs]
-        self.td = nn.Sequential(*td, TDHead(channels[0], c_out))
+        self.td = nn.Sequential(*td, TDHead(channels[0], td_c))
 
-        self.laterals = create_laterals(self.bu[1:], self.td[:-1], channels[1:], detach=detach)
+        self.laterals = create_laterals(self.bu_body[1:], self.td[:-1], channels[1:], detach=detach)
         if td_laterals:
-            self.laterals.extend(create_laterals(self.td[:-1], self.bu[1:], reversed(channels[:-1]), detach=detach))
-        self.emb = fv.embedding(n_instructions, channels[-1])
+            self.laterals.extend(
+                create_laterals(self.td[:-1], self.bu_body[1:], reversed(channels[:-1]), detach=detach))
+
+        self.emb = embedding(n_instructions, channels[-1])
+        self.bu_head = fv.create_head(channels[-1], bu_c) if bu_c else None
 
     def clear(self):
         for lateral in self.laterals:
@@ -105,8 +108,12 @@ class CounterStream(nn.Module):
         self.clear()
         td_out, bu_out = [], []
         for inst in instructions:
-            current_bu = self.bu(img)
-            inst_emb = self.emb(inst)[..., None, None].expand_as(current_bu)
+            current_bu = self.bu_body(img)
+            bu_shape = current_bu.shape
+            if self.bu_head:
+                current_bu = self.bu_head(current_bu)
+
+            inst_emb = self.emb(inst)[..., None, None].expand(bu_shape)
             current_td = self.td(inst_emb)
 
             bu_out.append(current_bu)
@@ -115,15 +122,16 @@ class CounterStream(nn.Module):
         return torch.cat(bu_out, dim=1), torch.cat(td_out, dim=1)
 
 
-def cs_learner(data: fv.DataBunch, arch: Callable, c_out, instructor, pretrained: bool = True,
+def cs_learner(data: fv.DataBunch, arch: Callable, td_c, instructor, bu_c=0, pretrained: bool = True,
                cut: Union[int, Callable] = None, td_laterals=True, **learn_kwargs: Any) -> fv.Learner:
     """Build Counter Stream learner from `data` and `arch`."""
     body = fv.create_body(arch, pretrained, cut)
     size = next(iter(data.train_dl))[0].shape[-2:]
-    model = fv.to_device(CounterStream(body, instructor.n_inst, c_out=c_out, img_size=size, td_laterals=td_laterals),
-                         data.device)
+    model = fv.to_device(
+        CounterStream(body, instructor.n_inst, td_c=td_c, bu_c=bu_c, img_size=size, td_laterals=td_laterals),
+        data.device)
     learn = fv.Learner(data, model, callbacks=instructor, **learn_kwargs)
-    learn.split((learn.model.bu[3], learn.model.td[0]))
+    learn.split((learn.model.bu_body[3], learn.model.td[0]))
     if pretrained:
         learn.freeze()
     return learn
@@ -146,7 +154,7 @@ class SequentialInstructor(BaseInstructor):
     def on_loss_begin(self, last_input, last_output, last_target, train, **kwargs: Any):
         bu_out, td_out = last_output
         bu_out, td_out = bu_out[:, self.reindex], td_out[:, self.reindex]
-        return super().on_loss_begin(last_input, (bu_out, td_out), last_target, train, **kwargs)
+        return {'last_target': (bu_out, td_out)}
 
     @property
     def n_inst(self):

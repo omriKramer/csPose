@@ -18,6 +18,11 @@ def bu(arch):
     return fv.create_body(arch, False)
 
 
+@pytest.fixture(scope="module", params=[0, 16])
+def bu_c(request):
+    return request.param
+
+
 @pytest.fixture(scope="module")
 def databunch():
     shape = 3, 128, 128
@@ -29,8 +34,9 @@ def databunch():
 
 
 @pytest.fixture(scope="module")
-def learn(databunch, arch):
-    return cs.cs_learner(databunch, arch, range(16))
+def learn(databunch, arch, bu_c):
+    instructor = cs.SingleInstruction()
+    return cs.cs_learner(databunch, arch, 16, instructor, bu_c=bu_c)
 
 
 def test_counter_stream_init(bu):
@@ -46,19 +52,15 @@ def test_counter_stream_init(bu):
 
 def test_cs_learner_freeze(learn):
     model = learn.model
-    for layer in fv.flatten_model(model.bu):
+    for layer in fv.flatten_model(model.bu_body):
         should_require = False
         if isinstance(layer, fv.bn_types):
             should_require = True
         for p in layer.parameters():
             assert p.requires_grad == should_require
 
-    for p in itertools.chain(model.td.parameters(),
-                             model.laterals.parameters(),
-                             model.emb.parameters()):
+    branches = [model.td, model.laterals, model.emb]
+    if model.bu_head:
+        branches.append(model.bu_head)
+    for p in itertools.chain.from_iterable(b.parameters() for b in branches):
         assert p.requires_grad
-
-
-def test_num_param(learn):
-    total_param = sum(p.numel() for p in learn.model.parameters())
-    pass
