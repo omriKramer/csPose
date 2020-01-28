@@ -34,19 +34,22 @@ def databunch():
 
 
 @pytest.fixture(scope="module")
-def learn(databunch, arch, bu_c):
-    instructor = cs.SingleInstruction()
-    return cs.cs_learner(databunch, arch, 16, instructor, bu_c=bu_c)
+def single_instructor():
+    return cs.SingleInstruction()
 
 
-def test_counter_stream_init(bu):
-    n_inst = 3
+@pytest.fixture(scope="module")
+def learn(databunch, arch, bu_c, single_instructor):
+    return cs.cs_learner(databunch, arch, 16, single_instructor, bu_c=bu_c)
+
+
+def test_counter_stream_init(bu, single_instructor):
+    td_c = 16
     img_size = 128, 128
-    cs_net = cs.CounterStream(bu, 16, img_size=img_size)
-    img = torch.rand(1, n_inst, *img_size)
-    instructions = torch.arange(3)[:, None]
-    bu_out, td_out = cs_net(img, instructions)
-    td_out_size = 1, n_inst, img_size[0] / 4, img_size[1] / 4
+    cs_net = cs.CounterStream(bu, single_instructor, td_c, img_size=img_size)
+    img = torch.rand(1, 3, *img_size)
+    bu_out, td_out = cs_net(img)
+    td_out_size = 1, td_c, img_size[0] / 4, img_size[1] / 4
     assert td_out.shape == td_out_size
 
 

@@ -77,7 +77,7 @@ class TDHead(nn.Sequential):
 
 
 class CounterStream(nn.Module):
-    def __init__(self, bu, n_instructions, td_c=1, bu_c=0, detach=False, td_laterals=True, embedding=fv.embedding,
+    def __init__(self, bu, instructor, td_c=1, bu_c=0, detach=False, td_laterals=True, embedding=fv.embedding,
                  img_size: Tuple[int, int] = (256, 256)):
         super().__init__()
         # first few layers are not in a block, we convert all layers up through MaxPool to a single block
@@ -97,22 +97,26 @@ class CounterStream(nn.Module):
             self.laterals.extend(
                 create_laterals(self.td[:-1], self.bu_body[1:], reversed(channels[:-1]), detach=detach))
 
-        self.emb = embedding(n_instructions, channels[-1])
+        self.emb = embedding(instructor.n_inst, channels[-1])
         self.bu_head = fv.create_head(channels[-1], bu_c) if bu_c else None
+        self.instructor = instructor
 
     def clear(self):
         for lateral in self.laterals:
             lateral.origin_out = None
 
-    def forward(self, img, instructions):
+    def forward(self, img):
         self.clear()
+        should_continue = True
         td_out, bu_out = [], []
-        for inst in instructions:
+
+        while should_continue:
             current_bu = self.bu_body(img)
             bu_shape = current_bu.shape
             if self.bu_head:
                 current_bu = self.bu_head(current_bu)
 
+            inst, should_continue = self.instructor.next_inst(current_bu)
             inst_emb = self.emb(inst)[..., None, None].expand(bu_shape)
             current_td = self.td(inst_emb)
 
@@ -128,7 +132,7 @@ def cs_learner(data: fv.DataBunch, arch: Callable, td_c, instructor, bu_c=0, pre
     body = fv.create_body(arch, pretrained, cut)
     size = next(iter(data.train_dl))[0].shape[-2:]
     model = fv.to_device(
-        CounterStream(body, instructor.n_inst, td_c=td_c, bu_c=bu_c, img_size=size, td_laterals=td_laterals),
+        CounterStream(body, instructor, td_c=td_c, bu_c=bu_c, img_size=size, td_laterals=td_laterals),
         data.device)
     learn = fv.Learner(data, model, callbacks=instructor, **learn_kwargs)
     learn.split((learn.model.bu_body[3], learn.model.td[0]))
@@ -139,6 +143,9 @@ def cs_learner(data: fv.DataBunch, arch: Callable, td_c, instructor, bu_c=0, pre
 
 class BaseInstructor(fv.Callback):
     _order = 20
+
+    def next_inst(self, bu_out):
+        raise NotImplementedError
 
 
 class SequentialInstructor(BaseInstructor):
@@ -164,7 +171,7 @@ class SequentialInstructor(BaseInstructor):
 class SingleInstruction(BaseInstructor):
     n_inst = 1
 
-    def on_batch_begin(self, last_input, last_target, train, **kwargs):
-        batch_size = last_input.shape[0]
-        instructions = torch.zeros(1, batch_size, dtype=torch.long, device=last_input.device)
-        return {'last_input': (last_input, instructions)}
+    def next_inst(self, bu_out):
+        batch_size = bu_out.shape[0]
+        instructions = torch.zeros(batch_size, dtype=torch.long, device=bu_out.device)
+        return instructions, False
