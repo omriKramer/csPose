@@ -126,13 +126,14 @@ class CounterStream(nn.Module):
         return torch.cat(bu_out, dim=1), torch.cat(td_out, dim=1)
 
 
-def cs_learner(data: fv.DataBunch, arch: Callable, td_c, instructor, bu_c=0, pretrained: bool = True,
-               cut: Union[int, Callable] = None, td_laterals=True, **learn_kwargs: Any) -> fv.Learner:
+def cs_learner(data: fv.DataBunch, arch: Callable, td_c, instructor, bu_c=0, td_laterals=True, embedding=fv.embedding,
+               pretrained: bool = True, cut: Union[int, Callable] = None, **learn_kwargs: Any) -> fv.Learner:
     """Build Counter Stream learner from `data` and `arch`."""
     body = fv.create_body(arch, pretrained, cut)
     size = next(iter(data.train_dl))[0].shape[-2:]
     model = fv.to_device(
-        CounterStream(body, instructor, td_c=td_c, bu_c=bu_c, img_size=size, td_laterals=td_laterals),
+        CounterStream(body, instructor, td_c=td_c, bu_c=bu_c, img_size=size,
+                      td_laterals=td_laterals, embedding=embedding),
         data.device)
     learn = fv.Learner(data, model, callbacks=instructor, **learn_kwargs)
     learn.split((learn.model.bu_body[3], learn.model.td[0]))
