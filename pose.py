@@ -33,6 +33,7 @@ class LIPLabel:
     def __init__(self, ann_folder):
         self.train_df = pd.read_csv(ann_folder / 'lip_train_set.csv', index_col=0, header=None)
         self.val_df = pd.read_csv(ann_folder / 'lip_val_set.csv', index_col=0, header=None)
+        self.no_ann = pd.read_csv(ann_folder / 'train_no_pose.txt', header=None, index_col=0).index
 
     def __call__(self, o):
         phase = o.parent.name.partition('_')[0]
@@ -41,6 +42,12 @@ class LIPLabel:
         pose = torch.tensor(pose, dtype=torch.float).reshape(-1, 3)
         pose = torch.index_select(pose, 1, torch.tensor([1, 0, 2], dtype=torch.long))
         return pose
+
+    def filter(self, o):
+        if o.name in self.no_ann:
+            return False
+
+        return True
 
 
 def output_to_scaled_pred(output):
