@@ -97,7 +97,7 @@ class CounterStream(nn.Module):
             self.laterals.extend(
                 create_laterals(self.td[:-1], self.bu_body[1:], reversed(channels[:-1]), detach=detach))
 
-        self.emb = embedding(instructor.n_inst, channels[-1])
+        self.emb = embedding(instructor.n_inst, channels[-1]) if embedding else None
         self.bu_head = fv.create_head(channels[-1] * 2, bu_c) if bu_c else None
         self.instructor = instructor
 
@@ -117,7 +117,8 @@ class CounterStream(nn.Module):
                 current_bu = self.bu_head(current_bu)
 
             inst, should_continue = self.instructor.next_inst(current_bu)
-            inst_emb = self.emb(inst)[..., None, None].expand(bu_shape)
+            inst_emb = self.emb(inst)[..., None, None] if self.emb else current_bu.new_zeros(1)
+            inst_emb = inst_emb.expand(bu_shape)
             current_td = self.td(inst_emb)
 
             bu_out.append(current_bu)
