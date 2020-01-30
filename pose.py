@@ -185,9 +185,10 @@ def scale_targets(targets, size):
 class Pckh(LearnerCallback):
     _order = -20  # Needs to run before the recorder
 
-    def __init__(self, learn):
+    def __init__(self, learn, pred_fn=None):
         super().__init__(learn)
         self.all_idx = list(range(0, 6)) + list(range(8, 16))
+        self.pred_fn = pred_fn if pred_fn else output_to_scaled_pred
 
     def on_train_begin(self, **kwargs: Any) -> None:
         metrics = ['Head', 'Shoulder', 'Elbow', 'Wrist', 'Hip', 'Knee', 'Ankle', 'UBody', 'Total']
@@ -201,7 +202,7 @@ class Pckh(LearnerCallback):
         if train:
             return
 
-        preds = output_to_scaled_pred(last_output[1])
+        preds = self.pred_fn(last_output[1])
         is_visible = last_target[..., 2] > 0
         gt = last_target[..., :2]
 
