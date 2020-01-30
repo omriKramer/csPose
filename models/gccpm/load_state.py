@@ -1,5 +1,7 @@
 import collections
 
+import torch
+
 
 def load_state(net, checkpoint):
     source_state = checkpoint['state_dict']
@@ -30,3 +32,8 @@ def load_from_mobilenet(net, checkpoint):
             print('[WARNING] Not found pre-trained parameters for {}'.format(target_key))
 
     net.load_state_dict(new_target_state)
+
+
+def load(model, path):
+    checkpoint = torch.load(path)
+    load_from_mobilenet(model, checkpoint)
