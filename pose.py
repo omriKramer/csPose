@@ -185,10 +185,10 @@ def scale_targets(targets, size):
 class Pckh(LearnerCallback):
     _order = -20  # Needs to run before the recorder
 
-    def __init__(self, learn, pred_fn=None):
+    def __init__(self, learn, heatmap_func=None):
         super().__init__(learn)
         self.all_idx = list(range(0, 6)) + list(range(8, 16))
-        self.pred_fn = pred_fn if pred_fn else output_to_scaled_pred
+        self.heatmap_func = heatmap_func if heatmap_func else lambda outputs: outputs[1]
 
     def on_train_begin(self, **kwargs: Any) -> None:
         metrics = ['Head', 'Shoulder', 'Elbow', 'Wrist', 'Hip', 'Knee', 'Ankle', 'UBody', 'Total']
@@ -202,7 +202,7 @@ class Pckh(LearnerCallback):
         if train:
             return
 
-        preds = self.pred_fn(last_output[1])
+        preds = output_to_scaled_pred(self.heatmap_func(last_output))
         is_visible = last_target[..., 2] > 0
         gt = last_target[..., :2]
 
