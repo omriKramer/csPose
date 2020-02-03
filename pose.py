@@ -94,14 +94,14 @@ class Pose(ImagePoints):
         return torch.cat((pose, visible[:, None]), dim=1)
 
     def show(self, ax: plt.Axes = None, figsize: tuple = (3, 3), title: Optional[str] = None, hide_axis: bool = True,
-             **kwargs):
+             annotate=False, **kwargs):
         if ax is None:
             _, ax = plt.subplots(figsize=figsize)
         data = self.data
         pnt = data[:, :2]
         visible = data[:, 2]
         pnt = scale_flow(FlowField(self.size, pnt), to_unit=False).flow.flip(1)
-        plot_joint(ax, pnt, visible)
+        plot_joint(ax, pnt, visible, annotate=annotate)
         if hide_axis:
             ax.axis('off')
         if title:
