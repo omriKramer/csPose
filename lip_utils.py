@@ -32,8 +32,8 @@ colors = np.array([(255, 0, 0), (255, 0, 0),
 
 
 def plot_joint(ax, joints, visible, annotate=False):
-    xs = [j[0] for j, v in zip(joints, visible) if v]
-    ys = [j[1] for j, v in zip(joints, visible) if v]
+    xs = [j[0].item() for j, v in zip(joints, visible) if v]
+    ys = [j[1].item() for j, v in zip(joints, visible) if v]
     params = {'s': 20, 'marker': '.', 'c': 'r'}
     ax.scatter(xs, ys, **params)
     if annotate:
