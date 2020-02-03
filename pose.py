@@ -157,7 +157,7 @@ class PoseItemList(ImageList):
 
 def pose_ce_loss(output, targets):
     is_visible = targets[..., 2] > 0
-    gt = targets[..., :2]
+    gt = targets[..., :2][is_visible]
     output = output[is_visible]
     return ce_loss(output, gt)
 
