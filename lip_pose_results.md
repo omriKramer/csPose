@@ -9,3 +9,4 @@
 | 29.01 | bu_multilabel_noinst (b)| 128->224 | 50 | CE | lr_flip | 67.2 | csResnet18 | True | simple TDBlock per BU layer. No Instruction given. Detached inner state of laterals.  |
 | 02.02 | unet (a) | 128->256 | 40 | CE | lr_flip | 73 | resnet-18 unet | True | fastai unet |
 | 02.02 | unet (b) | 128->256 | 40 | CE | lr_flip | 76 | resnet-18 unet | True | replaced head of unet (output is two times smaller than input |
+| 03.02 | unet (c) | 128->256 | 40 | CE | lr_flip | 75.5 | csunet-18 | True | replaced head of unet and BU loss|
