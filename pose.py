@@ -66,6 +66,7 @@ class Pose(ImagePoints):
         if mode == 'LIP':
             visible = torch.where(torch.isnan(visible), torch.zeros(1), visible + 1)
         self.visible = visible
+        self._flow.clamp_(-1, 1)
 
     def clone(self):
         cloned_flow = FlowField(self.size, self.flow.flow.clone())
