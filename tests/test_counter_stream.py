@@ -40,13 +40,13 @@ def single_instructor():
 
 @pytest.fixture(scope="module")
 def learn(databunch, arch, bu_c, single_instructor):
-    return cs.cs_learner(databunch, arch, 16, single_instructor, bu_c=bu_c)
+    return cs.cs_learner(databunch, arch, single_instructor, td_c=16, bu_c=bu_c)
 
 
 def test_counter_stream_init(bu, single_instructor):
     nk = 16
     img_size = 128, 128
-    cs_net = cs.CounterStream(bu, single_instructor, nk, bu_c=nk, img_size=img_size)
+    cs_net = cs.CounterStream(bu, single_instructor, td_c=nk, bu_c=nk, img_size=img_size)
     cs_net.eval()
     img = torch.rand(1, 3, *img_size)
     bu_out, td_out = cs_net(img)

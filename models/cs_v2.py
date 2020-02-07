@@ -1,9 +1,11 @@
+import itertools
 from typing import Callable, Tuple, Any, Union, List
 
 import fastai.vision as fv
 import numpy as np
 import torch
 import torch.nn.functional as F
+import torchvision
 from torch import nn
 
 
@@ -28,14 +30,24 @@ def out_channels(m: nn.Module):
     return None
 
 
+def conv_layer(ni, nf, ks=3):
+    return nn.Sequential(
+        fv.conv2d(ni, nf, ks=ks, bias=False),
+        fv.batchnorm_2d(nf),
+        nn.ReLU(inplace=True)
+    )
+
+
 class Lateral(nn.Module):
-    def __init__(self, origin_layer: nn.Module, target_layer: nn.Module, channels: int, detach=False):
+    def __init__(self, origin_layer: nn.Module, target_layer: nn.Module, channels: int, detach=False, ks=3,
+                 op=torch.add):
         super().__init__()
         self.detach = detach
         self.origin_out = None
-        self.lateral = nn.Conv2d(channels, channels, 1, bias=False)
-        self.bu_hook = origin_layer.register_forward_hook(self.origin_forward_hook)
-        self.td_hook = target_layer.register_forward_pre_hook(lambda module, inp: self(inp[0]))
+        self.conv = conv_layer(channels, channels, ks=ks) if channels else None
+        self.origin_hook = origin_layer.register_forward_hook(self.origin_forward_hook)
+        self.target_hook = target_layer.register_forward_pre_hook(lambda module, inp: self(inp[0]))
+        self.op = op
 
     def origin_forward_hook(self, module, inp, output):
         if self.detach:
@@ -43,9 +55,14 @@ class Lateral(nn.Module):
         self.origin_out = output
 
     def forward(self, inp):
-        if self.origin_out is not None:
-            out = self.lateral(self.origin_out) + inp
-            return out
+        if self.origin_out is None:
+            return
+
+        out = self.origin_out
+        if self.conv:
+            out = self.conv(out)
+        out = self.op(out, inp)
+        return out
 
 
 def create_laterals(origin_net, target_net, channels, **kwargs):
@@ -55,19 +72,49 @@ def create_laterals(origin_net, target_net, channels, **kwargs):
 
 
 class TDBlock(nn.Module):
-
-    def __init__(self, c_in, c_out, upsample=False):
+    def __init__(self, *layers, upsample=None):
         super().__init__()
-        self.conv1 = fv.conv_layer(c_in, c_in)
-        self.conv2 = fv.conv_layer(c_in, c_out)
+        self.layers = nn.ModuleList(layers)
+        self.relu = nn.ReLU(inplace=True)
         self.upsample = upsample
 
     def forward(self, x):
-        out = self.conv1(x)
+        identity = x
+        out = self.layers[0](x)
         if self.upsample:
-            out = F.interpolate(out, scale_factor=2, mode='nearest')
-        out = self.conv2(out)
+            identity = self.upsample(identity)
+            if out.shape[-1] != identity.shape[-1]:
+                out = F.interpolate(out, scale_factor=2, mode='nearest')
+
+        for layer in self.layers[1:]:
+            out = layer(out)
+        out += identity
+        out = self.relu(out)
         return out
+
+
+class TDBasicBlock(TDBlock):
+
+    def __init__(self, ni, nf, upsample=None):
+        super().__init__(
+            fv.conv_layer(ni, ni),
+            fv.conv_layer(ni, nf),
+            fv.batchnorm_2d(nf),
+            upsample=upsample)
+
+
+class TDBottleNeck(TDBlock):
+    expansion = 4
+
+    def __init__(self, ni, nf, upsample=None):
+        width = ni // self.expansion
+        super().__init__(
+            fv.conv_layer(ni, width),
+            fv.conv_layer(width, width),
+            fv.conv2d(width, nf),
+            fv.batchnorm_2d(nf),
+            upsample=upsample
+        )
 
 
 class TDHead(nn.Sequential):
@@ -80,49 +127,77 @@ class CounterStream(nn.Module):
     def __init__(self, bu, instructor, td_c=1, bu_c=0, detach=False, td_laterals=True, embedding=fv.embedding,
                  img_size: Tuple[int, int] = (256, 256)):
         super().__init__()
-        # first few layers are not in a block, we convert all layers up through MaxPool to a single block
+        # first few layers are not in a block, we group all layers up through MaxPool to a single block
         concat_idx = 4
         self.bu_body = nn.Sequential(bu[:concat_idx], *bu[concat_idx:])
-        szs = fv.learner.model_sizes(self.bu_body, size=img_size)
+        bu = [bu[:concat_idx]] + list(itertools.chain(*bu[concat_idx:]))
+        bu = nn.Sequential(*bu)
 
+        szs = fv.learner.model_sizes(bu, img_size)
+        td_szs = list(reversed(szs))
         td = []
-        for inp_size, out_size in zip(reversed(szs), reversed(szs[:-1])):
-            upsample = inp_size[-1] != out_size[-1]
-            td.append(TDBlock(inp_size[1], out_size[1], upsample=upsample))
-        channels = [s[1] for s in szs]
-        self.td = nn.Sequential(*td, TDHead(channels[0], td_c))
+        if isinstance(bu[1], torchvision.models.resnet.BasicBlock):
+            td_block = TDBasicBlock
+        elif isinstance(bu[1], torchvision.models.resnet.Bottleneck):
+            td_block = TDBottleNeck
+        else:
+            raise ValueError
+        for sz_in, sz_out in zip(td_szs, td_szs[1:]):
+            upsample = None
+            if sz_in[-1] != sz_out[-1]:
+                upsample = nn.Sequential(
+                    fv.Lambda(lambda x: F.interpolate(x, scale_factor=2, mode='nearest')),
+                    fv.conv_layer(sz_in[1], sz_out[1], use_activ=False)
+                )
+            elif sz_in[1] != sz_out[1]:
+                upsample = fv.conv_layer(sz_in[1], sz_out[1], ks=1, use_activ=False)
+            td.append(td_block(sz_in[1], sz_out[1], upsample=upsample))
 
-        self.laterals = create_laterals(self.bu_body[1:], self.td[:-1], channels[1:], detach=detach)
+        td_layered = self._group_td(td)
+        self.td = nn.Sequential(*td_layered, TDHead(td_szs[-1][1], td_c))
+
+        channels = [s[1] for s in szs]
+        td.append(self.td[-1])
+        self.laterals = create_laterals(bu[:-1], td[1:], channels[:-1], detach=detach)
         if td_laterals:
-            self.laterals.extend(
-                create_laterals(self.td[:-1], self.bu_body[1:], reversed(channels[:-1]), detach=detach))
+            self.laterals.extend(create_laterals(td[:-1], bu[1:], reversed(channels[:-1]), detach=detach))
 
         self.emb = embedding(instructor.n_inst, channels[-1]) if embedding else None
         self.bu_head = fv.create_head(channels[-1] * 2, bu_c) if bu_c else None
         self.instructor = instructor
+
+    def _group_td(self, td):
+        """group TDBlocks to mirror the layer groups in the BU network"""
+        layer_len = [len(layer) for layer in self.bu_body[1:]]
+        layer_len.reverse()
+        end_idx = np.cumsum(layer_len)
+        start_idx = np.roll(end_idx, 1)
+        start_idx[0] = 0
+        td_layered = []
+        for start, end in zip(start_idx, end_idx):
+            td_layered.append(nn.Sequential(*td[start:end]))
+        return td_layered
 
     def clear(self):
         for lateral in self.laterals:
             lateral.origin_out = None
 
     def forward(self, img):
-        self.clear()
-        should_continue = True
+        state = {'clear': True}
         td_out, bu_out = [], []
 
-        while should_continue:
-            current_bu = self.bu_body(img)
-            bu_shape = current_bu.shape
+        while state.get('continue', True):
+            if state.get('clear', False):
+                self.clear()
+
+            last_bu = self.bu_body(img)
             if self.bu_head:
-                current_bu = self.bu_head(current_bu)
+                bu_out.append(self.bu_head(last_bu))
 
-            inst, should_continue = self.instructor.next_inst(current_bu)
-            inst_emb = self.emb(inst)[..., None, None] if self.emb else current_bu.new_zeros(1)
-            inst_emb = inst_emb.expand(bu_shape)
-            current_td = self.td(inst_emb)
-
-            bu_out.append(current_bu)
-            td_out.append(current_td)
+            inst, state = self.instructor.next_inst(bu_out[-1] if bu_out else None)
+            if self.emb:
+                last_bu *= self.emb(inst)[..., None, None]
+            td_out.append(self.td(last_bu))
 
         return torch.cat(bu_out, dim=1), torch.cat(td_out, dim=1)
 
@@ -149,26 +224,6 @@ class BaseInstructor(fv.Callback):
 
     def next_inst(self, bu_out):
         raise NotImplementedError
-
-
-class SequentialInstructor(BaseInstructor):
-    def __init__(self, instructions):
-        self.instructions = torch.tensor(instructions)
-        self.reindex = self.instructions.argsort()
-
-    def on_batch_begin(self, last_input, last_output, last_target, train, **kwargs):
-        batch_size = last_input.shape[0]
-        instructions = self.instructions.to(device=last_input.device).expand(batch_size, len(self.instructions)).T
-        return {'last_input': (last_input, instructions)}
-
-    def on_loss_begin(self, last_input, last_output, last_target, train, **kwargs: Any):
-        bu_out, td_out = last_output
-        bu_out, td_out = bu_out[:, self.reindex], td_out[:, self.reindex]
-        return {'last_target': (bu_out, td_out)}
-
-    @property
-    def n_inst(self):
-        return len(self.instructions)
 
 
 class SingleInstruction(BaseInstructor):
