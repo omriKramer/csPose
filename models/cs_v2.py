@@ -231,7 +231,10 @@ class BaseInstructor(fv.Callback):
 class SingleInstruction(BaseInstructor):
     n_inst = 1
 
+    def __init__(self):
+        self.state = {'continue': False}
+
     def next_inst(self, bu_out):
         batch_size = bu_out.shape[0]
         instructions = torch.zeros(batch_size, dtype=torch.long, device=bu_out.device)
-        return instructions, {'continue': False}
+        return instructions, self.state
