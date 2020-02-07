@@ -163,7 +163,7 @@ def pose_ce_loss(output, targets):
     return ce_loss(output, gt)
 
 
-def ce_loss(heatmaps, targets):
+def ece_loss(heatmaps, targets):
     h, w = heatmaps.shape[-2:]
     heatmaps = heatmaps.view(-1, h * w)
     targets = scale_targets(targets, (h, w)).round().long()

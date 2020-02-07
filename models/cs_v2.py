@@ -194,7 +194,7 @@ class CounterStream(nn.Module):
             if self.bu_head:
                 bu_out.append(self.bu_head(last_bu))
 
-            inst, state = self.instructor.next_inst(bu_out[-1] if bu_out else None)
+            inst, state = self.instructor.next_inst(bu_out[-1] if bu_out else last_bu)
             if self.emb:
                 last_bu *= self.emb(inst)[..., None, None]
             td_out.append(self.td(last_bu))
@@ -232,4 +232,4 @@ class SingleInstruction(BaseInstructor):
     def next_inst(self, bu_out):
         batch_size = bu_out.shape[0]
         instructions = torch.zeros(batch_size, dtype=torch.long, device=bu_out.device)
-        return instructions, False
+        return instructions, {'continue': False}
