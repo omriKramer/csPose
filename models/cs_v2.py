@@ -196,7 +196,7 @@ class CounterStream(nn.Module):
 
             inst, state = self.instructor.next_inst(bu_out[-1] if bu_out else last_bu)
             if self.emb:
-                last_bu *= self.emb(inst)[..., None, None]
+                last_bu = last_bu * self.emb(inst)[..., None, None]
             td_out.append(self.td(last_bu))
 
         bu_out = torch.cat(bu_out, dim=1) if bu_out else None
