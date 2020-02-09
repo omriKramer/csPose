@@ -189,7 +189,7 @@ class Pckh(LearnerCallback):
 
     def __init__(self, learn, heatmap_func=None, filter_idx=None):
         super().__init__(learn)
-        self.filter_idx = filter_idx if filter_idx else range(16)
+        self.filter_idx = sorted(filter_idx) if filter_idx else range(16)
         self.heatmap_func = heatmap_func if heatmap_func else lambda outputs: outputs[1]
 
     def on_train_begin(self, **kwargs: Any) -> None:
