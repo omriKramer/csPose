@@ -219,7 +219,7 @@ class Pckh(LearnerCallback):
 
         # keep only keypoints of interest
         gt = gt[:, self.filter_idx]
-        is_visible = is_visible[: self.filter_idx]
+        is_visible = is_visible[:, self.filter_idx]
 
         distances = torch.norm(preds - gt, dim=2)
         is_correct = (distances < thresholds[:, None]) * is_visible
