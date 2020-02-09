@@ -187,18 +187,26 @@ class Pckh(LearnerCallback):
     _order = -20  # Needs to run before the recorder
     all_idx = list(range(0, 6)) + list(range(8, 16))
 
-    def __init__(self, learn, heatmap_func=None, filter_idx=None):
+    def __init__(self, learn, heatmap_func=None, filter_idx=None, acc_thresh=None):
         super().__init__(learn)
+        if filter_idx and acc_thresh:
+            raise ValueError('No support for partial keypoints and multilabel classification')
+
         self.filter_idx = sorted(filter_idx) if filter_idx else range(16)
         self.heatmap_func = heatmap_func if heatmap_func else lambda outputs: outputs[1]
+        self.acc_thresh = acc_thresh
 
     def on_train_begin(self, **kwargs: Any) -> None:
         metrics = ['Head', 'Shoulder', 'Elbow', 'Wrist', 'Hip', 'Knee', 'Ankle', 'UBody', 'Total']
+        if self.acc_thresh:
+            metrics.extend([f'acc@{self.acc_thresh}', 'TP_acc', 'FN_acc'])
         self.learn.recorder.add_metric_names(metrics)
 
     def on_epoch_begin(self, **kwargs: Any) -> None:
-        self.correct = torch.zeros(16)
-        self.total = torch.zeros(16)
+        self.correct = torch.zeros(18)
+        self.total = torch.zeros(18)
+        self.mlc_correct = 0
+        self.mlc_total = 0
 
     def on_batch_end(self, last_output, last_target, train, **kwargs) -> None:
         if train:
@@ -208,11 +216,19 @@ class Pckh(LearnerCallback):
         is_visible = last_target[..., 2] > 0
         gt = last_target[..., :2]
 
+        mlc_pred = None
+        if self.acc_thresh:
+            mlc_pred = last_output[0].sigmoid() > self.acc_thresh
+            self.mlc_correct += (mlc_pred == is_visible.bool()).sum().item()
+            self.mlc_total += mlc_pred.numel()
+
         # remove image without head segment
         has_head = (is_visible[:, 8:10]).all(1)
         preds = preds[has_head]
         gt = gt[has_head]
         is_visible = is_visible[has_head]
+        if mlc_pred is not None:
+            mlc_pred = mlc_pred[has_head]
 
         head_sizes = torch.norm(gt[:, 8] - gt[:, 9], dim=1)
         thresholds = (head_sizes / 2)
@@ -223,14 +239,24 @@ class Pckh(LearnerCallback):
 
         distances = torch.norm(preds - gt, dim=2)
         is_correct = (distances < thresholds[:, None]) * is_visible
-        self.update(is_correct, is_visible)
+        self.update(is_correct, is_visible, mlc_pred)
 
-    def update(self, is_correct, is_visible):
+    def update(self, is_correct, is_visible, mlc_pred):
         is_correct = is_correct.cpu()
         is_visible = is_visible.cpu()
 
         self.correct[self.filter_idx] += is_correct.sum(dim=0)
         self.total[self.filter_idx] += is_visible.sum(dim=0)
+
+        if mlc_pred is None:
+            return
+
+        mlc_pred = mlc_pred.cpu()
+        tp = mlc_pred * is_visible
+        fn = ~mlc_pred * is_visible
+        tp_fn = torch.cat((tp, fn))
+        self.correct[16:] += (tp_fn * is_correct[None]).sum(dim=(1, 2))
+        self.total[16:] += tp_fn.sum(dim=(1, 2))
 
     def on_epoch_end(self, last_metrics, **kwargs):
         idx_pairs = [(8, 9), (12, 13), (11, 14), (10, 15), (2, 3), (1, 4), (0, 5)]
@@ -243,6 +269,13 @@ class Pckh(LearnerCallback):
             (self.correct[8:].sum() / self.total[8:].sum()).item(),
             (self.correct[self.all_idx].sum() / self.total[self.all_idx].sum()).item()
         ])
+        # add multi-label classification accuracy, TP-accuracy, FN-accuracy
+        if self.acc_thresh:
+            pckh.extend([
+                self.mlc_correct / self.mlc_total,
+                accuracy[16].item(),
+                accuracy[17].item()
+            ])
         return add_metrics(last_metrics, pckh)
 
 
