@@ -1,5 +1,6 @@
 import numpy as np
 
+stats = [0.2682, 0.2387, 0.2219], [0.3046, 0.2805, 0.2727]
 c = ['R_Ankle',
      'R_Knee',
      'R_Hip',

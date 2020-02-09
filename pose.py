@@ -1,5 +1,6 @@
 from typing import Optional, Tuple
 
+import fastai.vision as fv
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -7,10 +8,9 @@ import torch
 import torch.nn.functional as F
 from fastai.vision import ItemList, Tensor, Any, ImagePoints, FlowField, scale_flow, LearnerCallback, add_metrics, \
     ImageList, tensor, TfmPixel
-from fastai.vision import PreProcessor
 
+import lip_utils
 from eval import heatmap_to_preds
-from lip_utils import plot_joint
 
 
 def _get_size(xs, i):
@@ -102,7 +102,7 @@ class Pose(ImagePoints):
         pnt = data[:, :2]
         visible = data[:, 2]
         pnt = scale_flow(FlowField(self.size, pnt), to_unit=False).flow.flip(1)
-        plot_joint(ax, pnt, visible, annotate=annotate)
+        lip_utils.plot_joint(ax, pnt, visible, annotate=annotate)
         if hide_axis:
             ax.axis('off')
         if title:
@@ -115,7 +115,7 @@ class Pose(ImagePoints):
         return self
 
 
-class PoseProcessor(PreProcessor):
+class PoseProcessor(fv.PreProcessor):
 
     def __init__(self, ds: ItemList):
         super().__init__(ds)
@@ -185,10 +185,11 @@ def scale_targets(targets, size):
 
 class Pckh(LearnerCallback):
     _order = -20  # Needs to run before the recorder
+    all_idx = list(range(0, 6)) + list(range(8, 16))
 
-    def __init__(self, learn, heatmap_func=None):
+    def __init__(self, learn, heatmap_func=None, filter_idx=None):
         super().__init__(learn)
-        self.all_idx = list(range(0, 6)) + list(range(8, 16))
+        self.filter_idx = filter_idx if filter_idx else range(16)
         self.heatmap_func = heatmap_func if heatmap_func else lambda outputs: outputs[1]
 
     def on_train_begin(self, **kwargs: Any) -> None:
@@ -196,8 +197,8 @@ class Pckh(LearnerCallback):
         self.learn.recorder.add_metric_names(metrics)
 
     def on_epoch_begin(self, **kwargs: Any) -> None:
-        self.correct = torch.zeros(18)
-        self.total = torch.zeros(18)
+        self.correct = torch.zeros(16)
+        self.total = torch.zeros(16)
 
     def on_batch_end(self, last_output, last_target, train, **kwargs) -> None:
         if train:
@@ -215,6 +216,7 @@ class Pckh(LearnerCallback):
 
         head_sizes = torch.norm(gt[:, 8] - gt[:, 9], dim=1)
         thresholds = head_sizes / 2
+        gt = gt[:, self.filter_idx]
         distances = torch.norm(preds - gt, dim=2)
         is_correct = (distances < thresholds[:, None]) * is_visible
         self.update(is_correct, is_visible)
@@ -223,17 +225,8 @@ class Pckh(LearnerCallback):
         is_correct = is_correct.cpu()
         is_visible = is_visible.cpu()
 
-        # keypoints separately
-        self.correct[:16] += is_correct.sum(dim=0)
-        self.total[:16] += is_visible.sum(dim=0)
-
-        # upper body
-        self.correct[16] += is_correct[:, 8:].sum()
-        self.total[16] += is_visible[:, 8:].sum()
-
-        # all keypoints
-        self.correct[17] += is_correct[:, self.all_idx].sum()
-        self.total[17] += is_visible[:, self.all_idx].sum()
+        self.correct[self.filter_idx] += is_correct.sum(dim=0)
+        self.total[self.filter_idx] += is_visible.sum(dim=0)
 
     def on_epoch_end(self, last_metrics, **kwargs):
         idx_pairs = [(8, 9), (12, 13), (11, 14), (10, 15), (2, 3), (1, 4), (0, 5)]
@@ -241,15 +234,35 @@ class Pckh(LearnerCallback):
         pckh = [(accuracy[idx0] + accuracy[idx1]).item() / 2
                 for idx0, idx1
                 in idx_pairs]
-        pckh.extend([accuracy[16].item(), accuracy[17].item()])
+        # add upper body and total
+        pckh.extend([
+            (self.correct[8:].sum() / self.total[8:].sum()).item(),
+            (self.correct[self.all_idx].sum() / self.total[self.all_idx].sum()).item()
+        ])
         return add_metrics(last_metrics, pckh)
 
 
 def _pose_flip_lr(x):
-    "Flip `x` horizontally."
+    """Flip `x` horizontally."""
     if isinstance(x, Pose):
         return x.flip_lr()
     return tensor(np.ascontiguousarray(np.array(x)[..., ::-1]))
 
 
 pose_flip_lr = TfmPixel(_pose_flip_lr)
+
+
+def get_data(root, size, bs=64, stats=lip_utils.stats):
+    t = fv.get_transforms(do_flip=False)
+    t[0].insert(0, pose_flip_lr(p=0.5))
+    pose_label = LIPLabel(root / 'pose_annotations')
+    data = (PoseItemList.from_folder(root)
+            .filter_by_func(pose_label.filter)
+            .split_by_folder('train_images', 'val_images')
+            .label_from_func(pose_label)
+            .transform(t, tfm_y=True, size=size, resize_method=fv.ResizeMethod.PAD, padding_mode='zeros')
+            .databunch(bs=bs)
+            .normalize(stats))
+
+    data.c = 16
+    return data
