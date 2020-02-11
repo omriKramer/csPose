@@ -254,7 +254,7 @@ class Pckh(LearnerCallback):
         mlc_pred = mlc_pred.cpu()
         tp = mlc_pred * is_visible
         fn = ~mlc_pred * is_visible
-        tp_fn = torch.cat((tp, fn))
+        tp_fn = torch.stack((tp, fn))
         self.correct[16:] += (tp_fn * is_correct[None]).sum(dim=(1, 2))
         self.total[16:] += tp_fn.sum(dim=(1, 2))
 
@@ -277,6 +277,7 @@ class Pckh(LearnerCallback):
                 accuracy[17].item()
             ])
         return add_metrics(last_metrics, pckh)
+        a
 
 
 def _pose_flip_lr(x):
