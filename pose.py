@@ -272,7 +272,7 @@ class Pckh(LearnerCallback):
         # add multi-label classification accuracy, TP-accuracy, FN-accuracy
         if self.acc_thresh:
             pckh.extend([
-                self.mlc_correct / self.mlc_total,
+                self.mlc_correct / self.mlc_total if self.mlc_total else np.nan,
                 accuracy[16].item(),
                 accuracy[17].item()
             ])
