@@ -124,8 +124,8 @@ class TDHead(nn.Sequential):
 
 
 class CounterStream(nn.Module):
-    def __init__(self, bu, instructor, td_c=1, bu_c=0, detach=False, td_laterals=True, embedding=fv.embedding,
-                 img_size: Tuple[int, int] = (256, 256)):
+    def __init__(self, bu, instructor, td_c=1, bu_c=0, detach=False, td_detach=None, td_laterals=True,
+                 embedding=fv.embedding, img_size: Tuple[int, int] = (256, 256)):
         super().__init__()
         # first few layers are not in a block, we group all layers up through MaxPool to a single block
         concat_idx = 4
@@ -160,7 +160,8 @@ class CounterStream(nn.Module):
         td.append(self.td[-1])
         self.laterals = create_laterals(bu[:-1], td[1:], channels[:-1], detach=detach)
         if td_laterals:
-            self.laterals.extend(create_laterals(td[:-1], bu[1:], reversed(channels[:-1]), detach=detach))
+            td_detach = td_detach if td_detach is not None else detach
+            self.laterals.extend(create_laterals(td[:-1], bu[1:], reversed(channels[:-1]), detach=td_detach))
 
         self.emb = embedding(instructor.n_inst, channels[-1]) if embedding else None
         self.bu_head = fv.create_head(channels[-1] * 2, bu_c) if bu_c else None
@@ -205,14 +206,14 @@ class CounterStream(nn.Module):
 
 
 def cs_learner(data: fv.DataBunch, arch: Callable, instructor, td_c=1, bu_c=0, td_laterals=True, embedding=fv.embedding,
-               detach=False,
+               detach=False, td_detach=None,
                pretrained: bool = True, cut: Union[int, Callable] = None, **learn_kwargs: Any) -> fv.Learner:
     """Build Counter Stream learner from `data` and `arch`."""
     body = fv.create_body(arch, pretrained, cut)
     size = next(iter(data.train_dl))[0].shape[-2:]
     model = fv.to_device(
-        CounterStream(body, instructor, td_c=td_c, bu_c=bu_c, img_size=size,
-                      td_laterals=td_laterals, embedding=embedding, detach=detach),
+        CounterStream(body, instructor, td_c=td_c, bu_c=bu_c, img_size=size, embedding=embedding,
+                      td_laterals=td_laterals, detach=detach, td_detach=td_detach),
         data.device)
     learn = fv.Learner(data, model, callbacks=instructor, **learn_kwargs)
     learn.split((learn.model.bu_body[3], learn.model.td[0]))
