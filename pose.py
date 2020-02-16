@@ -218,7 +218,7 @@ class Pckh(LearnerCallback):
 
         mlc_pred = None
         if self.acc_thresh:
-            mlc_pred = last_output[0].sigmoid() > self.acc_thresh
+            mlc_pred = last_output[0][-16:].sigmoid() > self.acc_thresh
             self.mlc_correct += (mlc_pred == is_visible.bool()).sum().item()
             self.mlc_total += mlc_pred.numel()
 

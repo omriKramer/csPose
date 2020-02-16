@@ -21,3 +21,8 @@ Added augmentations and deeper TD.
 | 12.02 | baselineV2 (C) | 128 | 40 | CE | 77.3 | csResnet18 | X | No instructions|
 | 11.02 | multilabelV2 | 128 | 40 | CE | 76.4 | csResnet18 | X | With BU Loss |
 | 11.02 | multilabelV2 (b) | 128 | 40 | CE | 77.2 | csResnet18 | X | With BU Loss, No instruction |
+| 15.02 | recurrent (a) | 128 | 40 | CE | 78.4 | csResnet18 | X | repeat 2 times |
+| 16.02 | recurrent (b) | 128 | 40 | CE | 78.6 | csResnet18 | X | repeat 3 times |
+| 16.02 | repeat4 | 128 | 40 | CE | 78.8 | csResnet18 | X | repeat 4 times |
+| 16.02 | repeat8 | 128 | 40 | CE | 78.3 | csResnet18 | X | repeat 8 times |
+| 16.02 | repeat-detach2 (a) | 128 | 40 | CE | 78.3 | csResnet18 | X | repeat 2 times and detach td laterals|
