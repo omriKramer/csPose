@@ -181,6 +181,7 @@ class CounterStream(nn.Module):
 
     def clear(self):
         for lateral in self.laterals:
+            del lateral.origin_out
             lateral.origin_out = None
 
     def forward(self, img):
@@ -200,6 +201,7 @@ class CounterStream(nn.Module):
                 last_bu = last_bu * self.emb(inst)[..., None, None]
             td_out.append(self.td(last_bu))
 
+        self.clear()
         bu_out = torch.cat(bu_out, dim=1) if bu_out else None
         td_out = torch.cat(td_out, dim=1)
         return bu_out, td_out

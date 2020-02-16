@@ -242,8 +242,8 @@ class Pckh(LearnerCallback):
         self.update(is_correct, is_visible, mlc_pred)
 
     def update(self, is_correct, is_visible, mlc_pred):
-        is_correct = is_correct.cpu()
-        is_visible = is_visible.cpu()
+        is_correct = is_correct.cpu().detach()
+        is_visible = is_visible.cpu().detach()
 
         self.correct[self.filter_idx] += is_correct.sum(dim=0)
         self.total[self.filter_idx] += is_visible.sum(dim=0)
@@ -251,7 +251,7 @@ class Pckh(LearnerCallback):
         if mlc_pred is None:
             return
 
-        mlc_pred = mlc_pred.cpu()
+        mlc_pred = mlc_pred.cpu().detach()
         tp = mlc_pred * is_visible
         fn = ~mlc_pred * is_visible
         tp_fn = torch.stack((tp, fn))
