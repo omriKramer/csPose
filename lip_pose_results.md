@@ -26,3 +26,5 @@ Added augmentations and deeper TD.
 | 16.02 | repeat4 | 128 | 40 | CE | 78.8 | csResnet18 | X | repeat 4 times |
 | 16.02 | repeat8 | 128 | 40 | CE | 78.3 | csResnet18 | X | repeat 8 times |
 | 16.02 | repeat-detach2 (a) | 128 | 40 | CE | 78.3 | csResnet18 | X | repeat 2 times and detach td laterals|
+| 16.02 | recurrent (c) | 128 | 40 | CE | 78.6 | csResnet18 | X | repeat 3 times and detach td laterals|
+| 16.02 | repeat-detach2 (b) | 128 | 40 | CE | 78.7 | csResnet18 | X | repeat 4 times and detach td laterals|
