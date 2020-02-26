@@ -187,7 +187,7 @@ class Pckh(LearnerCallback):
     _order = -20  # Needs to run before the recorder
     all_idx = list(range(0, 6)) + list(range(8, 16))
 
-    def __init__(self, learn, heatmap_func=None, filter_idx=None, acc_thresh=None):
+    def __init__(self, learn, heatmap_func=None, filter_idx=None, acc_thresh=None, niter=1):
         super().__init__(learn)
         if filter_idx and acc_thresh:
             raise ValueError('No support for partial keypoints and multilabel classification')
@@ -195,16 +195,19 @@ class Pckh(LearnerCallback):
         self.filter_idx = sorted(filter_idx) if filter_idx else range(16)
         self.heatmap_func = heatmap_func if heatmap_func else lambda outputs: outputs[1]
         self.acc_thresh = acc_thresh
+        self.niter = niter
 
     def on_train_begin(self, **kwargs: Any) -> None:
         metrics = ['Head', 'Shoulder', 'Elbow', 'Wrist', 'Hip', 'Knee', 'Ankle', 'UBody', 'Total']
+        if self.niter > 1:
+            metrics = [f'{title}_{i}' for title in metrics for i in range(self.niter)]
         if self.acc_thresh:
             metrics.extend([f'acc@{self.acc_thresh}', 'TP_acc', 'FN_acc'])
         self.learn.recorder.add_metric_names(metrics)
 
     def on_epoch_begin(self, **kwargs: Any) -> None:
-        self.correct = torch.zeros(18)
-        self.total = torch.zeros(18)
+        self.correct = torch.zeros(self.niter, 18)
+        self.total = torch.zeros(self.niter, 18)
         self.mlc_correct = 0
         self.mlc_total = 0
 
@@ -237,16 +240,18 @@ class Pckh(LearnerCallback):
         gt = gt[:, self.filter_idx]
         is_visible = is_visible[:, self.filter_idx]
 
-        distances = torch.norm(preds - gt, dim=2)
-        is_correct = (distances < thresholds[:, None]) * is_visible
-        self.update(is_correct, is_visible, mlc_pred)
+        # update keypoints stats fore each of the models iterations
+        for i, p in enumerate(preds.chunk(self.niter, dim=1)):
+            distances = torch.norm(p - gt, dim=2)
+            is_correct = (distances < thresholds[:, None]) * is_visible
+            self.update(is_correct, is_visible, i, mlc_pred)
 
-    def update(self, is_correct, is_visible, mlc_pred):
+    def update(self, is_correct, is_visible, i, mlc_pred):
         is_correct = is_correct.cpu().detach()
         is_visible = is_visible.cpu().detach()
 
-        self.correct[self.filter_idx] += is_correct.sum(dim=0)
-        self.total[self.filter_idx] += is_visible.sum(dim=0)
+        self.correct[i, self.filter_idx] += is_correct.sum(dim=0)
+        self.total[i, self.filter_idx] += is_visible.sum(dim=0)
 
         if mlc_pred is None:
             return
@@ -255,20 +260,22 @@ class Pckh(LearnerCallback):
         tp = mlc_pred * is_visible
         fn = ~mlc_pred * is_visible
         tp_fn = torch.stack((tp, fn))
-        self.correct[16:] += (tp_fn * is_correct[None]).sum(dim=(1, 2))
-        self.total[16:] += tp_fn.sum(dim=(1, 2))
+        self.correct[i, 16:] += (tp_fn * is_correct[None]).sum(dim=(1, 2))
+        self.total[i, 16:] += tp_fn.sum(dim=(1, 2))
 
     def on_epoch_end(self, last_metrics, **kwargs):
         idx_pairs = [(8, 9), (12, 13), (11, 14), (10, 15), (2, 3), (1, 4), (0, 5)]
         accuracy = self.correct / self.total
-        pckh = [(accuracy[idx0] + accuracy[idx1]).item() / 2
+        pckh = [(accuracy[:, idx0] + accuracy[:, idx1]).item() / 2
                 for idx0, idx1
                 in idx_pairs]
+
         # add upper body and total
         pckh.extend([
-            (self.correct[8:].sum() / self.total[8:].sum()).item(),
-            (self.correct[self.all_idx].sum() / self.total[self.all_idx].sum()).item()
+            (self.correct[:, 8:].sum(dim=1) / self.total[:, 8:].sum(dim=1)).item(),
+            (self.correct[:, self.all_idx].sum(dim=1) / self.total[:, self.all_idx].sum(dim=1)).item()
         ])
+
         # add multi-label classification accuracy, TP-accuracy, FN-accuracy
         if self.acc_thresh:
             pckh.extend([
@@ -276,8 +283,10 @@ class Pckh(LearnerCallback):
                 accuracy[16].item(),
                 accuracy[17].item()
             ])
-        return add_metrics(last_metrics, pckh)
-        a
+
+        results = torch.tensor(pckh)
+        results = results.T.view(-1).tolist()
+        return add_metrics(last_metrics, results)
 
 
 def _pose_flip_lr(x):
