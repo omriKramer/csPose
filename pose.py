@@ -266,22 +266,22 @@ class Pckh(LearnerCallback):
     def on_epoch_end(self, last_metrics, **kwargs):
         idx_pairs = [(8, 9), (12, 13), (11, 14), (10, 15), (2, 3), (1, 4), (0, 5)]
         accuracy = self.correct / self.total
-        pckh = [(accuracy[:, idx0] + accuracy[:, idx1]).item() / 2
+        pckh = [(accuracy[:, idx0] + accuracy[:, idx1]) / 2
                 for idx0, idx1
                 in idx_pairs]
 
         # add upper body and total
         pckh.extend([
-            (self.correct[:, 8:].sum(dim=1) / self.total[:, 8:].sum(dim=1)).item(),
-            (self.correct[:, self.all_idx].sum(dim=1) / self.total[:, self.all_idx].sum(dim=1)).item()
+            self.correct[:, 8:].sum(dim=1) / self.total[:, 8:].sum(dim=1),
+            self.correct[:, self.all_idx].sum(dim=1) / self.total[:, self.all_idx].sum(dim=1)
         ])
 
         # add multi-label classification accuracy, TP-accuracy, FN-accuracy
         if self.acc_thresh:
             pckh.extend([
                 self.mlc_correct / self.mlc_total if self.mlc_total else np.nan,
-                accuracy[16].item(),
-                accuracy[17].item()
+                accuracy[16],
+                accuracy[17]
             ])
 
         results = torch.tensor(pckh)
