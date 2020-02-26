@@ -240,7 +240,7 @@ class Pckh(LearnerCallback):
         gt = gt[:, self.filter_idx]
         is_visible = is_visible[:, self.filter_idx]
 
-        # update keypoints stats fore each of the models iterations
+        # update keypoints stats for each of the models iterations
         for i, p in enumerate(preds.chunk(self.niter, dim=1)):
             distances = torch.norm(p - gt, dim=2)
             is_correct = (distances < thresholds[:, None]) * is_visible
@@ -284,7 +284,7 @@ class Pckh(LearnerCallback):
                 accuracy[17]
             ])
 
-        results = torch.tensor(pckh)
+        results = torch.stack(pckh)
         results = results.view(-1).tolist()
         return add_metrics(last_metrics, results)
 
