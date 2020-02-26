@@ -285,7 +285,7 @@ class Pckh(LearnerCallback):
             ])
 
         results = torch.tensor(pckh)
-        results = results.T.view(-1).tolist()
+        results = results.view(-1).tolist()
         return add_metrics(last_metrics, results)
 
 
