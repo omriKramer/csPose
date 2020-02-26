@@ -1,7 +1,11 @@
 import argparse
 
+import fastai
+import fastprogress
 import torch
 import torch.distributed as dist
+from fastai.core import master_bar, progress_bar
+from fastprogress.fastprogress import force_console_behavior
 from torch.utils.data import DataLoader
 
 
@@ -95,3 +99,20 @@ def dataset_mean_and_std(dataset):
     mean /= nb_samples
     std /= nb_samples
     return mean, std
+
+
+class ProgressBarCtx:
+    """Context manager to disable the progress update bar."""
+
+    def __init__(self, show=True):
+        self.show = show
+
+    def __enter__(self):
+        if self.show:
+            return
+        # silence progress bar
+        fastprogress.fastprogress.NO_BAR = True
+        fastai.basic_train.master_bar, fastai.basic_train.progress_bar = force_console_behavior()
+
+    def __exit__(self, *args):
+        fastai.basic_train.master_bar, fastai.basic_train.progress_bar = master_bar, progress_bar
