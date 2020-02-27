@@ -4,6 +4,7 @@ import fastai
 import fastprogress
 import torch
 import torch.distributed as dist
+import torch.nn.functional as F
 from fastai.core import master_bar, progress_bar
 from fastprogress.fastprogress import force_console_behavior
 from torch.utils.data import DataLoader
@@ -99,6 +100,13 @@ def dataset_mean_and_std(dataset):
     mean /= nb_samples
     std /= nb_samples
     return mean, std
+
+
+def one_hot2d(x, h, w):
+    out = x[..., 0] * w + x[..., 1]
+    out = F.one_hot(out, h * w)
+    out = out.reshape(*x.shape[:-1], h, w)
+    return out
 
 
 class ProgressBarCtx:

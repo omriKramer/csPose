@@ -1,4 +1,3 @@
-import math
 import numbers
 
 import torch
@@ -44,7 +43,7 @@ class TDHead(nn.Module):
         return x
 
 
-class GaussianSmoothing(torch.nn.Module):
+class GaussianSmoothing(nn.Module):
     """
     Apply gaussian smoothing on a 2d tensor.
     Filtering is performed seperately for each channel
@@ -54,7 +53,7 @@ class GaussianSmoothing(torch.nn.Module):
         sigma (float, sequence): Standard deviation of the gaussian kernel.
     """
 
-    def __init__(self, sigma, kernel_size=3):
+    def __init__(self, sigma, kernel_size=3, scale=True, thresh=0):
         super(GaussianSmoothing, self).__init__()
 
         if isinstance(sigma, numbers.Number):
@@ -66,14 +65,16 @@ class GaussianSmoothing(torch.nn.Module):
 
         for std, mgrid in zip(sigma, meshgrids):
             mean = (kernel_size - 1) / 2
-            kernel *= 1 / (std * math.sqrt(2 * math.pi)) * torch.exp(-((mgrid - mean) / std) ** 2 / 2)
+            kernel *= torch.exp(-((mgrid - mean) / std) ** 2 / 2)
 
-        # Make sure sum of values in gaussian kernel equals 1.
-        kernel = kernel / torch.sum(kernel)
+        if scale:
+            # Make sure sum of values in gaussian kernel equals 1.
+            kernel = kernel / torch.sum(kernel)
 
         kernel = kernel.view(1, 1, *kernel.size())
         self.register_buffer('kernel', kernel)
         self.padding = kernel_size // 2
+        self.thresh = thresh
 
     def forward(self, x):
         """
@@ -87,5 +88,6 @@ class GaussianSmoothing(torch.nn.Module):
         channels = x.shape[1]
         weight = self.kernel.repeat(channels, *[1] * (self.kernel.dim() - 1))
         out = F.conv2d(x, weight, groups=channels, padding=self.padding)
-        out /= out.sum(dim=(2, 3))[:, :, None, None]
+        out[out < self.thresh] = 0
+        out.clamp_(0, 1)
         return out
