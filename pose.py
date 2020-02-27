@@ -140,7 +140,7 @@ class PoseLabelList(ItemList):
         return Pose(flow, t[:, 2], scale=False, mode='COCO')
 
     def analyze_pred(self, pred: Tensor):
-        pred = output_to_scaled_pred(pred[1][None])[0]
+        pred = output_to_scaled_pred(pred[None])[0]
         pred.clamp_(-1, 1)
         visibility = pred.new_ones(pred.shape[:-1])
         pred = torch.cat((pred, visibility[..., None]), dim=-1)
