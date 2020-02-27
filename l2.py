@@ -43,16 +43,18 @@ class L2Loss(Module):
 
 def main(args):
     print(args)
+    name = 'l2-' + str(args)
+    logger = partial(callbacks.CSVLogger, filename=name)
+
     root = Path(__file__).parent.parent / 'LIP'
     db = pose.get_data(root, 128, bs=32)
-    c_out = 16
+
     loss = to_device(L2Loss(args.std, args.ks), db.device)
     instructor = RecurrentInstructor(1)
-    learn = cs.cs_learner(db, models.resnet18, instructor, td_c=c_out, pretrained=False, embedding=None,
-                          loss_func=loss, callback_fns=pose.Pckh)
+    learn = cs.cs_learner(db, models.resnet18, instructor, td_c=16, pretrained=False, embedding=None,
+                          loss_func=loss, callback_fns=[pose.Pckh, logger])
     lr = 1e-2
     learn.fit_one_cycle(40, lr)
-    name = 'l2-' + str(args)
     learn.save(name)
 
 
