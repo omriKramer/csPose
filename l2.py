@@ -21,10 +21,11 @@ class RecurrentInstructor(cs.BaseInstructor):
 
 
 class L2Loss(Module):
-    def __init__(self, std=1, ks=7):
+    def __init__(self, std=1, ks=7, sigmoid=False):
         super().__init__()
         self.g = GaussianSmoothing(std, kernel_size=ks, scale=False, thresh=0.01)
         self.mse = nn.MSELoss()
+        self.sigmoid = nn.Sigmoid() if sigmoid else None
 
     def create_target_heatmaps(self, targets, size):
         targets = pose.scale_targets(targets, size).round().long()
@@ -35,9 +36,12 @@ class L2Loss(Module):
     def forward(self, outputs, targets):
         v = targets[..., 2].bool()
         outputs = outputs[1][v]
-        targets = targets[..., :2][v]
+        if self.sigmoid:
+            outputs = self.sigmoid(outputs)
 
+        targets = targets[..., :2][v]
         targets = self.create_target_heatmaps(targets, outputs.shape[-2:])
+
         return self.mse(outputs, targets)
 
 
@@ -49,12 +53,11 @@ def main(args):
     root = Path(__file__).resolve().parent.parent / 'LIP'
     db = pose.get_data(root, 128, bs=32)
 
-    loss = to_device(L2Loss(args.std, args.ks), db.device)
+    loss = to_device(L2Loss(args.std, args.ks, args.sigmoid), db.device)
     instructor = RecurrentInstructor(1)
     learn = cs.cs_learner(db, models.resnet18, instructor, td_c=16, pretrained=False, embedding=None,
                           loss_func=loss, callback_fns=[pose.Pckh, logger])
-    lr = 1e-2
-    learn.fit_one_cycle(40, lr)
+    learn.fit_one_cycle(40, args.lr)
     learn.save(name)
 
 
@@ -64,4 +67,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--std', default=1, type=float)
     parser.add_argument('--ks', default=7, type=int)
+    parser.add_argument('--sigmoid', action='store_true')
+    parser.add_argument('--lr', default=.01, type=float)
     main(parser.parse_args())
