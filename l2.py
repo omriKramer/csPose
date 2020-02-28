@@ -46,7 +46,7 @@ def main(args):
     name = 'l2-' + str(args)
     logger = partial(callbacks.CSVLogger, filename=name)
 
-    root = Path(__file__).parent.parent / 'LIP'
+    root = Path(__file__).resolve().parent.parent / 'LIP'
     db = pose.get_data(root, 128, bs=32)
 
     loss = to_device(L2Loss(args.std, args.ks), db.device)
