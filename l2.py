@@ -62,6 +62,6 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--std', default=1)
-    parser.add_argument('--ks', default=7)
+    parser.add_argument('--std', default=1, type=float)
+    parser.add_argument('--ks', default=7, type=int)
     main(parser.parse_args())
