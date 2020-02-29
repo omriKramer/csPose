@@ -12,6 +12,8 @@ from fastai.vision import ItemList, Tensor, Any, ImagePoints, FlowField, scale_f
 import lip_utils
 from eval import heatmap_to_preds
 
+CATEGORIES = ['Head', 'Shoulder', 'Elbow', 'Wrist', 'Hip', 'Knee', 'Ankle', 'UBody', 'Total']
+
 
 def _get_size(xs, i):
     size = xs.sizes.get(i, None)
@@ -187,7 +189,7 @@ class Pckh(LearnerCallback):
     _order = -20  # Needs to run before the recorder
     all_idx = list(range(0, 6)) + list(range(8, 16))
 
-    def __init__(self, learn, heatmap_func=None, filter_idx=None, acc_thresh=None, niter=1):
+    def __init__(self, learn, heatmap_func=None, filter_idx=None, acc_thresh=None, niter=1, mean=False):
         super().__init__(learn)
         if filter_idx and acc_thresh:
             raise ValueError('No support for partial keypoints and multilabel classification')
@@ -196,11 +198,14 @@ class Pckh(LearnerCallback):
         self.heatmap_func = heatmap_func if heatmap_func else lambda outputs: outputs[1]
         self.acc_thresh = acc_thresh
         self.niter = niter
+        self.mean = mean
 
     def on_train_begin(self, **kwargs: Any) -> None:
-        metrics = ['Head', 'Shoulder', 'Elbow', 'Wrist', 'Hip', 'Knee', 'Ankle', 'UBody', 'Total']
+        metrics = CATEGORIES
         if self.niter > 1:
             metrics = [f'{title}_{i}' for title in metrics for i in range(self.niter)]
+        if self.mean:
+            metrics.extend([f'Mean_{c}' for c in CATEGORIES])
         if self.acc_thresh:
             metrics.extend([f'acc@{self.acc_thresh}', 'TP_acc', 'FN_acc'])
         self.learn.recorder.add_metric_names(metrics)
@@ -214,6 +219,11 @@ class Pckh(LearnerCallback):
     def on_batch_end(self, last_output, last_target, train, **kwargs) -> None:
         if train:
             return
+
+        if self.mean:
+            bs, m, h, w = last_output.shape
+            mean_output = last_output.reshape(bs, self.niter, -1, h, w).mean(dim=1)
+            last_output = torch.cat((last_output, mean_output), dim=1)
 
         preds = output_to_scaled_pred(self.heatmap_func(last_output))
         is_visible = last_target[..., 2] > 0
@@ -241,7 +251,7 @@ class Pckh(LearnerCallback):
         is_visible = is_visible[:, self.filter_idx]
 
         # update keypoints stats for each of the models iterations
-        for i, p in enumerate(preds.chunk(self.niter, dim=1)):
+        for i, p in enumerate(preds.chunk(self.niter + self.mean, dim=1)):
             distances = torch.norm(p - gt, dim=2)
             is_correct = (distances < thresholds[:, None]) * is_visible
             self.update(is_correct, is_visible, i, mlc_pred)
