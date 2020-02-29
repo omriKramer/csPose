@@ -51,7 +51,7 @@ def main(args):
     logger = partial(callbacks.CSVLogger, filename=name)
 
     root = Path(__file__).resolve().parent.parent / 'LIP'
-    db = pose.get_data(root, 128, bs=32)
+    db = pose.get_data(root, args.size, bs=32)
 
     loss = to_device(L2Loss(args.std, args.ks, args.sigmoid), db.device)
     instructor = RecurrentInstructor(1)
@@ -69,4 +69,5 @@ if __name__ == '__main__':
     parser.add_argument('--ks', default=7, type=int)
     parser.add_argument('--sigmoid', action='store_true')
     parser.add_argument('--lr', default=.01, type=float)
+    parser.add_argument('--size', default=128, type=int)
     main(parser.parse_args())
