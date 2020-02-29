@@ -220,12 +220,13 @@ class Pckh(LearnerCallback):
         if train:
             return
 
+        last_output = self.heatmap_func(last_output)
         if self.mean:
             bs, m, h, w = last_output.shape
             mean_output = last_output.reshape(bs, self.niter, -1, h, w).mean(dim=1)
             last_output = torch.cat((last_output, mean_output), dim=1)
 
-        preds = output_to_scaled_pred(self.heatmap_func(last_output))
+        preds = output_to_scaled_pred(last_output)
         is_visible = last_target[..., 2] > 0
         gt = last_target[..., :2]
 
