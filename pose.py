@@ -211,8 +211,8 @@ class Pckh(LearnerCallback):
         self.learn.recorder.add_metric_names(metrics)
 
     def on_epoch_begin(self, **kwargs: Any) -> None:
-        self.correct = torch.zeros(self.niter, 18)
-        self.total = torch.zeros(self.niter, 18)
+        self.correct = torch.zeros(self.niter + self.mean, 18)
+        self.total = torch.zeros(self.niter + self.mean, 18)
         self.mlc_correct = 0
         self.mlc_total = 0
 
