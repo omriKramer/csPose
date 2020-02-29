@@ -241,3 +241,17 @@ class SingleInstruction(BaseInstructor):
         batch_size = bu_out.shape[0]
         instructions = torch.zeros(batch_size, dtype=torch.long, device=bu_out.device)
         return instructions, self.state
+
+
+class RecurrentInstructor(BaseInstructor):
+    def __init__(self, repeats):
+        self.repeats = repeats
+        self.i = 0
+
+    def on_batch_begin(self, **kwargs):
+        self.i = 0
+
+    def next_inst(self, last_bu):
+        self.i += 1
+        state = {'continue': self.i < self.repeats}
+        return None, state
