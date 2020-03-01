@@ -18,7 +18,7 @@ class RecurrentLoss:
 def main(args):
     print(args)
     root = Path(__file__).resolve().parent.parent / 'LIP'
-    niter = args.niter
+    niter = args.n
     instructor = cs.RecurrentInstructor(niter)
     pckh = partial(pose.Pckh, niter=niter, mean=True)
 

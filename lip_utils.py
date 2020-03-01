@@ -1,4 +1,38 @@
+from enum import Enum
+
 import numpy as np
+
+
+class KeypointGroup:
+    def __init__(self, s):
+        self.keypoints = s
+
+    @classmethod
+    def create(cls, *args):
+        return cls(set(args))
+
+    def join(self, other):
+        return self.__class__(self.keypoints | other.keypoints)
+
+    @property
+    def indices(self):
+        ind = [c.index(k) for k in self.keypoints]
+        ind.sort()
+        return ind
+
+    def __repr__(self):
+        return f'{self.__class__}(keypoints={self.keypoints})'
+
+
+class BasicGroups(Enum):
+    HEAD = KeypointGroup.create('B_Neck', 'B_Head')
+    SHOULDERS = KeypointGroup.create('R_Shoulder', 'L_Shoulder')
+    KNEES = KeypointGroup.create('R_Knee', 'L_Knee')
+    ANKLES = KeypointGroup.create('R_Ankle', 'L_Ankle')
+    WRISTS = KeypointGroup.create('R_Wrist', 'L_Wrist')
+    ELBOWS = KeypointGroup.create('R_Elbow', 'L_Elbow')
+    SPINE = KeypointGroup.create('B_Spine', 'B_Pelvis')
+
 
 stats = [0.2682, 0.2387, 0.2219], [0.3046, 0.2805, 0.2727]
 c = ['R_Ankle',
