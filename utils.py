@@ -1,10 +1,12 @@
 import argparse
+from time import time
 
 import fastai
 import fastprogress
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
+from fastai.basic_train import LearnerCallback, add_metrics
 from fastai.core import master_bar, progress_bar
 from fastprogress.fastprogress import force_console_behavior
 from torch.utils.data import DataLoader
@@ -124,3 +126,32 @@ class ProgressBarCtx:
 
     def __exit__(self, *args):
         fastai.basic_train.master_bar, fastai.basic_train.progress_bar = master_bar, progress_bar
+
+
+class DataTime(LearnerCallback):
+    def __init__(self, learn):
+        _order = -15
+        super().__init__(learn)
+
+    def on_train_begin(self, **kwargs):
+        self.learn.recorder.add_metric_names(['data_time'])
+
+    def on_epoch_begin(self, **kwargs):
+        self.total_time = 0.
+        self.nb = 0
+        self.start = None
+
+    def on_batch_begin(self, train, **kwargs):
+        if not train or self.start is None:
+            return
+
+        self.total_time += time() - self.start
+        self.nb += 1
+
+    def on_batch_end(self, train, **kwargs):
+        if not train:
+            return
+        self.start = time()
+
+    def on_epoch_end(self, last_metrics, **kwargs):
+        return add_metrics(last_metrics, self.total_time / self.nb)
