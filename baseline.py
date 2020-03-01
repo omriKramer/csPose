@@ -27,7 +27,7 @@ def main(n=1, e64=10, e128=40, e256=60, resnet=18, lr=1e-4):
     print(name)
     root = Path(__file__).resolve().parent.parent / 'LIP'
     instructor = cs.RecurrentInstructor(n)
-    pckh = partial(pose.Pckh, niter=n, mean=True)
+    pckh = partial(pose.Pckh, niter=n)
 
     db = pose.get_data(root, 64, bs=64)
     logger = partial(callbacks.CSVLogger, filename=f'baseline-{name}')
