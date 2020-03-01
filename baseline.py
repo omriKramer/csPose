@@ -16,7 +16,13 @@ class RecurrentLoss:
         return pose.pose_ce_loss(outputs[1], targets)
 
 
-def main(n=1, e64=10, e128=40, e256=60):
+def main(n=1, e64=10, e128=40, e256=60, resnet=18):
+    if resnet == 18:
+        model = models.resnet18
+    elif resnet == 50:
+        model = models.resnet50
+    else:
+        raise ValueError
     name = f'n={n}_e64={e64}_e128={e128}_e256={e256}'
     print(name)
     root = Path(__file__).resolve().parent.parent / 'LIP'
@@ -27,7 +33,7 @@ def main(n=1, e64=10, e128=40, e256=60):
     logger = partial(callbacks.CSVLogger, filename=f'baseline-{name}')
     monitor = f'Total_{n - 1}' if n > 1 else 'Total'
     save_clbk = partial(SaveModelCallback, every='improvement', monitor=monitor, name=f'baseline-{name}', mode='max')
-    learn = cs.cs_learner(db, models.resnet18, instructor, td_c=16, pretrained=False, embedding=None,
+    learn = cs.cs_learner(db, model, instructor, td_c=16, pretrained=False, embedding=None,
                           loss_func=RecurrentLoss(n), callback_fns=[pckh, logger, save_clbk, DataTime])
     if e64 > 0:
         learn.fit_one_cycle(e64, 1e-2)
@@ -48,5 +54,6 @@ if __name__ == '__main__':
     parser.add_argument('--e64', default=10, type=int)
     parser.add_argument('--e128', default=40, type=int)
     parser.add_argument('--e256', default=60, type=int)
+    parser.add_argument('-r', '--resnt', default=18, type=int)
     args = parser.parse_args()
     main(**vars(args))
