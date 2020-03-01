@@ -54,6 +54,6 @@ if __name__ == '__main__':
     parser.add_argument('--e64', default=10, type=int)
     parser.add_argument('--e128', default=40, type=int)
     parser.add_argument('--e256', default=60, type=int)
-    parser.add_argument('-r', '--resnt', default=18, type=int)
+    parser.add_argument('-r', '--resnet', default=18, type=int)
     args = parser.parse_args()
     main(**vars(args))
