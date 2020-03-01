@@ -130,7 +130,7 @@ class ProgressBarCtx:
 
 class DataTime(LearnerCallback):
     def __init__(self, learn):
-        _order = -15
+        _order = -20
         super().__init__(learn)
 
     def on_train_begin(self, **kwargs):
