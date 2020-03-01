@@ -16,7 +16,7 @@ class RecurrentLoss:
         return pose.pose_ce_loss(outputs[1], targets)
 
 
-def main(n=1, e64=10, e128=40, e256=60, resnet=18):
+def main(n=1, e64=10, e128=40, e256=60, resnet=18, lr=1e-4):
     if resnet == 18:
         model = models.resnet18
     elif resnet == 50:
@@ -43,7 +43,7 @@ def main(n=1, e64=10, e128=40, e256=60, resnet=18):
         learn.fit_one_cycle(e128, 5e-3)
 
     learn.data = pose.get_data(root, 256, bs=32)
-    learn.fit_one_cycle(e256, 1e-4)
+    learn.fit_one_cycle(e256, lr)
 
 
 if __name__ == '__main__':
@@ -55,5 +55,6 @@ if __name__ == '__main__':
     parser.add_argument('--e128', default=40, type=int)
     parser.add_argument('--e256', default=60, type=int)
     parser.add_argument('-r', '--resnet', default=18, type=int)
+    parser.add_argument('--lr', default=1e-4, type=float)
     args = parser.parse_args()
     main(**vars(args))
