@@ -15,25 +15,24 @@ class RecurrentLoss:
         return pose.pose_ce_loss(outputs[1], targets)
 
 
-def main(args):
-    print(args)
+def main(n=1):
+    name = f'n={n}'
+    print(name)
     root = Path(__file__).resolve().parent.parent / 'LIP'
-    niter = args.n
-    instructor = cs.RecurrentInstructor(niter)
-    pckh = partial(pose.Pckh, niter=niter, mean=True)
+    instructor = cs.RecurrentInstructor(n)
+    pckh = partial(pose.Pckh, niter=n, mean=True)
 
-    logger = partial(callbacks.CSVLogger, filename='baseline')
     db = pose.get_data(root, 64, bs=64)
+    logger = partial(callbacks.CSVLogger, filename=f'baseline-{name}')
+    monitor = f'Total_{n - 1}' if n > 1 else 'Total'
+    save_clbk = partial(SaveModelCallback, every='improvement', monitor=monitor, name=f'baseline-{name}', mode='max')
     learn = cs.cs_learner(db, models.resnet18, instructor, td_c=16, pretrained=False, embedding=None,
-                          loss_func=RecurrentLoss(niter), callback_fns=[pckh, logger])
+                          loss_func=RecurrentLoss(n), callback_fns=[pckh, logger, save_clbk])
     learn.fit_one_cycle(10, 1e-2)
 
     learn.data = pose.get_data(root, 128, bs=64)
     learn.fit_one_cycle(40, 5e-3)
 
-    monitor = f'Total_{niter - 1}' if niter > 1 else 'Total'
-    save_clbk = SaveModelCallback(learn, every='improvement', monitor=monitor, name=f'baseline-{args}', mode='max')
-    learn.callbacks.append(save_clbk)
     learn.data = pose.get_data(root, 256, bs=32)
     learn.fit_one_cycle(60, 1e-4)
 
@@ -43,4 +42,5 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--n', default=1, type=int)
-    main(parser.parse_args())
+    args = parser.parse_args()
+    main(**vars(args))
