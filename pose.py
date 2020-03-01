@@ -201,7 +201,7 @@ class Pckh(LearnerCallback):
         self.mean = mean
 
     def on_train_begin(self, **kwargs: Any) -> None:
-        metrics = CATEGORIES
+        metrics = CATEGORIES.copy()
         if self.niter > 1:
             metrics = [f'{title}_{i}' for title in metrics for i in range(self.niter)]
         if self.mean:

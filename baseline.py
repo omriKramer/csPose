@@ -3,6 +3,7 @@ from fastai.vision import *
 
 import models.cs_v2 as cs
 import pose
+from utils import DataTime
 
 
 class RecurrentLoss:
@@ -27,7 +28,7 @@ def main(n=1, e64=10, e128=50, e256=60):
     monitor = f'Total_{n - 1}' if n > 1 else 'Total'
     save_clbk = partial(SaveModelCallback, every='improvement', monitor=monitor, name=f'baseline-{name}', mode='max')
     learn = cs.cs_learner(db, models.resnet18, instructor, td_c=16, pretrained=False, embedding=None,
-                          loss_func=RecurrentLoss(n), callback_fns=[pckh, logger, save_clbk])
+                          loss_func=RecurrentLoss(n), callback_fns=[pckh, logger, save_clbk, DataTime])
     if e64 > 0:
         learn.fit_one_cycle(e64, 1e-2)
 
