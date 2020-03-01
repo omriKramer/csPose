@@ -203,9 +203,9 @@ class Pckh(LearnerCallback):
     def on_train_begin(self, **kwargs: Any) -> None:
         metrics = CATEGORIES.copy()
         if self.niter > 1:
-            metrics = [f'{title}_{i}' for title in metrics for i in range(self.niter)]
-        if self.mean:
-            metrics.extend([f'Mean_{c}' for c in CATEGORIES])
+            metrics = [f'Total_{i}' for i in range(self.niter)]
+            if self.mean:
+                metrics.append('Total_Mean')
         if self.acc_thresh:
             metrics.extend([f'acc@{self.acc_thresh}', 'TP_acc', 'FN_acc'])
         self.learn.recorder.add_metric_names(metrics)
@@ -295,8 +295,10 @@ class Pckh(LearnerCallback):
                 accuracy[17]
             ])
 
-        results = torch.stack(pckh)
-        results = results.view(-1).tolist()
+        if self.niter > 1:
+            results = pckh[-1].tolist()
+        else:
+            results = [r.item() for r in pckh]
         return add_metrics(last_metrics, results)
 
 
