@@ -39,12 +39,10 @@ def conv_layer(ni, nf, ks=3):
 
 
 class Lateral(nn.Module):
-    def __init__(self, origin_layer: nn.Module, target_layer: nn.Module, channels: int, detach=False, ks=3,
-                 op=torch.add):
+    def __init__(self, origin_layer: nn.Module, target_layer: nn.Module, op, detach=False):
         super().__init__()
         self.detach = detach
         self.origin_out = None
-        self.conv = conv_layer(channels, channels, ks=ks) if channels else None
         self.origin_hook = origin_layer.register_forward_hook(self.origin_forward_hook)
         self.target_hook = target_layer.register_forward_pre_hook(lambda module, inp: self(inp[0]))
         self.op = op
@@ -58,15 +56,28 @@ class Lateral(nn.Module):
         if self.origin_out is None:
             return
 
-        out = self.origin_out
-        if self.conv:
-            out = self.conv(out)
-        out = self.op(out, inp)
+        out = self.op(self.origin_out, inp)
         return out
 
 
+class LateralConvOp(nn.Module):
+    def __init__(self, channels, ks):
+        super().__init__()
+        self.conv = conv_layer(channels, channels, ks=ks)
+
+    def forward(self, origin_out, target_input):
+        out = self.conv(origin_out)
+        out = out + target_input
+        return out
+
+
+def conv_lateral(origin_layer, target_layer, channels, detach=False, ks=3):
+    op = LateralConvOp(channels, ks)
+    return Lateral(origin_layer, target_layer, op, detach=detach)
+
+
 def create_laterals(origin_net, target_net, channels, **kwargs):
-    laterals = [Lateral(o_layer, t_layer, c, **kwargs)
+    laterals = [conv_lateral(o_layer, t_layer, c, **kwargs)
                 for o_layer, t_layer, c in zip(origin_net, reversed(target_net), channels)]
     return nn.ModuleList(laterals)
 

@@ -23,7 +23,7 @@ def main(n=1, e64=10, e128=40, e256=60, resnet=18, lr=1e-4):
         model = models.resnet50
     else:
         raise ValueError
-    name = f'n={n}_e64={e64}_e128={e128}_e256={e256}'
+    name = f'n={n}_e64={e64}_e128={e128}_e256={e256}_resnet{resnet}'
     print(name)
     root = Path(__file__).resolve().parent.parent / 'LIP'
     instructor = cs.RecurrentInstructor(n)
