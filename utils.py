@@ -139,20 +139,16 @@ class DataTime(LearnerCallback):
 
     def on_epoch_begin(self, **kwargs):
         self.total_time = 0.
-        self.nb = 0
         self.start = None
 
     def on_batch_begin(self, train, **kwargs):
-        if not train or self.start is None:
+        if self.start is None:
             return
 
         self.total_time += time() - self.start
-        self.nb += 1
 
     def on_batch_end(self, train, **kwargs):
-        if not train:
-            return
         self.start = time()
 
     def on_epoch_end(self, last_metrics, **kwargs):
-        return add_metrics(last_metrics, self.total_time / self.nb)
+        return add_metrics(last_metrics, self.total_time / 60)
