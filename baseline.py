@@ -39,7 +39,7 @@ def main(args):
                           loss_func=RecurrentLoss(n), callback_fns=[pckh, DataTime, save_clbk, logger])
 
     learn.data = pose.get_data(root, 256, bs=args.bs)
-    learn.fit_one_cycle(args.eplchs, args.lr)
+    learn.fit_one_cycle(args.epochs, args.lr)
 
 
 if __name__ == '__main__':
