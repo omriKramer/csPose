@@ -197,7 +197,7 @@ class Pckh(LearnerCallback):
         self.filter_idx = sorted(filter_idx) if filter_idx else range(16)
         self.heatmap_func = heatmap_func if heatmap_func else lambda outputs: outputs[1]
         self.acc_thresh = acc_thresh
-        self.niter = niter
+        self.niter = niter + (niter > 1)
 
     def on_train_begin(self, **kwargs: Any) -> None:
         metrics = CATEGORIES.copy()
@@ -209,8 +209,8 @@ class Pckh(LearnerCallback):
         self.learn.recorder.add_metric_names(metrics)
 
     def on_epoch_begin(self, **kwargs: Any) -> None:
-        self.correct = torch.zeros(self.niter + 1, 18)
-        self.total = torch.zeros(self.niter + 1, 18)
+        self.correct = torch.zeros(self.niter, 18)
+        self.total = torch.zeros(self.niter, 18)
         self.mlc_correct = 0
         self.mlc_total = 0
 
@@ -250,8 +250,7 @@ class Pckh(LearnerCallback):
         is_visible = is_visible[:, self.filter_idx]
 
         # update keypoints stats for each of the models iterations
-        chunks = self.niter + (self.niter > 1)
-        for i, p in enumerate(preds.chunk(chunks, dim=1)):
+        for i, p in enumerate(preds.chunk(self.niter, dim=1)):
             distances = torch.norm(p - gt, dim=2)
             is_correct = (distances < thresholds[:, None]) * is_visible
             self.update(is_correct, is_visible, i, mlc_pred)
