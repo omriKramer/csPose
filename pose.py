@@ -250,7 +250,8 @@ class Pckh(LearnerCallback):
         is_visible = is_visible[:, self.filter_idx]
 
         # update keypoints stats for each of the models iterations
-        for i, p in enumerate(preds.chunk(self.niter + 1, dim=1)):
+        chunks = self.niter + (self.niter > 1)
+        for i, p in enumerate(preds.chunk(chunks, dim=1)):
             distances = torch.norm(p - gt, dim=2)
             is_correct = (distances < thresholds[:, None]) * is_visible
             self.update(is_correct, is_visible, i, mlc_pred)

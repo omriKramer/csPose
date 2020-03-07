@@ -1,4 +1,3 @@
-from fastai.callbacks import SaveModelCallback
 from fastai.vision import *
 
 import models.cs_v2 as cs
@@ -24,22 +23,22 @@ def main(args):
     else:
         raise ValueError
 
-    name = str(args)
+    name = 'baseline-' + str(args)
     print(name)
     n = args.niter
     root = Path(__file__).resolve().parent.parent / 'LIP'
     instructor = cs.RecurrentInstructor(n)
     pckh = partial(pose.Pckh, niter=n)
 
-    db = pose.get_data(root, 64, bs=64)
-    logger = partial(callbacks.CSVLogger, filename=f'baseline-{name}')
-    monitor = f'Total_{n - 1}' if n > 1 else 'Total'
-    save_clbk = partial(SaveModelCallback, every='improvement', monitor=monitor, name=f'baseline-{name}', mode='max')
-    learn = cs.cs_learner(db, model, instructor, td_c=16, pretrained=False, embedding=None,
-                          loss_func=RecurrentLoss(n), callback_fns=[pckh, DataTime, save_clbk, logger])
+    db = pose.get_data(root, 256, bs=64)
 
-    learn.data = pose.get_data(root, 256, bs=args.bs)
-    learn.fit_one_cycle(args.epochs, args.lr)
+    learn = cs.cs_learner(db, model, instructor, td_c=16, pretrained=False, embedding=None,
+                          loss_func=RecurrentLoss(n), callback_fns=[pckh, DataTime])
+
+    logger = callbacks.CSVLogger(learn, filename=name, append=args.start_epoch > 0)
+    monitor = f'Total_{n - 1}' if n > 1 else 'Total'
+    save_clbk = callbacks.SaveModelCallback(learn, monitor=monitor, mode='max', every='epoch', name=name)
+    learn.fit_one_cycle(args.epochs, args.lr, start_epoch=args.start_epoch, callbacks=[logger, save_clbk])
 
 
 if __name__ == '__main__':
@@ -48,6 +47,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-n', '--niter', default=1, type=int)
     parser.add_argument('-e', '--epochs', default=60, type=int)
+    parser.add_argument('-s', '--start-epoch', default=0, type=int)
     parser.add_argument('-r', '--resnet', default=18, type=int)
     parser.add_argument('--lr', default=1e-4, type=float)
     parser.add_argument('--bs', default=32, type=int)

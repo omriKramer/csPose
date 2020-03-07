@@ -76,8 +76,41 @@ def conv_lateral(origin_layer, target_layer, channels, detach=False, ks=3):
     return Lateral(origin_layer, target_layer, op, detach=detach)
 
 
-def create_laterals(origin_net, target_net, channels, **kwargs):
-    laterals = [conv_lateral(o_layer, t_layer, c, **kwargs)
+def conv1d(ni: int, no: int, ks: int = 1, stride: int = 1, padding: int = 0, bias: bool = False):
+    "Create and initialize a `nn.Conv1d` layer with spectral normalization."
+    conv = nn.Conv1d(ni, no, ks, stride=stride, padding=padding, bias=bias)
+    nn.init.kaiming_normal_(conv.weight)
+    if bias: conv.bias.data.zero_()
+    return fv.spectral_norm(conv)
+
+
+class AttentionLateralOp(nn.Module):
+
+    def __init__(self, n_channels: int):
+        super().__init__()
+        self.query = conv1d(n_channels, n_channels // 8)
+        self.key = conv1d(n_channels, n_channels // 8)
+        self.value = conv1d(n_channels, n_channels)
+        self.gamma = nn.Parameter(fv.tensor([0.]), requires_grad=True)
+
+    def forward(self, origin_out, target_in):
+        size = origin_out.size()
+        origin_out = origin_out.view(*size[:2], -1)
+        target_in = target_in.view(*size[:2], -1)
+
+        f, g, h = self.query(target_in), self.key(origin_out), self.value(origin_out)
+        beta = F.softmax(torch.bmm(f.permute(0, 2, 1).contiguous(), g), dim=1)
+        o = self.gamma * torch.bmm(h, beta) + target_in
+        return o.view(*size).contiguous()
+
+
+def attention_lateral(origin_layer, target_layer, channels, detach=False):
+    op = AttentionLateralOp(channels)
+    return Lateral(origin_layer, target_layer, op, detach=detach)
+
+
+def create_laterals(lateral, origin_net, target_net, channels, **kwargs):
+    laterals = [lateral(o_layer, t_layer, c, **kwargs)
                 for o_layer, t_layer, c in zip(origin_net, reversed(target_net), channels)]
     return nn.ModuleList(laterals)
 
@@ -136,7 +169,7 @@ class TDHead(nn.Sequential):
 
 class CounterStream(nn.Module):
     def __init__(self, bu, instructor, td_c=1, bu_c=0, detach=False, td_detach=None, td_laterals=True,
-                 embedding=fv.embedding, img_size: Tuple[int, int] = (256, 256)):
+                 embedding=fv.embedding, img_size: Tuple[int, int] = (256, 256), lateral_type=conv_lateral):
         super().__init__()
         # first few layers are not in a block, we group all layers up through MaxPool to a single block
         concat_idx = 4
@@ -169,10 +202,11 @@ class CounterStream(nn.Module):
 
         channels = [s[1] for s in szs]
         td.append(self.td[-1])
-        self.laterals = create_laterals(bu[:-1], td[1:], channels[:-1], detach=detach)
+        self.laterals = create_laterals(lateral_type, bu[:-1], td[1:], channels[:-1], detach=detach)
         if td_laterals:
             td_detach = td_detach if td_detach is not None else detach
-            self.laterals.extend(create_laterals(td[:-1], bu[1:], reversed(channels[:-1]), detach=td_detach))
+            bu_laterals = create_laterals(lateral_type, td[:-1], bu[1:], reversed(channels[:-1]), detach=td_detach)
+            self.laterals.extend(bu_laterals)
 
         self.emb = embedding(instructor.n_inst, channels[-1]) if embedding else None
         self.bu_head = fv.create_head(channels[-1] * 2, bu_c) if bu_c else None
