@@ -23,32 +23,37 @@ def main(args):
     else:
         raise ValueError
 
-    name = 'baseline-' + str(args)
-    print(name)
+    print(args)
+
     n = args.niter
-    root = Path(__file__).resolve().parent.parent / 'LIP'
     instructor = cs.RecurrentInstructor(n)
     pckh = partial(pose.Pckh, niter=n)
+    loss = RecurrentLoss(n)
 
-    db = pose.get_data(root, 256, bs=64)
+    root = Path(__file__).resolve().parent.parent / 'LIP'
+    db = pose.get_data(root, args.size, bs=args.bs)
 
     learn = cs.cs_learner(db, model, instructor, td_c=16, pretrained=False, embedding=None,
-                          loss_func=RecurrentLoss(n), callback_fns=[pckh, DataTime])
+                          loss_func=loss, callback_fns=[pckh, DataTime])
+    if args.load:
+        learn.load(args.load)
 
-    logger = callbacks.CSVLogger(learn, filename=name, append=args.start_epoch > 0)
-    monitor = f'Total_{n - 1}' if n > 1 else 'Total'
-    save_clbk = callbacks.SaveModelCallback(learn, monitor=monitor, mode='max', every='epoch', name=name)
-    learn.fit_one_cycle(args.epochs, args.lr, start_epoch=args.start_epoch, callbacks=[logger, save_clbk])
+    logger = callbacks.CSVLogger(learn, filename=args.save)
+    learn.fit_one_cycle(args.epochs, args.lr, start_epoch=args.start_epoch, callbacks=[logger])
+    learn.save(args.save)
 
 
 if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
+    parser.add_argument('save', type=str)
     parser.add_argument('-n', '--niter', default=1, type=int)
     parser.add_argument('-e', '--epochs', default=60, type=int)
-    parser.add_argument('-s', '--start-epoch', default=0, type=int)
+    parser.add_argument('--start-epoch', default=0, type=int)
     parser.add_argument('-r', '--resnet', default=18, type=int)
     parser.add_argument('--lr', default=1e-4, type=float)
     parser.add_argument('--bs', default=32, type=int)
+    parser.add_argument('-s', '--size', default=128, type=int)
+    parser.add_argument('-l', '--load', default=None, type=str)
     main(parser.parse_args())
