@@ -14,7 +14,7 @@
 ## V2
 Added augmentations and deeper TD.
 
-| Date   | Notebook    | Size    | Epochs  | Loss | PCKH  | Arch  | Pretrained | Comments |
+| Date   | Notebook/Name    | Size    | Epochs  | Loss | PCKH  | Arch  | Pretrained | Comments |
 | ------:|:-----------:| -------:| ------: | ---: | ----: |-----: | ---------: | -------: |
 |        | baselineV2 | 128 | 40 | CE | 77.2 | CSResnet18 | X | |
 |  | baselineV2 (b) | 128 | 30 | CE | 75.4 | csResnet18 | V | |
@@ -28,3 +28,6 @@ Added augmentations and deeper TD.
 | 16.02 | repeat-detach2 (a) | 128 | 40 | CE | 78.3 | csResnet18 | X | repeat 2 times and detach td laterals|
 | 16.02 | recurrent (c) | 128 | 40 | CE | 78.6 | csResnet18 | X | repeat 3 times and detach td laterals|
 | 16.02 | repeat-detach2 (b) | 128 | 40 | CE | 78.7 | csResnet18 | X | repeat 4 times and detach td laterals|
+| 08.03 | baselinev2-128-40 | 128 | 40 | CE | 78.3 | csResnet50 | X | baseline with resnet50 |
+| 08.03 | baselinev2-256-100 | 256 | 100 | CE | - | csResnet50 | X |lr 1e-3 |
+| 08.03 | baselinev2-256-100-1e-2| 256 | 100 | CE | - | csResnet50 | X | lr 12-2 |
