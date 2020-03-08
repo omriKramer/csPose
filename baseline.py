@@ -39,7 +39,10 @@ def main(args):
         learn.load(args.load)
 
     logger = callbacks.CSVLogger(learn, filename=args.save)
-    learn.fit_one_cycle(args.epochs, args.lr, start_epoch=args.start_epoch, callbacks=[logger])
+    monitor = f'Total_{n - 1}' if n > 1 else 'Total'
+    save_name = args.save + '-best'
+    save_clbk = callbacks.SaveModelCallback(learn, monitor=monitor, mode='max', every='improvement', name=save_name)
+    learn.fit_one_cycle(args.epochs, args.lr, start_epoch=args.start_epoch, callbacks=[logger, save_clbk])
     p = learn.save(args.save, return_path=True)
     print(f'saved learner to {p}')
 
