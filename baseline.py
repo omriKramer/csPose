@@ -40,7 +40,8 @@ def main(args):
 
     logger = callbacks.CSVLogger(learn, filename=args.save)
     learn.fit_one_cycle(args.epochs, args.lr, start_epoch=args.start_epoch, callbacks=[logger])
-    learn.save(args.save)
+    p = learn.save(args.save, return_path=True)
+    print(f'saved learner to {p}')
 
 
 if __name__ == '__main__':
