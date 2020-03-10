@@ -29,5 +29,8 @@ Added augmentations and deeper TD.
 | 16.02 | recurrent (c) | 128 | 40 | CE | 78.6 | csResnet18 | X | repeat 3 times and detach td laterals|
 | 16.02 | repeat-detach2 (b) | 128 | 40 | CE | 78.7 | csResnet18 | X | repeat 4 times and detach td laterals|
 | 08.03 | baselinev2-128-40 | 128 | 40 | CE | 78.3 | csResnet50 | X | baseline with resnet50 |
-| 08.03 | baselinev2-256-100 | 256 | 100 | CE | - | csResnet50 | X |lr 1e-3 |
-| 08.03 | baselinev2-256-100-1e-2| 256 | 100 | CE | - | csResnet50 | X | lr 12-2 |
+| 08.03 | baselinev2-128-40-1e-3 | 128 | 40 | CE | 77.4 | csResnet50 | X | lr 1e-3 |
+| 08.03 | baselinev2-128-40-5e-3 | 128 | 40 | CE | 77.6| csResnet50 | X | lr 5e-3 |
+| 08.03 | baselinev2-256-100 | 256 | 100 (72) | CE | 81.0 | csResnet50 | X |lr 1e-3 |
+| 08.03 | baselinev2-256-100-1e-2| 256 | 100 | CE | 75.2 | csResnet50 | X | lr 1e-2 |
+| 08.03 | baselinev2-128-256-1e-3| 256 | 40 | CE | 79.8 | csResnet50 | X | loaded baselinev2-128-40 |

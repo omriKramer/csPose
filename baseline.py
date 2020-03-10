@@ -41,7 +41,10 @@ def main(args):
     logger = callbacks.CSVLogger(learn, filename=args.save)
     monitor = f'Total_{n - 1}' if n > 1 else 'Total'
     save_clbk = callbacks.SaveModelCallback(learn, monitor=monitor, mode='max', every='improvement', name=args.save)
-    learn.fit_one_cycle(args.epochs, args.lr, start_epoch=args.start_epoch, callbacks=[logger, save_clbk])
+    if args.one_cycle:
+        learn.fit_one_cycle(args.epochs, args.lr, start_epoch=args.start_epoch, callbacks=[logger, save_clbk])
+    else:
+        learn.fit(args.epochs, args.lr, start_epoch=args.start_epoch, callbacks=[logger, save_clbk])
 
 
 if __name__ == '__main__':
@@ -57,4 +60,5 @@ if __name__ == '__main__':
     parser.add_argument('--bs', default=32, type=int)
     parser.add_argument('-s', '--size', default=128, type=int)
     parser.add_argument('-l', '--load', default=None, type=str)
+    parser.add_argument('--one-cycle', action='store_true')
     main(parser.parse_args())
