@@ -44,7 +44,8 @@ def main(args):
     if args.one_cycle:
         learn.fit_one_cycle(args.epochs, args.lr, start_epoch=args.start_epoch, callbacks=[logger, save_clbk])
     else:
-        learn.fit(args.epochs, args.lr, start_epoch=args.start_epoch, callbacks=[logger, save_clbk])
+        epochs = args.epochs - args.start_epoch
+        learn.fit(epochs, args.lr, callbacks=[logger, save_clbk])
 
 
 if __name__ == '__main__':
