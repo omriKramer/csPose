@@ -15,6 +15,13 @@ class RecurrentLoss:
         return pose.pose_ce_loss(outputs[1], targets)
 
 
+lateral_types = {
+    'add': cs.conv_add_lateral,
+    'mul': cs.conv_mul_lateral,
+    'attention': cs.attention_lateral,
+}
+
+
 def main(args):
     if args.resnet == 18:
         model = models.resnet18
@@ -33,7 +40,8 @@ def main(args):
     root = Path(__file__).resolve().parent.parent / 'LIP'
     db = pose.get_data(root, args.size, bs=args.bs)
 
-    learn = cs.cs_learner(db, model, instructor, td_c=16, pretrained=False, embedding=None,
+    lateral = lateral_types[args.lateral]
+    learn = cs.cs_learner(db, model, instructor, td_c=16, pretrained=False, embedding=None, lateral=lateral,
                           loss_func=loss, callback_fns=[pckh, DataTime])
     if args.load:
         learn.load(args.load)
@@ -62,4 +70,5 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--size', default=128, type=int)
     parser.add_argument('-l', '--load', default=None, type=str)
     parser.add_argument('--one-cycle', action='store_true')
+    parser.add_argument('--lateral', choices=lateral_types, default='add')
     main(parser.parse_args())
