@@ -60,7 +60,7 @@ class Lateral(nn.Module):
         return out
 
 
-class LateralConvOp(nn.Module):
+class LateralConvAddOp(nn.Module):
     def __init__(self, channels, ks):
         super().__init__()
         self.conv = conv_layer(channels, channels, ks=ks)
@@ -71,16 +71,33 @@ class LateralConvOp(nn.Module):
         return out
 
 
-def conv_lateral(origin_layer, target_layer, channels, detach=False, ks=3):
-    op = LateralConvOp(channels, ks)
+def conv_add_lateral(origin_layer, target_layer, channels, detach=False, ks=3):
+    op = LateralConvAddOp(channels, ks)
+    return Lateral(origin_layer, target_layer, op, detach=detach)
+
+
+class LateralConvMulOP(nn.Module):
+    def __init__(self, channels, ks):
+        super().__init__()
+        self.conv = conv_layer(channels, channels, ks=ks)
+
+    def forward(self, origin_out, target_input):
+        out = self.conv(origin_out)
+        out = out * target_input
+        return out
+
+
+def conv_mul_lateral(origin_layer, target_layer, channels, detach=False, ks=3):
+    op = LateralConvMulOP(channels, ks)
     return Lateral(origin_layer, target_layer, op, detach=detach)
 
 
 def conv1d(ni: int, no: int, ks: int = 1, stride: int = 1, padding: int = 0, bias: bool = False):
-    "Create and initialize a `nn.Conv1d` layer with spectral normalization."
+    """Create and initialize a `nn.Conv1d` layer with spectral normalization."""
     conv = nn.Conv1d(ni, no, ks, stride=stride, padding=padding, bias=bias)
     nn.init.kaiming_normal_(conv.weight)
-    if bias: conv.bias.data.zero_()
+    if bias:
+        conv.bias.data.zero_()
     return fv.spectral_norm(conv)
 
 
@@ -169,7 +186,7 @@ class TDHead(nn.Sequential):
 
 class CounterStream(nn.Module):
     def __init__(self, bu, instructor, td_c=1, bu_c=0, detach=False, td_detach=None, td_laterals=True,
-                 embedding=fv.embedding, img_size: Tuple[int, int] = (256, 256), lateral_type=conv_lateral):
+                 embedding=fv.embedding, img_size: Tuple[int, int] = (256, 256), lateral=conv_add_lateral):
         super().__init__()
         # first few layers are not in a block, we group all layers up through MaxPool to a single block
         concat_idx = 4
@@ -202,10 +219,10 @@ class CounterStream(nn.Module):
 
         channels = [s[1] for s in szs]
         td.append(self.td[-1])
-        self.laterals = create_laterals(lateral_type, bu[:-1], td[1:], channels[:-1], detach=detach)
+        self.laterals = create_laterals(lateral, bu[:-1], td[1:], channels[:-1], detach=detach)
         if td_laterals:
             td_detach = td_detach if td_detach is not None else detach
-            bu_laterals = create_laterals(lateral_type, td[:-1], bu[1:], reversed(channels[:-1]), detach=td_detach)
+            bu_laterals = create_laterals(lateral, td[:-1], bu[1:], reversed(channels[:-1]), detach=td_detach)
             self.laterals.extend(bu_laterals)
 
         self.emb = embedding(instructor.n_inst, channels[-1]) if embedding else None
@@ -253,14 +270,14 @@ class CounterStream(nn.Module):
 
 
 def cs_learner(data: fv.DataBunch, arch: Callable, instructor, td_c=1, bu_c=0, td_laterals=True, embedding=fv.embedding,
-               detach=False, td_detach=None,
+               detach=False, td_detach=None, lateral=conv_add_lateral,
                pretrained: bool = True, cut: Union[int, Callable] = None, **learn_kwargs: Any) -> fv.Learner:
     """Build Counter Stream learner from `data` and `arch`."""
     body = fv.create_body(arch, pretrained, cut)
     size = next(iter(data.train_dl))[0].shape[-2:]
     model = fv.to_device(
         CounterStream(body, instructor, td_c=td_c, bu_c=bu_c, img_size=size, embedding=embedding,
-                      td_laterals=td_laterals, detach=detach, td_detach=td_detach),
+                      td_laterals=td_laterals, detach=detach, td_detach=td_detach, lateral=lateral),
         data.device)
     learn = fv.Learner(data, model, callbacks=instructor, **learn_kwargs)
     learn.split((learn.model.bu_body[3], learn.model.td[0]))
