@@ -37,9 +37,16 @@ Added augmentations and deeper TD.
 | 10.03 | baseline2-128-40-fit| 128 | 40 | CE | 66.4 | csResnet50 | X | | | didn't use one_cycle |
 | 11.03 | baseline2-128-40-fit-1e-3| 128 | 40 | CE | 75.4 | csResnet50 | X | 1e-3 | | didn't use one_cycle |
 | 10.03 | baseline2-128-40-5e-3 | 128 | 40 | CE | 78.3 | csResnet50 | X | 5e-3 | | |
-| 11.03 | baseline2-128-256-1e-4 | 256 | 40 | CE | - | csResnet50 | X | 1e-4 | baseline2-128-40-5e-3  |
-| 11.03 | baseline2-128-256-7e-4 | 256 | 40 | CE | - | csResnet50 | X | 7e-4 | baseline2-128-40-5e-3  |
+| 11.03 | baseline2-128-256-1e-4 | 256 | 40 | CE | 78.2 | csResnet50 | X | 1e-4 | baseline2-128-40-5e-3  |
+| 11.03 | baseline2-128-256-7e-4 | 256 | 40 | CE | 79.9 | csResnet50 | X | 7e-4 | baseline2-128-40-5e-3  |
 | 10.03 | baseline2-256-60 | 256 | 60 | CE | 81.3 | csResnet50 | X | 1e-3 |
 | 10.03 | baseline2-256-60-5e-3 | 256 | 60 | CE | 80.5 | csResnet50 | X | 5e-3 |
-| 11.03 | baseline2-256-70-5e-3 | 256 | 70 | CE | - | csResnet50 | X | 5e-3 |
+| 11.03 | baseline2-256-70-5e-3 | 256 | 70 | CE | 80.2 | csResnet50 | X | 5e-3 |
+| 13.03 | baseline2-256-70-1e-3 | 256 | 70 | CE | _ | csResnet50 | X | 1e-3 |
+| 11.03 | mul-lateral-128-40-1e-2 | 128 | 40 | CE | 76.6 | csResnet50 | X | 1e-2 | | conv-multiply lateral|
+| 11.03 | mul-lateral-128-40-5e-3 | 128 | 40 | CE | 76.4 | csResnet50 | X | 5e-3 | | conv-multiply lateral|
+| 11.03 | mul-lateral-128-60-5e-3 | 128 | 60 | CE | - | csResnet50 | X | 5e-3 | | conv-multiply lateral|
+| 11.03 | mul-lateral-128-40-1e-3 | 128 | 40 | CE | 75.5 | csResnet50 | X | 1e-3 | | conv-multiply lateral|
+| 11.03 | attention-lateral-128-40-1e-3 | 128 | 40 | CE | 73.6 | csResnet50 | X | 1e-3 | | attention lateral|
+| 11.03 | attention-lateral-128-40-5e-3 | 128 | 40 | CE | 72.4 | csResnet50 | X | 5e-3 | | attention lateral|
 

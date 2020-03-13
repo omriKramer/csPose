@@ -9,6 +9,17 @@ import torchvision
 from torch import nn
 
 
+def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
+    """3x3 convolution with padding"""
+    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
+                     padding=dilation, groups=groups, bias=False, dilation=dilation)
+
+
+def conv1x1(in_planes, out_planes, stride=1):
+    """1x1 convolution"""
+    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
+
+
 def _get_sfs_idxs(sizes: fv.Sizes) -> List[int]:
     "Get the indexes of the layers where the size of the activation changes."
     feature_szs = [size[-1] for size in sizes]
@@ -133,49 +144,64 @@ def create_laterals(lateral, origin_net, target_net, channels, **kwargs):
 
 
 class TDBlock(nn.Module):
-    def __init__(self, *layers, upsample=None):
-        super().__init__()
-        self.layers = nn.ModuleList(layers)
-        self.relu = nn.ReLU(inplace=True)
-        self.upsample = upsample
 
-    def forward(self, x):
-        identity = x
-        out = self.layers[0](x)
+    def __init__(self, upsample, mode='nearest'):
+        super().__init__()
+        self.upsample = upsample
+        self.mode = mode
+
+    def maybe_upsample(self, x, identity):
         if self.upsample:
             identity = self.upsample(identity)
-            if out.shape[-1] != identity.shape[-1]:
-                out = F.interpolate(out, scale_factor=2, mode='nearest')
+            if x.shape[-1] != identity.shape[-1]:
+                x = F.interpolate(x, scale_factor=2, mode=self.mode)
 
-        for layer in self.layers[1:]:
-            out = layer(out)
-        out += identity
-        out = self.relu(out)
-        return out
+        return x, identity
 
 
 class TDBasicBlock(TDBlock):
 
     def __init__(self, ni, nf, upsample=None):
-        super().__init__(
-            fv.conv_layer(ni, ni),
-            fv.conv_layer(ni, nf),
-            fv.batchnorm_2d(nf),
-            upsample=upsample)
+        super().__init__(upsample)
+        self.conv1 = conv3x3(ni, ni)
+        self.bn1 = nn.BatchNorm2d(ni)
+        self.conv2 = conv3x3(ni, nf)
+        self.bn2 = nn.BatchNorm2d(nf)
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        identity = x
+        out = self.relu(self.bn1(self.conv1(x)))
+        out, identity = self.maybe_upsample(out, identity)
+        out = self.bn2(self.conv2(out))
+        out += identity
+        out = self.relu(out)
+        return out
 
 
 class TDBottleNeck(TDBlock):
     expansion = 4
 
     def __init__(self, ni, nf, upsample=None):
+        super().__init__(upsample)
         width = ni // self.expansion
-        super().__init__(
-            fv.conv_layer(ni, width),
-            fv.conv_layer(width, width),
-            fv.conv2d(width, nf),
-            fv.batchnorm_2d(nf),
-            upsample=upsample
-        )
+        self.conv1 = conv1x1(ni, width)
+        self.bn1 = nn.BatchNorm2d(width)
+        self.conv2 = conv3x3(width, width)
+        self.bn2 = nn.BatchNorm2d(width)
+        self.conv3 = conv1x1(width, nf)
+        self.bn3 = nn.BatchNorm2d(nf)
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        identity = x
+        out = self.relu(self.bn1(self.conv1(identity)))
+        out, identity = self.maybe_upsample(out, identity)
+        out = self.relu(self.bn2(self.conv2(out)))
+        out = self.bn3(self.conv3(out))
+        out += identity
+        out = self.relu(out)
+        return out
 
 
 class TDHead(nn.Sequential):
@@ -208,7 +234,7 @@ class CounterStream(nn.Module):
             if sz_in[-1] != sz_out[-1]:
                 upsample = nn.Sequential(
                     fv.Lambda(lambda x: F.interpolate(x, scale_factor=2, mode='nearest')),
-                    fv.conv_layer(sz_in[1], sz_out[1], use_activ=False)
+                    fv.conv_layer(sz_in[1], sz_out[1], ks=1, use_activ=False)
                 )
             elif sz_in[1] != sz_out[1]:
                 upsample = fv.conv_layer(sz_in[1], sz_out[1], ks=1, use_activ=False)
