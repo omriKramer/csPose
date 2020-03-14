@@ -22,15 +22,14 @@ lateral_types = {
 }
 
 
+nets = {
+    18: models.resnet18,
+    34: models.resnet34,
+    50: models.resnet50,
+}
 def main(args):
-    if args.resnet == 18:
-        model = models.resnet18
-    elif args.resnet == 50:
-        model = models.resnet50
-    else:
-        raise ValueError
-
     print(args)
+    arch = nets[args.resnet]
 
     n = args.niter
     instructor = cs.RecurrentInstructor(n)
@@ -41,7 +40,7 @@ def main(args):
     db = pose.get_data(root, args.size, bs=args.bs)
 
     lateral = lateral_types[args.lateral]
-    learn = cs.cs_learner(db, model, instructor, td_c=16, pretrained=False, embedding=None, lateral=lateral,
+    learn = cs.cs_learner(db, arch, instructor, td_c=16, pretrained=False, embedding=None, lateral=lateral,
                           loss_func=loss, callback_fns=[pckh, DataTime])
     if args.load:
         learn.load(args.load)

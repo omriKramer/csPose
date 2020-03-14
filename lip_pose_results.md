@@ -50,3 +50,14 @@ Added augmentations and deeper TD.
 | 11.03 | attention-lateral-128-40-1e-3 | 128 | 40 | CE | 73.6 | csResnet50 | X | 1e-3 | | attention lateral|
 | 11.03 | attention-lateral-128-40-5e-3 | 128 | 40 | CE | 72.4 | csResnet50 | X | 5e-3 | | attention lateral|
 
+
+## V3
+Changed TDBLOCK.
+| Date   | Notebook/Name | Size    | Epochs  | Loss | PCKH  | Arch  | Pretrained | lr | load | Comments |
+| ------:|:-------------:| -------:| -------:| ----:| -----:| -----:| ----------:| ---| ----:| --------:|
+| 13.03   | baseline3-128-40-1e-3 | 128 | 40 | CE | - | CSResnet18 | X | 77.7 | 1e-3 |  |
+| 13.03   | baseline3-128-40-5e-3 | 128 | 40 | CE | - | CSResnet18 | X | 78.1 | 5e-3 |  |
+| 14.03   | baseline3-128-40-1e-2 | 128 | 40 | CE | - | CSResnet18 | X | - | 1e-2 |  |
+| 13.03   | baseline3-256-60-5e-3 | 256 | 60 | CE | - | CSResnet18 | X | 80.1 | 5e-3 |  |
+| 13.03   | baseline3-256-60-1e-3 | 256 | 60 | CE | - | CSResnet18 | X | 81.2 | 1e-3 |  |
+| 14.03   | baseline3-256-40-1e-3 | 256 | 40 | CE | - | CSResnet18 | X | - | 1e-3 |  |
