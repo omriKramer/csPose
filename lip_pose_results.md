@@ -52,12 +52,24 @@ Added augmentations and deeper TD.
 
 
 ## V3
-Changed TDBLOCK.
+Changed TDBlock.
+
 | Date   | Notebook/Name | Size    | Epochs  | Loss | PCKH  | Arch  | Pretrained | lr | load | Comments |
 | ------:|:-------------:| -------:| -------:| ----:| -----:| -----:| ----------:| ---| ----:| --------:|
-| 13.03   | baseline3-128-40-1e-3 | 128 | 40 | CE | - | CSResnet18 | X | 77.7 | 1e-3 |  |
-| 13.03   | baseline3-128-40-5e-3 | 128 | 40 | CE | - | CSResnet18 | X | 78.1 | 5e-3 |  |
-| 14.03   | baseline3-128-40-1e-2 | 128 | 40 | CE | - | CSResnet18 | X | - | 1e-2 |  |
-| 13.03   | baseline3-256-60-5e-3 | 256 | 60 | CE | - | CSResnet18 | X | 80.1 | 5e-3 |  |
-| 13.03   | baseline3-256-60-1e-3 | 256 | 60 | CE | - | CSResnet18 | X | 81.2 | 1e-3 |  |
-| 14.03   | baseline3-256-40-1e-3 | 256 | 40 | CE | - | CSResnet18 | X | - | 1e-3 |  |
+| 13.03  | baseline3-128-40-1e-3 | 128 | 40 | CE | 77.4 | CSResnet50 | X | 1e-3 |  |  |
+| 13.03   | baseline3-128-40-5e-3 | 128 | 40 | CE | 78.0 | CSResnet50 | X | 5e-3 | | |
+| 14.03   | baseline3-128-40-1e-2 | 128 | 40 | CE | 78.4 | CSResnet50 | X | 1e-2 | | |
+| 14.03   | baseline3-r34-128-40-1e-2 | 128 | 40 | CE | 78.4 | CSResnet34 | X | 1e-2 |  | |
+| 14.03   | baseline3-r34-128-40-5e-3 | 128 | 40 | CE | 77.0 | CSResnet34 | X | 5e-3 |  | |
+| 14.03   | baseline3-r34-128-40-1e-3 | 128 | 40 | CE | 78.2 | CSResnet34 | X | 1e-3 |  |
+| 15.03   | mul-r34-128-40-1e-3 | 128 | 40 | CE | 74.8 | CSResnet34 | X | 1e-3 |  | conv-multiply lateral |
+| 15.03   | mul-r34-128-40-1e-2 | 128 | 40 | CE | 75.2 | CSResnet34 | X | 1e-2 | | conv-multiply lateral |
+| 15.03   | mul-r34-128-60-1e-2 | 128 | 40 | CE | 75.2 | CSResnet34 | X | 1e-2 | | conv-multiply lateral |
+| 15.03   | baseline3-128-256-r34-lr-1e-3 | 256 | 40 | CE | 82.1 | CSResnet34 | X | 1e-3 | baseline3-r34-128-40-1e-2 | |
+| 15.03   | baseline3-128-256-r34-1e-3-60 | 256 | 60 | CE | 81.9 | CSResnet34 | X | 1e-3 | baseline3-r34-128-40-1e-2 | |
+| 15.03   | baseline3-128-256-r34-lr-5e-4 | 256 | 40 | CE | 81.8 | CSResnet34 | X | 5e-4 | baseline3-r34-128-40-1e-2 | |
+| 15.03   | baseline3-256-r34-lr-1e-3 | 256 | 50 | CE | 81.4 | CSResnet34 | X | 1e-3 | | |
+| 15.03   | baseline3-256-r34-lr-5e-3 | 256 | 50 | CE | 81.6 | CSResnet34 | X | 5e-3 | | |
+| 15.03   | baseline3-256-r34-8e-3 | 256 | 50 | CE | 81.8 | CSResnet34 | X | 8e-3 | | |
+| 16.03   | baseline3-256-r34-1e-2 | 256 | 50 | CE | - | CSResnet34 | X | 1e-2 | | |
+
