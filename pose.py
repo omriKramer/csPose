@@ -202,7 +202,7 @@ class Pckh(LearnerCallback):
     def on_train_begin(self, **kwargs: Any) -> None:
         metrics = CATEGORIES.copy()
         if self.niter > 1:
-            metrics = [f'Total_{i}' for i in range(self.niter)]
+            metrics = [f'Total_{i}' for i in range(self.niter - 1)]
             metrics.append('Total_Mean')
         if self.acc_thresh:
             metrics.extend([f'acc@{self.acc_thresh}', 'TP_acc', 'FN_acc'])
