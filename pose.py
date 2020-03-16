@@ -221,7 +221,7 @@ class Pckh(LearnerCallback):
         last_output = self.heatmap_func(last_output)
         if self.niter > 1:
             bs, m, h, w = last_output.shape
-            mean_output = last_output.reshape(bs, self.niter, -1, h, w).mean(dim=1)
+            mean_output = last_output.reshape(bs, self.niter - 1, -1, h, w).mean(dim=1)
             last_output = torch.cat((last_output, mean_output), dim=1)
 
         preds = output_to_scaled_pred(last_output)
