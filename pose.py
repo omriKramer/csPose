@@ -206,7 +206,11 @@ class Pckh(LearnerCallback):
             metrics.append('Total_Mean')
         if self.acc_thresh:
             metrics.extend([f'acc@{self.acc_thresh}', 'TP_acc', 'FN_acc'])
-        self.learn.recorder.add_metric_names(metrics)
+
+        try:
+            self.learn.recorder.add_metric_names(metrics)
+        except AttributeError:
+            print('running pckh without recorder')
 
     def on_epoch_begin(self, **kwargs: Any) -> None:
         self.correct = torch.zeros(self.niter, 18)
