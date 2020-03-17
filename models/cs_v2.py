@@ -285,7 +285,11 @@ class CounterStream(nn.Module):
             if self.bu_head:
                 bu_out.append(self.bu_head(last_bu))
 
-            inst, state = self.instructor.next_inst(last_bu, bu_out[-1] if bu_out else None, td_out[-1])
+            inst, state = self.instructor.next_inst(
+                last_bu,
+                bu_out[-1] if bu_out else None,
+                td_out[-1] if td_out else None
+            )
             if self.emb:
                 last_bu = last_bu * self.emb(inst)[..., None, None]
             td_out.append(self.td(last_bu))
