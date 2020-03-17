@@ -328,3 +328,13 @@ def get_data(root, size, bs=64, stats=lip_utils.stats):
 
     data.c = 16
     return data
+
+
+class RecurrentLoss:
+
+    def __init__(self, repeats):
+        self.r = repeats
+
+    def __call__(self, outputs, targets):
+        targets = targets.repeat(1, self.r, 1)
+        return pose_ce_loss(outputs[1], targets)

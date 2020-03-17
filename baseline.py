@@ -4,29 +4,19 @@ import models.cs_v2 as cs
 import pose
 from utils import DataTime
 
-
-class RecurrentLoss:
-
-    def __init__(self, repeats):
-        self.r = repeats
-
-    def __call__(self, outputs, targets):
-        targets = targets.repeat(1, self.r, 1)
-        return pose.pose_ce_loss(outputs[1], targets)
-
-
 lateral_types = {
     'add': cs.conv_add_lateral,
     'mul': cs.conv_mul_lateral,
     'attention': cs.attention_lateral,
 }
 
-
 nets = {
     18: models.resnet18,
     34: models.resnet34,
     50: models.resnet50,
 }
+
+
 def main(args):
     print(args)
     arch = nets[args.resnet]
@@ -34,7 +24,7 @@ def main(args):
     n = args.niter
     instructor = cs.RecurrentInstructor(n)
     pckh = partial(pose.Pckh, niter=n)
-    loss = RecurrentLoss(n)
+    loss = pose.RecurrentLoss(n)
 
     root = Path(__file__).resolve().parent.parent / 'LIP'
     db = pose.get_data(root, args.size, bs=args.bs)

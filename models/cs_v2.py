@@ -273,9 +273,10 @@ class CounterStream(nn.Module):
             lateral.origin_out = None
 
     def forward(self, img):
+        # clear inner state before starting
         state = {'clear': True}
-        td_out, bu_out = [], []
 
+        td_out, bu_out = [], []
         while state.get('continue', True):
             if state.get('clear', False):
                 self.clear()
@@ -289,7 +290,6 @@ class CounterStream(nn.Module):
                 last_bu = last_bu * self.emb(inst)[..., None, None]
             td_out.append(self.td(last_bu))
 
-        self.clear()
         bu_out = torch.cat(bu_out, dim=1) if bu_out else None
         td_out = torch.cat(td_out, dim=1)
         return bu_out, td_out
@@ -306,7 +306,7 @@ def cs_learner(data: fv.DataBunch, arch: Callable, instructor, td_c=1, bu_c=0, t
                       td_laterals=td_laterals, detach=detach, td_detach=td_detach, lateral=lateral),
         data.device)
     learn = fv.Learner(data, model, callbacks=instructor, **learn_kwargs)
-    learn.split((learn.model.bu_body[3], learn.model.td[0]))
+    learn.split((learn.model.laterals[17],))
     if pretrained:
         learn.freeze()
     return learn
