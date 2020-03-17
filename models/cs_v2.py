@@ -285,7 +285,7 @@ class CounterStream(nn.Module):
             if self.bu_head:
                 bu_out.append(self.bu_head(last_bu))
 
-            inst, state = self.instructor.next_inst(bu_out[-1] if bu_out else last_bu)
+            inst, state = self.instructor.next_inst(last_bu, bu_out[-1] if bu_out else None, td_out[-1])
             if self.emb:
                 last_bu = last_bu * self.emb(inst)[..., None, None]
             td_out.append(self.td(last_bu))
@@ -306,7 +306,8 @@ def cs_learner(data: fv.DataBunch, arch: Callable, instructor, td_c=1, bu_c=0, t
                       td_laterals=td_laterals, detach=detach, td_detach=td_detach, lateral=lateral),
         data.device)
     learn = fv.Learner(data, model, callbacks=instructor, **learn_kwargs)
-    learn.split((learn.model.laterals[17],))
+    split = len(learn.model.laterals) // 2 + 1
+    learn.split((learn.model.laterals[split],))
     if pretrained:
         learn.freeze()
     return learn
@@ -315,7 +316,7 @@ def cs_learner(data: fv.DataBunch, arch: Callable, instructor, td_c=1, bu_c=0, t
 class BaseInstructor(fv.Callback):
     _order = 20
 
-    def next_inst(self, bu_out):
+    def next_inst(self, last_bu, bu_out, td_out):
         raise NotImplementedError
 
 
@@ -325,9 +326,9 @@ class SingleInstruction(BaseInstructor):
     def __init__(self):
         self.state = {'continue': False}
 
-    def next_inst(self, bu_out):
-        batch_size = bu_out.shape[0]
-        instructions = torch.zeros(batch_size, dtype=torch.long, device=bu_out.device)
+    def next_inst(self, last_bu, bu_out, td_out):
+        batch_size = last_bu.shape[0]
+        instructions = torch.zeros(batch_size, dtype=torch.long, device=last_bu.device)
         return instructions, self.state
 
 
@@ -339,7 +340,7 @@ class RecurrentInstructor(BaseInstructor):
     def on_batch_begin(self, **kwargs):
         self.i = 0
 
-    def next_inst(self, last_bu):
+    def next_inst(self, last_bu, bu_out, td_out):
         self.i += 1
         state = {'continue': self.i < self.repeats}
         return None, state

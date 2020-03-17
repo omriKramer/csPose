@@ -71,5 +71,6 @@ Changed TDBlock.
 | 15.03   | baseline3-256-r34-lr-1e-3 | 256 | 50 | CE | 81.4 | CSResnet34 | X | 1e-3 | | |
 | 15.03   | baseline3-256-r34-lr-5e-3 | 256 | 50 | CE | 81.6 | CSResnet34 | X | 5e-3 | | |
 | 15.03   | baseline3-256-r34-8e-3 | 256 | 50 | CE | 81.8 | CSResnet34 | X | 8e-3 | | |
-| 16.03   | baseline3-256-r34-1e-2 | 256 | 50 | CE | - | CSResnet34 | X | 1e-2 | | |
+| 16.03   | baseline3-256-r34-1e-2 | 256 | 50 | CE | 81.9 | CSResnet34 | X | 1e-2 | | |
+| 17.03   | baseline3-256-r34-1e-2-60 | 256 | 6ba0 | CE | - | CSResnet34 | X | 1e-2 | | |
 
