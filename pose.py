@@ -189,7 +189,7 @@ class Pckh(LearnerCallback):
     _order = -20  # Needs to run before the recorder
     all_idx = list(range(0, 6)) + list(range(8, 16))
 
-    def __init__(self, learn, heatmap_func=None, filter_idx=None, acc_thresh=None, niter=1):
+    def __init__(self, learn, heatmap_func=None, filter_idx=None, acc_thresh=None, niter=1, mean=None):
         super().__init__(learn)
         if filter_idx and acc_thresh:
             raise ValueError('No support for partial keypoints and multilabel classification')
@@ -197,13 +197,15 @@ class Pckh(LearnerCallback):
         self.filter_idx = sorted(filter_idx) if filter_idx else range(16)
         self.heatmap_func = heatmap_func if heatmap_func else lambda outputs: outputs[1]
         self.acc_thresh = acc_thresh
-        self.niter = niter + (niter > 1)
+        self.niter = niter
+        self.mean = fv.ifnone(mean, self.niter > 1)
 
     def on_train_begin(self, **kwargs: Any) -> None:
         metrics = CATEGORIES.copy()
         if self.niter > 1:
-            metrics = [f'Total_{i}' for i in range(self.niter - 1)]
-            metrics.append('Total_Mean')
+            metrics = [f'Total_{i}' for i in range(self.niter)]
+            if self.mean:
+                metrics.append('Total_Mean')
         if self.acc_thresh:
             metrics.extend([f'acc@{self.acc_thresh}', 'TP_acc', 'FN_acc'])
 
@@ -213,8 +215,8 @@ class Pckh(LearnerCallback):
             print('running pckh without recorder')
 
     def on_epoch_begin(self, **kwargs: Any) -> None:
-        self.correct = torch.zeros(self.niter, 18)
-        self.total = torch.zeros(self.niter, 18)
+        self.correct = torch.zeros(self.niter + self.mean, 18)
+        self.total = torch.zeros(self.niter + self.mean, 18)
         self.mlc_correct = 0
         self.mlc_total = 0
 
@@ -223,9 +225,9 @@ class Pckh(LearnerCallback):
             return
 
         last_output = self.heatmap_func(last_output)
-        if self.niter > 1:
+        if self.mean:
             bs, m, h, w = last_output.shape
-            mean_output = last_output.reshape(bs, self.niter - 1, -1, h, w).mean(dim=1)
+            mean_output = last_output.reshape(bs, self.niter, -1, h, w).mean(dim=1)
             last_output = torch.cat((last_output, mean_output), dim=1)
 
         preds = output_to_scaled_pred(last_output)
@@ -254,7 +256,7 @@ class Pckh(LearnerCallback):
         is_visible = is_visible[:, self.filter_idx]
 
         # update keypoints stats for each of the models iterations
-        for i, p in enumerate(preds.chunk(self.niter, dim=1)):
+        for i, p in enumerate(preds.chunk(self.niter + self.mean, dim=1)):
             distances = torch.norm(p - gt, dim=2)
             is_correct = (distances < thresholds[:, None]) * is_visible
             self.update(is_correct, is_visible, i, mlc_pred)
@@ -338,3 +340,10 @@ class RecurrentLoss:
     def __call__(self, outputs, targets):
         targets = targets.repeat(1, self.r, 1)
         return pose_ce_loss(outputs[1], targets)
+
+
+nets = {
+    18: fv.models.resnet18,
+    34: fv.models.resnet34,
+    50: fv.models.resnet50,
+}

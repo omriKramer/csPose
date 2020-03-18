@@ -6,6 +6,7 @@ import fastprogress
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
+from fastai import callbacks
 from fastai.basic_train import LearnerCallback, add_metrics
 from fastai.core import master_bar, progress_bar
 from fastprogress.fastprogress import force_console_behavior
@@ -152,3 +153,33 @@ class DataTime(LearnerCallback):
 
     def on_epoch_end(self, last_metrics, **kwargs):
         return add_metrics(last_metrics, self.total_time / 60)
+
+
+def fit_and_log(learn, args, monitor):
+    if args.load:
+        learn.load(args.load)
+
+    logger = callbacks.CSVLogger(learn, filename=args.save)
+    save_clbk = callbacks.SaveModelCallback(learn, monitor=monitor, mode='max', every='improvement', name=args.save)
+
+    if args.no_one_cycle:
+        epochs = args.epochs - args.start_epoch
+        learn.fit(epochs, args.lr, wd=args.wd, callbacks=[logger, save_clbk])
+    else:
+        learn.fit_one_cycle(args.epochs, args.lr, wd=args.wd, start_epoch=args.start_epoch,
+                            callbacks=[logger, save_clbk])
+
+
+def basic_train_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('save', type=str)
+    parser.add_argument('-e', '--epochs', default=60, type=int)
+    parser.add_argument('--start-epoch', default=0, type=int)
+    parser.add_argument('-r', '--resnet', default=18, type=int)
+    parser.add_argument('--lr', default=1e-4, type=float)
+    parser.add_argument('--wd', default=None, type=float)
+    parser.add_argument('--bs', default=64, type=int)
+    parser.add_argument('-s', '--size', default=128, type=int)
+    parser.add_argument('-l', '--load', default=None, type=str)
+    parser.add_argument('--no-one-cycle', action='store_true')
+    return parser

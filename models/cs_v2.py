@@ -1,4 +1,5 @@
 import itertools
+from abc import ABC
 from typing import Callable, Tuple, Any, Union, List
 
 import fastai.vision as fv
@@ -212,9 +213,15 @@ class TDHead(nn.Sequential):
 
 class CounterStream(nn.Module):
     def __init__(self, bu, instructor, td_c=1, bu_c=0, detach=False, td_detach=None, td_laterals=True,
+                 concat_td_out=False,
                  embedding=fv.embedding, img_size: Tuple[int, int] = (256, 256), lateral=conv_add_lateral):
         super().__init__()
         # first few layers are not in a block, we group all layers up through MaxPool to a single block
+        self.td_c = td_c
+        self.concat_td_out = concat_td_out
+        if self.concat_td_out:
+            bu[0] = nn.Conv2d(3 + td_c, 64, kernel_size=7, stride=2, padding=3, bias=False)
+
         concat_idx = 4
         self.bu_body = nn.Sequential(bu[:concat_idx], *bu[concat_idx:])
         bu = [bu[:concat_idx]] + list(itertools.chain(*bu[concat_idx:]))
@@ -273,41 +280,48 @@ class CounterStream(nn.Module):
             lateral.origin_out = None
 
     def forward(self, img):
-        # clear inner state before starting
-        state = {'clear': True}
+        self.instructor.forward_begin(self)
 
         td_out, bu_out = [], []
-        while state.get('continue', True):
-            if state.get('clear', False):
-                self.clear()
+        while self.instructor.on_bu_body_begin(self):
 
+            img = self.maybe_concat_td(img, td_out)
             last_bu = self.bu_body(img)
-            if self.bu_head:
+            if self.instructor.on_bu_pred_begin(self) and self.bu_head:
                 bu_out.append(self.bu_head(last_bu))
 
-            inst, state = self.instructor.next_inst(
-                last_bu,
-                bu_out[-1] if bu_out else None,
-                td_out[-1] if td_out else None
-            )
+            inst = self.instructor.on_td_begin(last_bu, bu_out, td_out)
             if self.emb:
                 last_bu = last_bu * self.emb(inst)[..., None, None]
             td_out.append(self.td(last_bu))
+
+            self.instructor.i += 1
 
         bu_out = torch.cat(bu_out, dim=1) if bu_out else None
         td_out = torch.cat(td_out, dim=1)
         return bu_out, td_out
 
+    def maybe_concat_td(self, img, td_out):
+        if self.concat_td_out:
+            if td_out:
+                last_heatmap = td_out[-1]
+            else:
+                n, c, h, w = img.shape
+                last_heatmap = img.new_zeros((n, self.td_c, h, w))
+            img = torch.cat((img, last_heatmap), dim=1)
+        return img
+
 
 def cs_learner(data: fv.DataBunch, arch: Callable, instructor, td_c=1, bu_c=0, td_laterals=True, embedding=fv.embedding,
-               detach=False, td_detach=None, lateral=conv_add_lateral,
+               detach=False, td_detach=None, lateral=conv_add_lateral, concat_td_out=False,
                pretrained: bool = True, cut: Union[int, Callable] = None, **learn_kwargs: Any) -> fv.Learner:
     """Build Counter Stream learner from `data` and `arch`."""
     body = fv.create_body(arch, pretrained, cut)
     size = next(iter(data.train_dl))[0].shape[-2:]
     model = fv.to_device(
         CounterStream(body, instructor, td_c=td_c, bu_c=bu_c, img_size=size, embedding=embedding,
-                      td_laterals=td_laterals, detach=detach, td_detach=td_detach, lateral=lateral),
+                      td_laterals=td_laterals, detach=detach, td_detach=td_detach, lateral=lateral,
+                      concat_td_out=concat_td_out),
         data.device)
     learn = fv.Learner(data, model, callbacks=instructor, **learn_kwargs)
     split = len(learn.model.laterals) // 2 + 1
@@ -317,34 +331,29 @@ def cs_learner(data: fv.DataBunch, arch: Callable, instructor, td_c=1, bu_c=0, t
     return learn
 
 
-class BaseInstructor(fv.Callback):
-    _order = 20
-
-    def next_inst(self, last_bu, bu_out, td_out):
-        raise NotImplementedError
-
-
-class SingleInstruction(BaseInstructor):
-    n_inst = 1
-
+class BaseInstructor(ABC):
     def __init__(self):
-        self.state = {'continue': False}
+        self.i = 0
 
-    def next_inst(self, last_bu, bu_out, td_out):
-        batch_size = last_bu.shape[0]
-        instructions = torch.zeros(batch_size, dtype=torch.long, device=last_bu.device)
-        return instructions, self.state
+    def on_forward_begin(self, model):
+        self.i = 0
+        model.clear()
+
+    def on_bu_body_begin(self, model):
+        NotImplementedError
+
+    def on_bu_pred_begin(self, model):
+        return True
+
+    def on_td_begin(self, last_bu, bu_out, td_out):
+        return None
 
 
 class RecurrentInstructor(BaseInstructor):
     def __init__(self, repeats):
         self.repeats = repeats
-        self.i = 0
+        super().__init__()
 
-    def on_batch_begin(self, **kwargs):
-        self.i = 0
-
-    def next_inst(self, last_bu, bu_out, td_out):
-        self.i += 1
-        state = {'continue': self.i < self.repeats}
-        return None, state
+    def on_bu_body_begin(self, last_bu, bu_out, td_out):
+        should_continue = self.i < self.repeats
+        return should_continue
