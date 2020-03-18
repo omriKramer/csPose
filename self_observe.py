@@ -93,7 +93,7 @@ def main(args):
     self_correct = SelfCorrect()
     pckh = partial(pose.Pckh, niter=3, mean=False, heatmap_func=self_correct.heatmap_func)
     learn = cs.cs_learner(db, arch, instructor, td_c=16, bu_c=16 * 3, pretrained=False, embedding=None,
-                          concat_td_out=True, loss_func=self_correct.loss_func, mmetrics=self_correct.accuracy,
+                          concat_td_out=True, loss_func=self_correct.loss_func, metrics=self_correct.accuracy,
                           callback_fns=[pckh, DataTime])
 
     monitor = 'Total_1'
