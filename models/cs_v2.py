@@ -323,7 +323,7 @@ def cs_learner(data: fv.DataBunch, arch: Callable, instructor, td_c=1, bu_c=0, t
                       td_laterals=td_laterals, detach=detach, td_detach=td_detach, lateral=lateral,
                       concat_td_out=concat_td_out),
         data.device)
-    learn = fv.Learner(data, model, callbacks=instructor, **learn_kwargs)
+    learn = fv.Learner(data, model, **learn_kwargs)
     split = len(learn.model.laterals) // 2 + 1
     learn.split((learn.model.laterals[split],))
     if pretrained:
