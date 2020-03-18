@@ -280,7 +280,7 @@ class CounterStream(nn.Module):
             lateral.origin_out = None
 
     def forward(self, img):
-        self.instructor.forward_begin(self)
+        self.instructor.on_forward_begin(self)
 
         td_out, bu_out = [], []
         while self.instructor.on_bu_body_begin(self):
