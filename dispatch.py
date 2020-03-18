@@ -17,7 +17,7 @@ def main():
     cmd = ['bsub', '-env', 'LSB_CONTAINER_IMAGE=ibdgx001:5000/omri-20.02', '-q', 'waic-long',
            '-gpu', 'num=1:j_exclusive=yes', '-R', 'rusage[mem=8192]', '-R', 'affinity[thread*8]',
            '-app', 'nvidia-gpu', '-oo', out_file, '-eo', err_file, 'python', args.script] + args.training_script_args
-    print(cmd)
+    print(' '.join(cmd))
     subprocess.call(cmd)
 
 
