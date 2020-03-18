@@ -39,10 +39,11 @@ def main(args):
     monitor = f'Total_{n - 1}' if n > 1 else 'Total'
     save_clbk = callbacks.SaveModelCallback(learn, monitor=monitor, mode='max', every='improvement', name=args.save)
     if args.one_cycle:
-        learn.fit_one_cycle(args.epochs, args.lr, start_epoch=args.start_epoch, callbacks=[logger, save_clbk])
+        learn.fit_one_cycle(args.epochs, args.lr, wd=args.wd, start_epoch=args.start_epoch,
+                            callbacks=[logger, save_clbk])
     else:
         epochs = args.epochs - args.start_epoch
-        learn.fit(epochs, args.lr, callbacks=[logger, save_clbk])
+        learn.fit(epochs, args.lr, wd=args.wd, callbacks=[logger, save_clbk])
 
 
 if __name__ == '__main__':
@@ -55,6 +56,7 @@ if __name__ == '__main__':
     parser.add_argument('--start-epoch', default=0, type=int)
     parser.add_argument('-r', '--resnet', default=18, type=int)
     parser.add_argument('--lr', default=1e-4, type=float)
+    parser.add_argument('--wd', default=None, type=float)
     parser.add_argument('--bs', default=64, type=int)
     parser.add_argument('-s', '--size', default=128, type=int)
     parser.add_argument('-l', '--load', default=None, type=str)
