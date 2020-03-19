@@ -1,26 +1,21 @@
 from fastai.vision import *
 
 import models.cs_v2 as cs
+import models.laterals
 import pose
 import utils
 from utils import DataTime
 
 lateral_types = {
-    'add': cs.conv_add_lateral,
-    'mul': cs.conv_mul_lateral,
-    'attention': cs.attention_lateral,
-}
-
-nets = {
-    18: models.resnet18,
-    34: models.resnet34,
-    50: models.resnet50,
+    'add': models.laterals.conv_add_lateral,
+    'mul': models.laterals.conv_mul_lateral,
+    'attention': models.laterals.attention_lateral,
 }
 
 
 def main(args):
     print(args)
-    arch = nets[args.resnet]
+    arch = pose.nets[args.resnet]
 
     n = args.niter
     instructor = cs.RecurrentInstructor(n)

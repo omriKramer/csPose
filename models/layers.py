@@ -1,6 +1,7 @@
 import numbers
 
 import torch
+from fastai import vision as fv
 from torch import nn
 from torch.nn import functional as F
 
@@ -91,3 +92,20 @@ class GaussianSmoothing(nn.Module):
         out[out < self.thresh] = 0
         out.clamp_(0, 1)
         return out
+
+
+def conv_layer(ni, nf, ks=3):
+    return nn.Sequential(
+        fv.conv2d(ni, nf, ks=ks, bias=False),
+        fv.batchnorm_2d(nf),
+        nn.ReLU(inplace=True)
+    )
+
+
+def conv1d(ni: int, no: int, ks: int = 1, stride: int = 1, padding: int = 0, bias: bool = False):
+    """Create and initialize a `nn.Conv1d` layer with spectral normalization."""
+    conv = nn.Conv1d(ni, no, ks, stride=stride, padding=padding, bias=bias)
+    nn.init.kaiming_normal_(conv.weight)
+    if bias:
+        conv.bias.data.zero_()
+    return fv.spectral_norm(conv)

@@ -9,6 +9,8 @@ import torch.nn.functional as F
 import torchvision
 from torch import nn
 
+from . import laterals
+
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     """3x3 convolution with padding"""
@@ -40,108 +42,6 @@ def out_channels(m: nn.Module):
             return c
 
     return None
-
-
-def conv_layer(ni, nf, ks=3):
-    return nn.Sequential(
-        fv.conv2d(ni, nf, ks=ks, bias=False),
-        fv.batchnorm_2d(nf),
-        nn.ReLU(inplace=True)
-    )
-
-
-class Lateral(nn.Module):
-    def __init__(self, origin_layer: nn.Module, target_layer: nn.Module, op, detach=False):
-        super().__init__()
-        self.detach = detach
-        self.origin_out = None
-        self.origin_hook = origin_layer.register_forward_hook(self.origin_forward_hook)
-        self.target_hook = target_layer.register_forward_pre_hook(lambda module, inp: self(inp[0]))
-        self.op = op
-
-    def origin_forward_hook(self, module, inp, output):
-        if self.detach:
-            output = output.detach()
-        self.origin_out = output
-
-    def forward(self, inp):
-        if self.origin_out is None:
-            return
-
-        out = self.op(self.origin_out, inp)
-        return out
-
-
-class LateralConvAddOp(nn.Module):
-    def __init__(self, channels, ks):
-        super().__init__()
-        self.conv = conv_layer(channels, channels, ks=ks)
-
-    def forward(self, origin_out, target_input):
-        out = self.conv(origin_out)
-        out = out + target_input
-        return out
-
-
-def conv_add_lateral(origin_layer, target_layer, channels, detach=False, ks=3):
-    op = LateralConvAddOp(channels, ks)
-    return Lateral(origin_layer, target_layer, op, detach=detach)
-
-
-class LateralConvMulOP(nn.Module):
-    def __init__(self, channels, ks):
-        super().__init__()
-        self.conv = conv_layer(channels, channels, ks=ks)
-
-    def forward(self, origin_out, target_input):
-        out = self.conv(origin_out)
-        out = out * target_input
-        return out
-
-
-def conv_mul_lateral(origin_layer, target_layer, channels, detach=False, ks=3):
-    op = LateralConvMulOP(channels, ks)
-    return Lateral(origin_layer, target_layer, op, detach=detach)
-
-
-def conv1d(ni: int, no: int, ks: int = 1, stride: int = 1, padding: int = 0, bias: bool = False):
-    """Create and initialize a `nn.Conv1d` layer with spectral normalization."""
-    conv = nn.Conv1d(ni, no, ks, stride=stride, padding=padding, bias=bias)
-    nn.init.kaiming_normal_(conv.weight)
-    if bias:
-        conv.bias.data.zero_()
-    return fv.spectral_norm(conv)
-
-
-class AttentionLateralOp(nn.Module):
-
-    def __init__(self, n_channels: int):
-        super().__init__()
-        self.query = conv1d(n_channels, n_channels // 8)
-        self.key = conv1d(n_channels, n_channels // 8)
-        self.value = conv1d(n_channels, n_channels)
-        self.gamma = nn.Parameter(fv.tensor([0.]), requires_grad=True)
-
-    def forward(self, origin_out, target_in):
-        size = origin_out.size()
-        origin_out = origin_out.view(*size[:2], -1)
-        target_in = target_in.view(*size[:2], -1)
-
-        f, g, h = self.query(target_in), self.key(origin_out), self.value(origin_out)
-        beta = F.softmax(torch.bmm(f.permute(0, 2, 1).contiguous(), g), dim=1)
-        o = self.gamma * torch.bmm(h, beta) + target_in
-        return o.view(*size).contiguous()
-
-
-def attention_lateral(origin_layer, target_layer, channels, detach=False):
-    op = AttentionLateralOp(channels)
-    return Lateral(origin_layer, target_layer, op, detach=detach)
-
-
-def create_laterals(lateral, origin_net, target_net, channels, **kwargs):
-    laterals = [lateral(o_layer, t_layer, c, **kwargs)
-                for o_layer, t_layer, c in zip(origin_net, reversed(target_net), channels)]
-    return nn.ModuleList(laterals)
 
 
 class TDBlock(nn.Module):
@@ -213,17 +113,13 @@ class TDHead(nn.Sequential):
 
 class CounterStream(nn.Module):
     def __init__(self, bu, instructor, td_c=1, bu_c=0, detach=False, td_detach=None, td_laterals=True,
-                 concat_td_out=False,
-                 embedding=fv.embedding, img_size: Tuple[int, int] = (256, 256), lateral=conv_add_lateral):
+                 add_td_out=False,
+                 embedding=fv.embedding, img_size: Tuple[int, int] = (256, 256), lateral=laterals.conv_add_lateral):
         super().__init__()
         # first few layers are not in a block, we group all layers up through MaxPool to a single block
-        self.td_c = td_c
-        self.concat_td_out = concat_td_out
-        if self.concat_td_out:
-            bu[0] = nn.Conv2d(3 + td_c, 64, kernel_size=7, stride=2, padding=3, bias=False)
-
         concat_idx = 4
-        self.bu_body = nn.Sequential(bu[:concat_idx], *bu[concat_idx:])
+        self.ifn = bu[:concat_idx]
+        self.bu_body = nn.Sequential(*bu[concat_idx:])
         bu = [bu[:concat_idx]] + list(itertools.chain(*bu[concat_idx:]))
         bu = nn.Sequential(*bu)
 
@@ -252,11 +148,14 @@ class CounterStream(nn.Module):
 
         channels = [s[1] for s in szs]
         td.append(self.td[-1])
-        self.laterals = create_laterals(lateral, bu[:-1], td[1:], channels[:-1], detach=detach)
+        self.laterals = laterals.create_laterals(lateral, bu[:-1], td[1:], channels[:-1], detach=detach)
         if td_laterals:
             td_detach = td_detach if td_detach is not None else detach
-            bu_laterals = create_laterals(lateral, td[:-1], bu[1:], reversed(channels[:-1]), detach=td_detach)
+            bu_laterals = laterals.create_laterals(lateral, td[:-1], bu[1:], reversed(channels[:-1]), detach=td_detach)
             self.laterals.extend(bu_laterals)
+
+        if add_td_out:
+            self.laterals.append(laterals.heatmap_add_lateral(self.td[-1], self.bu_body[0], td_c, channels[0]))
 
         self.emb = embedding(instructor.n_inst, channels[-1]) if embedding else None
         self.bu_head = fv.create_head(channels[-1] * 2, bu_c) if bu_c else None
@@ -264,7 +163,7 @@ class CounterStream(nn.Module):
 
     def _group_td(self, td):
         """group TDBlocks to mirror the layer groups in the BU network"""
-        layer_len = [len(layer) for layer in self.bu_body[1:]]
+        layer_len = [len(layer) for layer in self.bu_body]
         layer_len.reverse()
         end_idx = np.cumsum(layer_len)
         start_idx = np.roll(end_idx, 1)
@@ -281,12 +180,12 @@ class CounterStream(nn.Module):
 
     def forward(self, img):
         self.instructor.on_forward_begin(self)
+        img_features = self.ifn(img)
 
         td_out, bu_out = [], []
         while self.instructor.on_bu_body_begin(self):
 
-            img = self.maybe_concat_td(img, td_out)
-            last_bu = self.bu_body(img)
+            last_bu = self.bu_body(img_features)
             if self.instructor.on_bu_pred_begin(self) and self.bu_head:
                 bu_out.append(self.bu_head(last_bu))
 
@@ -301,19 +200,9 @@ class CounterStream(nn.Module):
         td_out = torch.cat(td_out, dim=1)
         return bu_out, td_out
 
-    def maybe_concat_td(self, img, td_out):
-        if self.concat_td_out:
-            if td_out:
-                last_heatmap = td_out[-1]
-            else:
-                n, c, h, w = img.shape
-                last_heatmap = img.new_zeros((n, self.td_c, h, w))
-            img = torch.cat((img, last_heatmap), dim=1)
-        return img
-
 
 def cs_learner(data: fv.DataBunch, arch: Callable, instructor, td_c=1, bu_c=0, td_laterals=True, embedding=fv.embedding,
-               detach=False, td_detach=None, lateral=conv_add_lateral, concat_td_out=False,
+               detach=False, td_detach=None, lateral=laterals.conv_add_lateral, concat_td_out=False,
                pretrained: bool = True, cut: Union[int, Callable] = None, **learn_kwargs: Any) -> fv.Learner:
     """Build Counter Stream learner from `data` and `arch`."""
     body = fv.create_body(arch, pretrained, cut)
@@ -321,7 +210,7 @@ def cs_learner(data: fv.DataBunch, arch: Callable, instructor, td_c=1, bu_c=0, t
     model = fv.to_device(
         CounterStream(body, instructor, td_c=td_c, bu_c=bu_c, img_size=size, embedding=embedding,
                       td_laterals=td_laterals, detach=detach, td_detach=td_detach, lateral=lateral,
-                      concat_td_out=concat_td_out),
+                      add_td_out=concat_td_out),
         data.device)
     learn = fv.Learner(data, model, **learn_kwargs)
     split = len(learn.model.laterals) // 2 + 1
