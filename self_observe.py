@@ -112,7 +112,7 @@ class SelfCorrect:
         return self.correction_loss_func(error_out, td_out, targets)
 
     def accuracy(self, outputs, targets):
-        bu_out = outputs[1][-1].reshape(-1, 3)
+        bu_out = outputs[0].reshape(-1, 3)
         return accuracy(bu_out, self.detect_target)
 
     def heatmap_func(self, outputs):
