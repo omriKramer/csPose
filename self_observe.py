@@ -42,7 +42,7 @@ class SelfCorrect:
         n = targets.shape[0]
         bu_out, td_out = outputs
         preds = pose.output_to_scaled_pred(td_out)
-        first_td, second_td = preds[:, :17], preds[:, 17:]
+        first_td, second_td = preds[:, :16], preds[:, 16:]
         is_visible = targets[..., 2] > 0
         gt = targets[..., :2]
 
@@ -80,8 +80,8 @@ class SelfCorrect:
         heatmaps = outputs[1]
         n, _, h, w = heatmaps.shape
         combined = torch.empty(n, 16, h, w).to(heatmaps.device)
-        combined[self.is_wrong] = heatmaps[:, 17:][self.is_wrong]
-        combined[~self.is_wrong] = heatmaps[:, :17][~self.is_wrong]
+        combined[self.is_wrong] = heatmaps[:, 16:][self.is_wrong]
+        combined[~self.is_wrong] = heatmaps[:, :16][~self.is_wrong]
         return torch.cat((heatmaps, combined), dim=1)
 
 
