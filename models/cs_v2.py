@@ -199,7 +199,7 @@ class CounterStream(nn.Module):
 
         bu_out = torch.cat(bu_out, dim=1) if bu_out else None
         td_out = torch.cat(td_out, dim=1)
-        return bu_out, td_out
+        return self.instructor.on_forward_end(bu_out, td_out)
 
 
 def cs_learner(data: fv.DataBunch, arch: Callable, instructor, td_c=1, bu_c=0, td_laterals=True, embedding=fv.embedding,
@@ -240,6 +240,9 @@ class BaseInstructor(ABC):
 
     def on_init_end(self, model):
         pass
+
+    def on_forward_end(self, bu_out, td_out):
+        return bu_out, td_out
 
 
 class RecurrentInstructor(BaseInstructor):

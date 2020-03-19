@@ -100,7 +100,7 @@ class HeatmapAddOp(nn.Module):
     def forward(self, origin_out, target_in):
         out = self.bn(origin_out)
         out = self.conv(out)
-        out += target_in
+        out = out + target_in
         return out
 
 

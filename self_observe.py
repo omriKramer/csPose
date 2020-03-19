@@ -45,14 +45,22 @@ class InstructorObserver(cs.RecurrentInstructor):
         self.error_net_out = None
 
     def on_init_end(self, model):
-        model.error_detection_network = None
+        model.error_detection_network = ErrorDetectionNet()
 
     def on_td_begin(self, model, img_features, last_bu, bu_out, td_out):
-        if self.i > 0:
-            error_pred = model.error_detection_network(img_features, td_out[-1])
-            error_pred = error_pred.reshape(-1, 16, 3).argmax(dim=-1)
-            error_pred = (error_pred == 1).float()
-            return error_pred
+        if self.i == 0:
+            return last_bu.new_ones((last_bu.shape[0], 16))
+
+        error_pred = model.error_detection_network(img_features, td_out[-1])
+        self.error_net_out = error_pred
+        error_pred = error_pred.reshape(-1, 16, 3).argmax(dim=-1)
+        error_pred = (error_pred == 1).float()
+        return error_pred
+
+    def on_forward_end(self, bu_out, td_out):
+        error_net_out = self.error_net_out
+        self.error_net_out = None
+        return error_net_out, td_out
 
 
 # mean head size of LIP validation set
@@ -64,10 +72,9 @@ class SelfCorrect:
         self.detect_target = None
         self.is_wrong = None
 
-    def loss_func(self, outputs, targets):
+    def correction_loss_func(self, error_out, heatmaps, targets):
         n = targets.shape[0]
-        bu_out, td_out = outputs
-        preds = pose.output_to_scaled_pred(td_out)
+        preds = pose.output_to_scaled_pred(heatmaps)
         first_td_preds = preds[:, :16]
         is_visible = targets[..., 2] > 0
         gt = targets[..., :2]
@@ -86,19 +93,23 @@ class SelfCorrect:
         detect_target[is_correct] = 2
         self.detect_target = detect_target.reshape(-1).to(targets.device)
 
-        error_detect_loss = F.cross_entropy(bu_out.reshape(-1, 3), self.detect_target)
+        error_detect_loss = F.cross_entropy(error_out.reshape(-1, 3), self.detect_target)
 
         first_targets = gt[is_visible]
-        first_td = td_out[:, :16][is_visible]
-        pred_detect = bu_out.reshape(-1, 16, 3).argmax(dim=2)
+        first_td = heatmaps[:, :16][is_visible]
+        pred_detect = error_out.reshape(-1, 16, 3).argmax(dim=2)
         pred_wrong = pred_detect == 1
         wrong = pred_wrong * is_visible
         second_targets = gt[wrong]
-        second_td = td_out[:, 16:][wrong]
+        second_td = heatmaps[:, 16:][wrong]
         td = torch.cat((first_td, second_td))
         td_targets = torch.cat((first_targets, second_targets))
         keypoints_loss = pose.ce_loss(td, td_targets)
         return error_detect_loss + keypoints_loss
+
+    def loss_func(self, outputs, targets):
+        error_out, td_out = outputs
+        return self.correction_loss_func(error_out, td_out, targets)
 
     def accuracy(self, outputs, targets):
         bu_out = outputs[1][-1].reshape(-1, 3)
