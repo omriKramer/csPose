@@ -130,16 +130,21 @@ def main(args):
 
     if args.cnn_fix:
         instructor = CNNObserver()
+        bu_c = 0
+        add_td_out = False
     else:
         instructor = SelfObserveInstructor()
+        bu_c = 16 * 3
+        add_td_out = True
 
     root = Path(__file__).resolve().parent.parent / 'LIP'
     db = pose.get_data(root, args.size, bs=args.bs)
 
     self_correct = SelfCorrect()
     pckh = partial(pose.Pckh, niter=3, mean=False, heatmap_func=self_correct.heatmap_func)
-    learn = cs.cs_learner(db, arch, instructor, td_c=16, bu_c=16 * 3, pretrained=False, embedding=None,
-                          add_td_out=True, loss_func=self_correct.loss_func, metrics=self_correct.accuracy,
+    learn = cs.cs_learner(db, arch, instructor, td_c=16, bu_c=bu_c, pretrained=False, embedding=None,
+                          add_td_out=add_td_out, detach_td_out=not args.keep_heatmap,
+                          loss_func=self_correct.loss_func, metrics=self_correct.accuracy,
                           callback_fns=[pckh, DataTime])
 
     monitor = 'Total_2'
@@ -149,4 +154,5 @@ def main(args):
 if __name__ == '__main__':
     parser = utils.basic_train_parser()
     parser.add_argument('--cnn-fix', action='store_true')
+    parser.add_argument('--keep_heatmap', action='store_true')
     main(parser.parse_args())

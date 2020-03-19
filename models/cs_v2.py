@@ -113,7 +113,7 @@ class TDHead(nn.Sequential):
 
 class CounterStream(nn.Module):
     def __init__(self, bu, instructor, td_c=1, bu_c=0, detach=False, td_detach=None, td_laterals=True,
-                 add_td_out=False,
+                 add_td_out=False, detach_td_out=True,
                  embedding=fv.embedding, img_size: Tuple[int, int] = (256, 256), lateral=laterals.conv_add_lateral):
         super().__init__()
         # first few layers are not in a block, we group all layers up through MaxPool to a single block
@@ -155,7 +155,8 @@ class CounterStream(nn.Module):
             self.laterals.extend(bu_laterals)
 
         if add_td_out:
-            self.laterals.append(laterals.heatmap_add_lateral(self.td[-1], self.bu_body[0], td_c, channels[0]))
+            hm_lat = laterals.heatmap_add_lateral(self.td[-1], self.bu_body[0], td_c, channels[0], detach=detach_td_out)
+            self.laterals.append(hm_lat)
 
         self.emb = embedding(instructor.n_inst, channels[-1]) if embedding else None
         self.bu_head = fv.create_head(channels[-1] * 2, bu_c) if bu_c else None
@@ -203,7 +204,7 @@ class CounterStream(nn.Module):
 
 
 def cs_learner(data: fv.DataBunch, arch: Callable, instructor, td_c=1, bu_c=0, td_laterals=True, embedding=fv.embedding,
-               detach=False, td_detach=None, lateral=laterals.conv_add_lateral, add_td_out=False,
+               detach=False, td_detach=None, lateral=laterals.conv_add_lateral, add_td_out=False, detach_td_out=True,
                pretrained: bool = True, cut: Union[int, Callable] = None, **learn_kwargs: Any) -> fv.Learner:
     """Build Counter Stream learner from `data` and `arch`."""
     body = fv.create_body(arch, pretrained, cut)
@@ -211,7 +212,7 @@ def cs_learner(data: fv.DataBunch, arch: Callable, instructor, td_c=1, bu_c=0, t
     model = fv.to_device(
         CounterStream(body, instructor, td_c=td_c, bu_c=bu_c, img_size=size, embedding=embedding,
                       td_laterals=td_laterals, detach=detach, td_detach=td_detach, lateral=lateral,
-                      add_td_out=add_td_out),
+                      add_td_out=add_td_out, detach_td_out=detach_td_out),
         data.device)
     learn = fv.Learner(data, model, **learn_kwargs)
     split = len(learn.model.laterals) // 2 + 1

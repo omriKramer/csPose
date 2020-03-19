@@ -104,6 +104,6 @@ class HeatmapAddOp(nn.Module):
         return out
 
 
-def heatmap_add_lateral(origin_layer, target_layer, ni, nf):
+def heatmap_add_lateral(origin_layer, target_layer, ni, nf, detach=True):
     op = HeatmapAddOp(ni, nf)
-    return Lateral(origin_layer, target_layer, op, detach=True)
+    return Lateral(origin_layer, target_layer, op, detach=detach)
