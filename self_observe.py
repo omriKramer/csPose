@@ -24,6 +24,11 @@ class SelfObserveInstructor(cs.RecurrentInstructor):
         return wrong_preds
 
 
+class InstructorObserver(cs.RecurrentInstructor):
+    def __init__(self):
+        super().__init__(2)
+
+
 # mean head size of LIP validation set
 default_threshold = 0.3314
 
@@ -36,7 +41,8 @@ class SelfCorrect:
     def loss_func(self, outputs, targets):
         n = targets.shape[0]
         bu_out, td_out = outputs
-        preds = pose.output_to_scaled_pred(td_out[0])
+        preds = pose.output_to_scaled_pred(td_out)
+        first_td, second_td = preds[:, :17], preds[:, 17:]
         is_visible = targets[..., 2] > 0
         gt = targets[..., :2]
 
@@ -44,7 +50,7 @@ class SelfCorrect:
         thresholds = head_sizes / 2
         has_head = (is_visible[:, 8:10]).all(1)
         thresholds[~has_head] = default_threshold
-        distances = torch.norm(preds - gt, dim=2)
+        distances = torch.norm(first_td - gt, dim=2)
         under_threshold = (distances < thresholds[:, None])
         is_correct = under_threshold * is_visible
         self.is_wrong = (~under_threshold) * is_visible
@@ -54,16 +60,14 @@ class SelfCorrect:
         detect_target[is_correct] = 2
         self.detect_target = detect_target.reshape(-1, 3).to(targets.device)
 
-        error_detect_loss = F.cross_entropy(bu_out[0].reshape(-1, 3), self.detect_target)
+        error_detect_loss = F.cross_entropy(bu_out.reshape(-1, 3), self.detect_target)
 
-        first_td = td_out[0][is_visible]
         first_targets = gt[is_visible]
-        pred_detect = bu_out[0].reshape(-1, 16, 3).argmax(dim=2)
+        pred_detect = bu_out.reshape(-1, 16, 3).argmax(dim=2)
         pred_wrong = pred_detect == 1
         wrong = pred_wrong * is_visible
-        second_td = td_out[1][wrong]
         second_targets = gt[wrong]
-        td = torch.cat((first_td, second_td))
+        td = torch.cat((first_td[is_visible], second_td[is_visible]))
         td_targets = torch.stack((first_targets, second_targets))
         keypoints_loss = pose.ce_loss(td, td_targets)
         return error_detect_loss + keypoints_loss
@@ -93,7 +97,7 @@ def main(args):
     self_correct = SelfCorrect()
     pckh = partial(pose.Pckh, niter=3, mean=False, heatmap_func=self_correct.heatmap_func)
     learn = cs.cs_learner(db, arch, instructor, td_c=16, bu_c=16 * 3, pretrained=False, embedding=None,
-                          concat_td_out=True, loss_func=self_correct.loss_func, metrics=self_correct.accuracy,
+                          add_td_out=True, loss_func=self_correct.loss_func, metrics=self_correct.accuracy,
                           callback_fns=[pckh, DataTime])
 
     monitor = 'Total_1'
