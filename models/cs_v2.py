@@ -243,6 +243,6 @@ class RecurrentInstructor(BaseInstructor):
         self.repeats = repeats
         super().__init__()
 
-    def on_bu_body_begin(self, last_bu, bu_out, td_out):
+    def on_bu_body_begin(self, model):
         should_continue = self.i < self.repeats
         return should_continue
