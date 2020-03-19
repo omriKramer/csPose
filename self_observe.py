@@ -55,10 +55,10 @@ class SelfCorrect:
         is_correct = under_threshold * is_visible
         self.is_wrong = (~under_threshold) * is_visible
 
-        detect_target = torch.zeros(n, 16, 3, dtype=torch.long)
+        detect_target = torch.zeros(n, 16, dtype=torch.long)
         detect_target[self.is_wrong] = 1
         detect_target[is_correct] = 2
-        self.detect_target = detect_target.reshape(-1, 3).to(targets.device)
+        self.detect_target = detect_target.reshape(-1).to(targets.device)
 
         error_detect_loss = F.cross_entropy(bu_out.reshape(-1, 3), self.detect_target)
 
