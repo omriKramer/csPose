@@ -79,4 +79,7 @@ Changed TDBlock.
 | 17.03   | gradual-stage2-1e-4 | 256 | 10 | CE | 82.58 | CSResnet34 | X | 1e-4 |recurrent-gradual | |
 | 18.03   | gradual-stage2-40-1e-4 | 256 | 40 | CE | 82.5 | CSResnet34 | X | 1e-4 |recurrent-gradual | |
 | 18.03   | gradual-stage2-40-1e-3 | 256 | 40 | CE | 82.49 | CSResnet34 | X | 1e-3 |recurrent-gradual | |
+| 19.03   | self-fix-256-60-1e-2 | 256 | 60 | CE | - | CSResnet34 | X | 1e-2 | | detect wrong keypoint and fix in second td|
+| 19.03   | self-fix-256-60-1e-2-hm | 256 | 60 | CE | - | CSResnet34 | X | 1e-2 | | don't detach heatmaps|
+| 19.03   | cnn-fix-256-60-1e-2 | 256 | 60 | CE | - | CSResnet34 | X | 1e-2 | | use resnet18 to detect wrong keypoint preds|
 

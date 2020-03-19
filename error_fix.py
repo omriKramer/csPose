@@ -28,7 +28,7 @@ class ErrorDetectionNet(nn.Module):
     def __init__(self):
         super().__init__()
         self.heatmaps_bn = nn.BatchNorm2d(16)
-        self.resnet = nn.Sequential(*list(models.resnet18(pretrained=False, num_classes=16 * 3)))
+        self.resnet = nn.Sequential(*list(models.resnet18(pretrained=False, num_classes=16 * 3).children()))
         self.resnet = nn.Sequential(*self.resnet[4:])
         self.resnet[0][0].conv1 = nn.Conv2d(16 + 64, 64, kernel_size=3, padding=1)
 
@@ -154,5 +154,5 @@ def main(args):
 if __name__ == '__main__':
     parser = utils.basic_train_parser()
     parser.add_argument('--cnn-fix', action='store_true')
-    parser.add_argument('--keep_heatmap', action='store_true')
+    parser.add_argument('--keep-heatmap', action='store_true')
     main(parser.parse_args())
