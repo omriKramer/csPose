@@ -73,10 +73,10 @@ Changed TDBlock.
 | 15.03   | baseline3-256-r34-8e-3 | 256 | 50 | CE | 81.8 | CSResnet34 | X | 8e-3 | | |
 | 16.03   | baseline3-256-r34-1e-2 | 256 | 50 | CE | 81.9 | CSResnet34 | X | 1e-2 | | |
 | 17.03   | baseline3-256-r34-1e-2-60 | 256 | 60 | CE | 81.7 | CSResnet34 | X | 1e-2 | | |
-| 18.03   | baseline3-r34-256-80-1e-1-wd | 256 | 80 | CE | - | CSResnet34 | X | 1e-1 | | wd 1e-4 |
+| 18.03   | baseline3-r34-256-80-1e-1-wd | 256 | 80 | CE | 81.4 | CSResnet34 | X | 1e-1 | | wd 1e-4 |
 | 17.03   | gradual-stage2-1e-3 | 256 | 10 | CE | 82.45 | CSResnet34 | X | 1e-3 |recurrent-gradual | |
 | 17.03   | gradual-stage2-5e-4 | 256 | 10 | CE | 82.47 | CSResnet34 | X | 5e-4 |recurrent-gradual | |
 | 17.03   | gradual-stage2-1e-4 | 256 | 10 | CE | 82.58 | CSResnet34 | X | 1e-4 |recurrent-gradual | |
-| 18.03   | gradual-stage2-40-1e-4 | 256 | 40 | CE | - | CSResnet34 | X | 1e-4 |recurrent-gradual | |
-| 18.03   | gradual-stage2-40-1e-3 | 256 | 40 | CE | - | CSResnet34 | X | 1e-3 |recurrent-gradual | |
+| 18.03   | gradual-stage2-40-1e-4 | 256 | 40 | CE | 82.5 | CSResnet34 | X | 1e-4 |recurrent-gradual | |
+| 18.03   | gradual-stage2-40-1e-3 | 256 | 40 | CE | 82.49 | CSResnet34 | X | 1e-3 |recurrent-gradual | |
 
