@@ -39,7 +39,7 @@ class ErrorDetectionNet(nn.Module):
         return out
 
 
-class InstructorObserver(cs.RecurrentInstructor):
+class CNNObserver(cs.RecurrentInstructor):
     def __init__(self):
         super().__init__(2)
         self.error_net_out = None
@@ -128,7 +128,10 @@ def main(args):
     print(args)
     arch = pose.nets[args.resnet]
 
-    instructor = SelfObserveInstructor()
+    if args.cnn_fix:
+        instructor = CNNObserver()
+    else:
+        instructor = SelfObserveInstructor()
 
     root = Path(__file__).resolve().parent.parent / 'LIP'
     db = pose.get_data(root, args.size, bs=args.bs)
@@ -139,10 +142,11 @@ def main(args):
                           add_td_out=True, loss_func=self_correct.loss_func, metrics=self_correct.accuracy,
                           callback_fns=[pckh, DataTime])
 
-    monitor = 'Total_1'
+    monitor = 'Total_2'
     utils.fit_and_log(learn, args, monitor)
 
 
 if __name__ == '__main__':
     parser = utils.basic_train_parser()
+    parser.add_argument('--cnn-fix', action='store_true')
     main(parser.parse_args())
