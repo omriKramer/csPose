@@ -160,6 +160,7 @@ class CounterStream(nn.Module):
         self.emb = embedding(instructor.n_inst, channels[-1]) if embedding else None
         self.bu_head = fv.create_head(channels[-1] * 2, bu_c) if bu_c else None
         self.instructor = instructor
+        self.instructor.on_init_end(self)
 
     def _group_td(self, td):
         """group TDBlocks to mirror the layer groups in the BU network"""
@@ -189,7 +190,7 @@ class CounterStream(nn.Module):
             if self.instructor.on_bu_pred_begin(self) and self.bu_head:
                 bu_out.append(self.bu_head(last_bu))
 
-            inst = self.instructor.on_td_begin(last_bu, bu_out, td_out)
+            inst = self.instructor.on_td_begin(self, img_features, last_bu, bu_out, td_out)
             if self.emb:
                 last_bu = last_bu * self.emb(inst)[..., None, None]
             td_out.append(self.td(last_bu))
@@ -234,8 +235,11 @@ class BaseInstructor(ABC):
     def on_bu_pred_begin(self, model):
         return True
 
-    def on_td_begin(self, last_bu, bu_out, td_out):
+    def on_td_begin(self, model, img_features, last_bu, bu_out, td_out):
         return None
+
+    def on_init_end(self, model):
+        pass
 
 
 class RecurrentInstructor(BaseInstructor):

@@ -16,7 +16,7 @@ class SelfObserveInstructor(cs.RecurrentInstructor):
 
         return True
 
-    def on_td_begin(self, last_bu, bu_out, td_out):
+    def on_td_begin(self, model, img_features, last_bu, bu_out, td_out):
         if self.i == 0:
             return last_bu.new_ones((last_bu.shape[0], 16))
         preds = bu_out[-1].reshape(-1, 16, 3).argmax(dim=-1)
@@ -27,6 +27,15 @@ class SelfObserveInstructor(cs.RecurrentInstructor):
 class InstructorObserver(cs.RecurrentInstructor):
     def __init__(self):
         super().__init__(2)
+
+    def on_init_end(self, model):
+        model.error_detection_network = None
+
+    def on_td_begin(self, model, img_features, last_bu, bu_out, td_out):
+        error_pred = model.error_detection_network(img_features, td_out[-1])
+        error_pred = error_pred.reshape(-1, 16, 3).argmax(dim=-1)
+        error_pred = (error_pred == 1).float()
+        return error_pred
 
 
 # mean head size of LIP validation set
@@ -68,7 +77,7 @@ class SelfCorrect:
         wrong = pred_wrong * is_visible
         second_targets = gt[wrong]
         td = torch.cat((first_td[is_visible], second_td[is_visible]))
-        td_targets = torch.stack((first_targets, second_targets))
+        td_targets = torch.cat((first_targets, second_targets))
         keypoints_loss = pose.ce_loss(td, td_targets)
         return error_detect_loss + keypoints_loss
 
