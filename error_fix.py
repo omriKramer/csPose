@@ -34,7 +34,7 @@ class ErrorDetectionNet(nn.Module):
         first_block.conv1 = nn.Conv2d(16 + 64, 64, kernel_size=3, padding=1)
         first_block.downsample = nn.Sequential(
             cs.conv1x1(16 + 64, 64 * first_block.expansion),
-            nn.BatchNorm2d(64 * first_block.exapnsion),
+            nn.BatchNorm2d(64 * first_block.expansion),
         )
 
     def forward(self, img_features, td_out):
