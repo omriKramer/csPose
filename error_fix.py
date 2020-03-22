@@ -29,6 +29,7 @@ class ErrorDetectionNet(nn.Module):
         super().__init__()
         self.heatmaps_bn = nn.BatchNorm2d(16)
         self.resnet = list(models.resnet18(pretrained=False, num_classes=16 * 3).children())
+        self.resnet.insert(-1, Flatten())
         self.resnet = nn.Sequential(*self.resnet[4:])
         first_block = self.resnet[0][0]
         first_block.conv1 = nn.Conv2d(16 + 64, 64, kernel_size=3, padding=1)

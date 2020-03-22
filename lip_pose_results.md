@@ -84,7 +84,8 @@ Changed TDBlock.
 | 22.03   | self-fix-256-40-1e-2-wd1e-3 | 256 | 40 | CE | - | CSResnet34 | X | 1e-2 | | wd 1e-3 |
 | 19.03   | self-fix-256-60-1e-2-hm | 256 | 60 | CE | 83.4 | CSResnet34 | X | 1e-2 | | don't detach heatmaps|
 | 19.03   | cnn-fix-256-60-1e-2 | 256 | 60 | CE | - | CSResnet34 | X | 1e-2 | | use resnet18 to detect wrong keypoint preds|
-| 2.03   | self-fix-128-40-1e-2-wd1e-4 | 128 | 40 | CE | - | CSResnet34 | X | 1e-2 | | wd 1e-4 |
-| 2.03   | self-fix-128-40-1e-2-wd1e-3 | 128 | 40 | CE | - | CSResnet34 | X | 1e-2 | | wd 1e-3 |
-| 2.03   | self-fix-128-40-1e-2-wd1e-2 | 128 | 40 | CE | - | CSResnet34 | X | 1e-2 | | wd 1e-2 |
+| 19.03   | cnn-fix-256-40-1e-2 | 256 | 40 | CE | - | CSResnet34 | X | 1e-2 | | use resnet18 to detect wrong keypoint preds|
+| 22.03   | self-fix-128-40-1e-2-wd1e-4 | 128 | 40 | CE | - | CSResnet34 | X | 1e-2 | | wd 1e-4 |
+| 22.03   | self-fix-128-40-1e-2-wd1e-3 | 128 | 40 | CE | - | CSResnet34 | X | 1e-2 | | wd 1e-3 |
+| 22.03   | self-fix-128-40-1e-2-wd1e-2 | 128 | 40 | CE | - | CSResnet34 | X | 1e-2 | | wd 1e-2 |
 
