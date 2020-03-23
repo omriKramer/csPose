@@ -80,7 +80,7 @@ Changed TDBlock.
 | 18.03   | gradual-stage2-40-1e-4 | 256 | 40 | CE | 82.5 | CSResnet34 | X | 1e-4 |recurrent-gradual | |
 | 18.03   | gradual-stage2-40-1e-3 | 256 | 40 | CE | 82.49 | CSResnet34 | X | 1e-3 |recurrent-gradual | |
 | 19.03   | self-fix-256-60-1e-2 | 256 | 60 | CE | 83.6 | CSResnet34 | X | 1e-2 | | detect wrong keypoint and fix in second td|
-| 24.03   | self-fix-256-50-1e-2 | 256 | 60 | CE | - | CSResnet34 | X | 1e-2 | | detect wrong keypoint and fix in second td|
+| 24.03   | self-fix-256-50-1e-2 | 256 | 60 | CE | 80.6 | CSResnet34 | X | 1e-2 | | detect wrong keypoint and fix in second td|
 | 19.03   | self-fix-256-60-1e-2wd1e-2 | 256 | 60 | CE | 77.8 | CSResnet34 | X | 1e-2 | | wd 1e-2|
 | 19.03   | self-fix-256-50-1e-2wd1e-2 | 256 | 50 | CE | 80.2 | CSResnet34 | X | 1e-2 | | wd 1e-2|
 | 22.03   | self-fix-256-40-1e-2-wd1e-2 | 256 | 40 | CE | 81.3 | CSResnet34 | X | 1e-2 | | wd 1e-2 |
@@ -94,4 +94,7 @@ Changed TDBlock.
 | 22.03   | self-fix-128-50-1e-2-wd1e-2 | 128 | 50 | CE | 78.0 | CSResnet34 | X | 1e-2 | | wd 1e-2 |
 | 22.03   | self-fix-128-50-1e-2-wd1e-3 | 128 | 50 | CE | 77.7 | CSResnet34 | X | 1e-2 | | wd 1e-3 |
 | 22.03   | self-fix-256-384-60-1e-3-wd1e-3 | 384 | 60 | CE | - | CSResnet34 | X | 1e-3 | self-fix-256-60-1e-2  | wd 1e-3 |
+| 13.03   | self-fix2-256-40-1e-2 | 256 | 40 | CE | - | CSResnet34 | X | 1e-2 | | linear embedding |
+| 13.03   | self-fix2-256-40-1e-2wd1e-3 | 256 | 40 | CE | - | CSResnet34 | X | 1e-2 | | linear embedding |
+| 13.03   | self-fix2-256-40-1e-2wd1e-2 | 256 | 40 | CE | - | CSResnet34 | X | 1e-2 | | linear embedding |
 

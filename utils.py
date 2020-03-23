@@ -134,6 +134,8 @@ class DataTime(LearnerCallback):
 
     def __init__(self, learn):
         super().__init__(learn)
+        self.total_time = 0.
+        self.start = None
 
     def on_train_begin(self, **kwargs):
         self.learn.recorder.add_metric_names(['data_time'])

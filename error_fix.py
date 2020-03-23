@@ -7,6 +7,8 @@ from utils import DataTime
 
 
 class SelfObserveInstructor(cs.RecurrentInstructor):
+    n_inst = 16
+
     def __init__(self):
         super().__init__(2)
 
@@ -18,8 +20,8 @@ class SelfObserveInstructor(cs.RecurrentInstructor):
 
     def on_td_begin(self, model, img_features, last_bu, bu_out, td_out):
         if self.i == 0:
-            return last_bu.new_ones((last_bu.shape[0], 16))
-        preds = bu_out[-1].reshape(-1, 16, 3).argmax(dim=-1)
+            return last_bu.new_ones((last_bu.shape[0], self.n_inst))
+        preds = bu_out[-1].reshape(-1, self.n_inst, 3).argmax(dim=-1)
         wrong_preds = (preds == 1).float()
         return wrong_preds
 
@@ -46,6 +48,8 @@ class ErrorDetectionNet(nn.Module):
 
 
 class CNNObserver(cs.RecurrentInstructor):
+    n_inst = 16
+
     def __init__(self):
         super().__init__(2)
         self.error_net_out = None
@@ -55,11 +59,11 @@ class CNNObserver(cs.RecurrentInstructor):
 
     def on_td_begin(self, model, img_features, last_bu, bu_out, td_out):
         if self.i == 0:
-            return last_bu.new_ones((last_bu.shape[0], 16))
+            return last_bu.new_ones((last_bu.shape[0], self.n_inst))
 
         error_pred = model.error_detection_network(img_features, td_out[-1])
         self.error_net_out = error_pred
-        error_pred = error_pred.reshape(-1, 16, 3).argmax(dim=-1)
+        error_pred = error_pred.reshape(-1, self.n_inst, 3).argmax(dim=-1)
         error_pred = (error_pred == 1).float()
         return error_pred
 
