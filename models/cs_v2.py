@@ -219,6 +219,8 @@ def cs_learner(data: fv.DataBunch, arch: Callable, instructor, td_c=1, bu_c=0, t
     learn.split((learn.model.laterals[split],))
     if pretrained:
         learn.freeze()
+    else:
+        fv.apply_init(learn.model, nn.init.kaiming_normal_)
     return learn
 
 

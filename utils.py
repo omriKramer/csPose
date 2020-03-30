@@ -177,7 +177,7 @@ def basic_train_parser():
     parser.add_argument('save', type=str)
     parser.add_argument('-e', '--epochs', default=60, type=int)
     parser.add_argument('--start-epoch', default=0, type=int)
-    parser.add_argument('-r', '--resnet', default=18, type=int)
+    parser.add_argument('-r', '--resnet', default=34, type=int)
     parser.add_argument('--lr', default=1e-4, type=float)
     parser.add_argument('--wd', default=None, type=float)
     parser.add_argument('--bs', default=64, type=int)
