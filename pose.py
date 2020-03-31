@@ -316,8 +316,11 @@ def _pose_flip_lr(x):
 pose_flip_lr = TfmPixel(_pose_flip_lr)
 
 
-def get_data(root, size, bs=64, stats=lip_utils.stats):
-    t = fv.get_transforms(do_flip=False)
+def get_data(root, size, bs=64, stats=lip_utils.stats,
+             max_rotate: float = 10., max_zoom: float = 1.1, max_lighting: float = 0.2,
+             max_warp: float = 0.2, p_affine: float = 0.75, p_lighting: float = 0.75):
+    t = fv.get_transforms(do_flip=False, max_rotate=max_rotate, max_zoom=max_zoom, max_lighting=max_lighting,
+                          max_warp=max_warp, p_affine=p_affine, p_lighting=p_lighting)
     t[0].insert(0, pose_flip_lr(p=0.5))
     pose_label = LIPLabel(root / 'pose_annotations')
     data = (PoseItemList.from_folder(root)
