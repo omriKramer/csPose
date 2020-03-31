@@ -27,7 +27,7 @@ def main(args):
 
     lateral = lateral_types[args.lateral]
     learn = cs.cs_learner(db, arch, instructor, td_c=16, pretrained=False, embedding=None, lateral=lateral,
-                          loss_func=loss, callback_fns=[pckh, DataTime])
+                          add_td_out=args.add_td_out, loss_func=loss, callback_fns=[pckh, DataTime])
 
     monitor = f'Total_{n - 1}' if n > 1 else 'Total'
     utils.fit_and_log(learn, args, monitor)
@@ -37,4 +37,5 @@ if __name__ == '__main__':
     parser = utils.basic_train_parser()
     parser.add_argument('-n', '--niter', default=1, type=int)
     parser.add_argument('--lateral', choices=lateral_types, default='add')
+    parser.add_argument('--add-td-out', action='store_true')
     main(parser.parse_args())
