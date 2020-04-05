@@ -91,7 +91,7 @@ def plot_joint(ax, joints, visible, annotate=False, plot_lines=True, colors='r')
     ans = keep_vis(c, visible)
     for x, y, name, should_annotate in zip(xs, ys, ans, annotate):
         if should_annotate:
-            ax.annotate(name, (x, y))
+            ax.annotate(name, (x, y), c='m')
 
     if plot_lines:
         for segment_idx, color, in zip(bombs, line_colors):
