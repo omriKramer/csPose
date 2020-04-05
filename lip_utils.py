@@ -1,6 +1,7 @@
 from enum import Enum
 
 import numpy as np
+import torch
 
 
 class KeypointGroup:
@@ -66,18 +67,30 @@ line_colors = np.array([(255, 0, 0), (255, 0, 0),
                         (128, 0, 128)]) / 255
 
 
+def keep_vis(li, visible):
+    if isinstance(li, torch.Tensor):
+        li = li.tolist()
+
+    return [item for item, v in zip(li, visible) if v]
+
+
 def plot_joint(ax, joints, visible, annotate=False, plot_lines=True, colors='r'):
-    xs = [j[0].item() for j, v in zip(joints, visible) if v]
-    ys = [j[1].item() for j, v in zip(joints, visible) if v]
+    xs = keep_vis(joints[:, 0], visible)
+    ys = keep_vis(joints[:, 1], visible)
+
     if isinstance(colors, list):
-        colors = [color for color, v in zip(colors, visible) if v]
+        colors = keep_vis(colors, visible)
 
     params = {'s': 20, 'marker': '.', 'c': colors}
     ax.scatter(xs, ys, **params)
 
-    if annotate:
-        ans = [name for name, v in zip(c, visible) if v]
-        for x, y, name in zip(xs, ys, ans):
+    if isinstance(annotate, bool):
+        annotate = [annotate] * len(c)
+
+    annotate = keep_vis(annotate, visible)
+    ans = keep_vis(c, visible)
+    for x, y, name, should_annotate in zip(xs, ys, ans, annotate):
+        if should_annotate:
             ax.annotate(name, (x, y))
 
     if plot_lines:

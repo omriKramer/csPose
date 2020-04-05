@@ -177,11 +177,13 @@ class PoseItemList(ImageList):
             try:
                 is_wrong = y.get_wrong(z)
                 colors = ['r' if w else 'g' for w in is_wrong]
+                annotate = is_wrong
             except ValueError:
                 colors = 'b'
+                annotate = False
 
-            x.show(ax=axs[i, 0], y=y, plot_lines=False, colors=colors, **kwargs)
-            x.show(ax=axs[i, 1], y=z, plot_lines=False, colors=colors, **kwargs)
+            x.show(ax=axs[i, 0], y=y, plot_lines=False, colors=colors, annotate=annotate, **kwargs)
+            x.show(ax=axs[i, 1], y=z, plot_lines=False, colors=colors, annotate=annotate, **kwargs)
 
 
 def pose_ce_loss(output, targets):
