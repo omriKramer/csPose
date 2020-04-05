@@ -195,7 +195,7 @@ class Pckh(LearnerCallback):
             raise ValueError('No support for partial keypoints and multilabel classification')
 
         self.filter_idx = sorted(filter_idx) if filter_idx else range(16)
-        self.heatmap_func = heatmap_func if heatmap_func else lambda outputs: outputs[1]
+        self.heatmap_func = heatmap_func if heatmap_func else lambda outputs: outputs
         self.acc_thresh = acc_thresh
         self.niter = niter
         self.mean = fv.ifnone(mean, self.niter > 1)
@@ -316,7 +316,7 @@ def _pose_flip_lr(x):
 pose_flip_lr = TfmPixel(_pose_flip_lr)
 
 
-def get_data(root, size, bs=64, stats=lip_utils.stats,
+def get_data(root, size, bs=64, stats=lip_utils.stats, padding_mode='zeros',
              max_rotate: float = 10., max_zoom: float = 1.1, max_lighting: float = 0.2,
              max_warp: float = 0.2, p_affine: float = 0.75, p_lighting: float = 0.75):
     t = fv.get_transforms(do_flip=False, max_rotate=max_rotate, max_zoom=max_zoom, max_lighting=max_lighting,
@@ -327,7 +327,7 @@ def get_data(root, size, bs=64, stats=lip_utils.stats,
             .filter_by_func(pose_label.filter)
             .split_by_folder('train_images', 'val_images')
             .label_from_func(pose_label)
-            .transform(t, tfm_y=True, size=size, resize_method=fv.ResizeMethod.PAD, padding_mode='zeros')
+            .transform(t, tfm_y=True, size=size, resize_method=fv.ResizeMethod.PAD, padding_mode=padding_mode)
             .databunch(bs=bs)
             .normalize(stats))
 
@@ -342,7 +342,7 @@ class RecurrentLoss:
 
     def __call__(self, outputs, targets):
         targets = targets.repeat(1, self.r, 1)
-        return pose_ce_loss(outputs[1], targets)
+        return pose_ce_loss(outputs, targets)
 
 
 nets = {

@@ -245,6 +245,9 @@ class BaseInstructor(ABC):
         pass
 
     def on_forward_end(self, bu_out, td_out):
+        if bu_out is None:
+            return td_out
+
         return bu_out, td_out
 
 
