@@ -172,7 +172,7 @@ class PoseItemList(ImageList):
             z.visible = y.visible
 
         title = 'Ground truth/Predictions'
-        axs = plt.subplots(len(xs), 2, imgsize=imgsize, figsize=figsize, title=title, weight='bold', size=14)
+        axs = fv.subplots(len(xs), 2, imgsize=imgsize, figsize=figsize, title=title, weight='bold', size=14)
         for i, (x, y, z) in enumerate(zip(xs, ys, zs)):
             try:
                 is_wrong = y.get_wrong(z)
