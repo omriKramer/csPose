@@ -116,6 +116,21 @@ class Pose(ImagePoints):
         self.visible = self.visible[self.switch_on_lr_flip]
         return self
 
+    def get_wrong(self, pred):
+        data = self.data
+        is_vis = data[:, 2]
+        if not is_vis[8:10].bool().all():
+            raise ValueError('Missing Head')
+
+        gt = data[:, :2]
+        hs = torch.norm(gt[8] - gt[9])
+        thresh = hs / 2
+
+        pred = pred.data[:, :2]
+        distances = torch.norm(pred - gt, dim=1)
+        is_wrong = distances >= thresh
+        return is_wrong
+
 
 class PoseProcessor(fv.PreProcessor):
 
@@ -155,7 +170,18 @@ class PoseItemList(ImageList):
     def show_xyzs(self, xs, ys, zs, imgsize: int = 4, figsize: Optional[Tuple[int, int]] = None, **kwargs):
         for y, z in zip(ys, zs):
             z.visible = y.visible
-        super().show_xyzs(xs, ys, zs, imgsize, figsize, **kwargs)
+
+        title = 'Ground truth/Predictions'
+        axs = plt.subplots(len(xs), 2, imgsize=imgsize, figsize=figsize, title=title, weight='bold', size=14)
+        for i, (x, y, z) in enumerate(zip(xs, ys, zs)):
+            try:
+                is_wrong = y.get_wrong(z)
+                colors = ['r' if w else 'g' for w in is_wrong]
+            except ValueError:
+                colors = 'b'
+
+            x.show(ax=axs[i, 0], y=y, plot_lines=False, colors=colors, **kwargs)
+            x.show(ax=axs[i, 1], y=z, plot_lines=False, colors=colors, **kwargs)
 
 
 def pose_ce_loss(output, targets):
