@@ -104,7 +104,7 @@ class Pose(ImagePoints):
         pnt = data[:, :2]
         visible = data[:, 2]
         pnt = scale_flow(FlowField(self.size, pnt), to_unit=False).flow.flip(1)
-        lip_utils.plot_joaint(ax, pnt, visible, annotate=annotate, plot_lines=plot_lines, colors=colors)
+        lip_utils.plot_joint(ax, pnt, visible, annotate=annotate, plot_lines=plot_lines, colors=colors)
         if hide_axis:
             ax.axis('off')
         if title:
