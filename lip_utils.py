@@ -69,6 +69,8 @@ line_colors = np.array([(255, 0, 0), (255, 0, 0),
 def plot_joint(ax, joints, visible, annotate=False, plot_lines=True, colors='r'):
     xs = [j[0].item() for j, v in zip(joints, visible) if v]
     ys = [j[1].item() for j, v in zip(joints, visible) if v]
+    if isinstance(colors, list):
+        colors = [color for color, v in zip(colors, visible) if v]
 
     params = {'s': 20, 'marker': '.', 'c': colors}
     ax.scatter(xs, ys, **params)
