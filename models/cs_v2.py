@@ -1,6 +1,6 @@
 import itertools
 from abc import ABC
-from typing import Callable, Tuple, Any, Union, List
+from typing import Callable, Tuple, Any, List
 
 import fastai.vision as fv
 import numpy as np
@@ -112,9 +112,9 @@ class TDHead(nn.Sequential):
 
 
 class CounterStream(nn.Module):
-    def __init__(self, bu, instructor, td_c=1, bu_c=0, detach=False, td_detach=None, td_laterals=True,
-                 add_td_out=False, detach_td_out=True,
-                 embedding=fv.embedding, img_size: Tuple[int, int] = (256, 256), lateral=laterals.conv_add_lateral):
+    def __init__(self, bu, instructor, td_c=1, bu_c=0, lateral=laterals.conv_add_lateral,
+                 td_out_lateral=None, embedding=fv.embedding,
+                 img_size: Tuple[int, int] = (256, 256), bu_lateral=None, td_lateral=None):
         super().__init__()
         # first few layers are not in a block, we group all layers up through MaxPool to a single block
         concat_idx = 4
@@ -123,15 +123,16 @@ class CounterStream(nn.Module):
         bu = [bu[:concat_idx]] + list(itertools.chain(*bu[concat_idx:]))
         bu = nn.Sequential(*bu)
 
-        szs = fv.learner.model_sizes(bu, img_size)
-        td_szs = list(reversed(szs))
-        td = []
         if isinstance(bu[1], torchvision.models.resnet.BasicBlock):
             td_block = TDBasicBlock
         elif isinstance(bu[1], torchvision.models.resnet.Bottleneck):
             td_block = TDBottleNeck
         else:
             raise ValueError
+
+        szs = fv.learner.model_sizes(bu, img_size)
+        td_szs = list(reversed(szs))
+        td = []
         for sz_in, sz_out in zip(td_szs, td_szs[1:]):
             upsample = None
             if sz_in[-1] != sz_out[-1]:
@@ -145,17 +146,20 @@ class CounterStream(nn.Module):
 
         td_layered = self._group_td(td)
         self.td = nn.Sequential(*td_layered, TDHead(td_szs[-1][1], td_c))
-
         channels = [s[1] for s in szs]
         td.append(self.td[-1])
-        self.laterals = laterals.create_laterals(lateral, bu[:-1], td[1:], channels[:-1], detach=detach)
-        if td_laterals:
-            td_detach = td_detach if td_detach is not None else detach
-            bu_laterals = laterals.create_laterals(lateral, td[:-1], bu[1:], reversed(channels[:-1]), detach=td_detach)
-            self.laterals.extend(bu_laterals)
 
-        if add_td_out:
-            hm_lat = laterals.heatmap_add_lateral(self.td[-1], self.bu_body[0], td_c, channels[0], detach=detach_td_out)
+        if not bu_lateral:
+            bu_lateral = lateral
+        self.laterals = laterals.create_laterals(bu_lateral, bu[:-1], td[1:], channels[:-1])
+
+        if not td_lateral:
+            td_lateral = lateral
+        td_laterals = laterals.create_laterals(td_lateral, td[:-1], bu[1:], reversed(channels[:-1]))
+        self.laterals.extend(td_laterals)
+
+        if td_out_lateral:
+            hm_lat = td_out_lateral(self.td[-1], self.bu_body[0], td_c, channels[0])
             self.laterals.append(hm_lat)
 
         self.emb = embedding(instructor.n_inst, channels[-1]) if embedding else None
@@ -203,16 +207,15 @@ class CounterStream(nn.Module):
         return self.instructor.on_forward_end(bu_out, td_out)
 
 
-def cs_learner(data: fv.DataBunch, arch: Callable, instructor, td_c=1, bu_c=0, td_laterals=True, embedding=fv.embedding,
-               detach=False, td_detach=None, lateral=laterals.conv_add_lateral, add_td_out=False, detach_td_out=True,
-               pretrained: bool = True, cut: Union[int, Callable] = None, **learn_kwargs: Any) -> fv.Learner:
+def cs_learner(data: fv.DataBunch, arch: Callable, instructor, td_c=1, bu_c=0, embedding=fv.embedding,
+               lateral=laterals.conv_add_lateral, td_out_lateral=None,
+               pretrained: bool = True, **learn_kwargs: Any) -> fv.Learner:
     """Build Counter Stream learner from `data` and `arch`."""
-    body = fv.create_body(arch, pretrained, cut)
+    body = fv.create_body(arch, pretrained)
     size = next(iter(data.train_dl))[0].shape[-2:]
     model = fv.to_device(
         CounterStream(body, instructor, td_c=td_c, bu_c=bu_c, img_size=size, embedding=embedding,
-                      td_laterals=td_laterals, detach=detach, td_detach=td_detach, lateral=lateral,
-                      add_td_out=add_td_out, detach_td_out=detach_td_out),
+                      lateral=lateral, td_out_lateral=td_out_lateral),
         data.device)
     learn = fv.Learner(data, model, **learn_kwargs)
     split = len(learn.model.laterals) // 2 + 1
