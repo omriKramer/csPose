@@ -27,7 +27,7 @@ class Lateral(nn.Module):
         out = self.op(self.origin_out, inp)
         return out
 
-    def __del__(self):
+    def remove(self):
         self.origin_hook.remove()
         self.target_hook.remove()
 
