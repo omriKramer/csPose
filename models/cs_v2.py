@@ -159,8 +159,9 @@ class CounterStream(nn.Module):
         self.laterals.extend(td_laterals)
 
         if td_out_lateral:
+            self.laterals[-1].remove()
             hm_lat = td_out_lateral(self.td[-1], self.bu_body[0], td_c, channels[0])
-            self.laterals.append(hm_lat)
+            self.laterals[-1] = hm_lat
 
         self.emb = embedding(instructor.n_inst, channels[-1]) if embedding else None
         self.bu_head = fv.create_head(channels[-1] * 2, bu_c) if bu_c else None
