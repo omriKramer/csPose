@@ -44,6 +44,19 @@ def conv_add_lateral(origin_layer, target_layer, channels, detach=False, ks=3):
     return Lateral(origin_layer, target_layer, op, detach=detach)
 
 
+class LateralSoftAddOp(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        self.alpha = nn.Parameter(torch.zeros(channels), requires_grad=True)
+
+    def forward(self, origin_out, target_input):
+        return target_input + self.alpha[:, None, None] * origin_out
+
+
+def soft_add_lateral(origin_layer, target_layer, channels):
+    return Lateral(origin_layer, target_layer, LateralSoftAddOp(channels))
+
+
 class LateralConvMulOP(nn.Module):
     def __init__(self, channels, ks):
         super().__init__()
