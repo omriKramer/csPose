@@ -43,11 +43,6 @@ def databunch():
 
 
 @pytest.fixture(scope="module")
-def single_instructor():
-    return cs.SingleInstruction()
-
-
-@pytest.fixture(scope="module")
 def learn(databunch, arch, bu_c, single_instructor):
     return cs.cs_learner(databunch, arch, single_instructor, td_c=16, bu_c=bu_c)
 
@@ -202,3 +197,11 @@ def test_batchnorm():
     loss.backward()
     opt.step()
     assert (m.weight == weight).all()
+
+
+def test_double_unet(bu):
+    nk = 16
+    img_size = 128, 128
+    dunet = cs.DoubleUnet(bu)
+    out = dunet(torch.rand(2, 3, *img_size))
+    assert len(out) == 2

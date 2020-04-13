@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import torchvision
 from torch import nn
 
-from . import laterals
+from . import laterals, layers
 
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
@@ -42,6 +42,19 @@ def out_channels(m: nn.Module):
             return c
 
     return None
+
+
+def _group_td(td, bu):
+    """group TDBlocks to mirror the layer groups in the BU network"""
+    layer_len = [len(layer) for layer in bu]
+    layer_len.reverse()
+    end_idx = np.cumsum(layer_len)
+    start_idx = np.roll(end_idx, 1)
+    start_idx[0] = 0
+    td_layered = []
+    for start, end in zip(start_idx, end_idx):
+        td_layered.append(nn.Sequential(*td[start:end]))
+    return td_layered
 
 
 class TDBlock(nn.Module):
@@ -111,9 +124,128 @@ class TDHead(nn.Sequential):
                          fv.conv2d(fi, fn, ks=1))
 
 
+class UnetBlock(nn.Module):
+
+    def __init__(self, ni, nf, upsample=False):
+        super().__init__()
+        self.conv1 = conv3x3(ni, ni)
+        self.bn1 = nn.BatchNorm2d(ni)
+        self.conv2 = conv3x3(ni, nf)
+        self.bn2 = nn.BatchNorm2d(nf)
+        self.relu = nn.ReLU(inplace=True)
+        self.upsample = upsample
+
+    def forward(self, x):
+        out = self.relu(self.bn1(self.conv1(x)))
+        if self.upsample:
+            out = F.interpolate(out, scale_factor=2, mode='nearest')
+        out = self.relu(self.bn2(self.conv2(out)))
+        return out
+
+
+def _bu_laterals_idx(bu):
+    lengths = [len(layer) for layer in bu]
+    lengths.reverse()
+    idx = [0] + list(np.cumsum(lengths))[:-1]
+    return set(idx)
+
+
+class DoubleUnet(nn.Module):
+
+    def __init__(self, bu, iterations=2, td_c=16, img_size=(256, 256)):
+        super().__init__()
+        concat_idx = 4
+        self.fe = bu[:concat_idx]
+        self.bu = nn.Sequential(*bu[concat_idx:])
+        self.iterations = iterations
+
+        bu_flat = [bu[:concat_idx]] + list(itertools.chain(*bu[concat_idx:]))
+        bu_flat = nn.Sequential(*bu_flat)
+        szs = fv.learner.model_sizes(bu_flat, img_size)
+        ni = szs[-1][1]
+        self.middle_conv = nn.Sequential(
+            layers.conv_layer(ni, ni * 2),
+            layers.conv_layer(ni * 2, ni)
+        )
+
+        szs.reverse()
+        td = []
+        lat_idx = _bu_laterals_idx(self.bu)
+        for i, (szs_in, szs_out) in enumerate(zip(szs, szs[1:])):
+            c_in = szs_in[1]
+            if i in lat_idx:
+                c_in *= 2
+
+            upsample = szs_in[-1] != szs_out[-1]
+            td.append(UnetBlock(c_in, szs_out[1], upsample=upsample))
+
+        self.td = nn.Sequential(*_group_td(td, self.bu))
+        c = szs[-1][1]
+        self.td_head = nn.Sequential(
+            layers.conv_layer(c, c),
+            conv1x1(c, td_c)
+        )
+
+        for layer in self.bu:
+            double_res_block(layer[0])
+
+        self.bu_laterals = []
+        self.td_laterals = []
+        for bu_l, td_l in zip(self.bu, self.td[::-1]):
+            self.bu_laterals.append(laterals.DenseLateral(bu_l, td_l))
+            self.td_laterals.append(laterals.DenseLateral(td_l, bu_l))
+
+    def forward(self, img):
+        img_features = self.fe(img)
+        out = []
+        for _ in range(self.iterations):
+            x = self.bu(img_features)
+            x = self.middle_conv(x)
+            x = self.td(x)
+            out.append(self.td_head(x))
+
+        return out
+
+
+def double_unet_leaner(data: fv.DataBunch, arch: Callable, iterations=2, td_c=16,
+                       **learn_kwargs: Any) -> fv.Learner:
+    """Build Counter Stream learner from `data` and `arch`."""
+    body = fv.create_body(arch, pretrained=False)
+    size = next(iter(data.train_dl))[0].shape[-2:]
+    model = DoubleUnet(body, iterations=iterations, td_c=td_c, img_size=size)
+    model = fv.to_device(model, data.device)
+    learn = fv.Learner(data, model, **learn_kwargs)
+    fv.apply_init(learn.model, nn.init.kaiming_normal_)
+    return learn
+
+
+def double_conv(conv):
+    in_c, out_c, ks, s, p = conv.in_channels, conv.out_channels, conv.kernel_size, conv.stride, conv.padding
+    return nn.Conv2d(in_c * 2, out_c, kernel_size=ks, stride=s, padding=p, bias=False)
+
+
+def double_res_block(block):
+    block.conv1 = double_conv(block.conv1)
+    if block.downsample:
+        block.downsample[0] = double_conv(block.downsample[0])
+    else:
+        c_in = block.conv1.in_channels
+        try:
+            c_out = block.bn3.num_features
+        except AttributeError:
+            c_out = block.bn2.num_features
+
+        if c_in != c_out:
+            block.downsample = nn.Sequential(
+                nn.Conv2d(c_in, c_out, kernel_size=1, bias=False),
+                nn.BatchNorm2d(c_out)
+            )
+
+
 class CounterStream(nn.Module):
-    def __init__(self, bu, instructor, td_c=1, bu_c=0, lateral=laterals.conv_add_lateral,
-                 td_out_lateral=None, embedding=fv.embedding,
+
+    def __init__(self, bu, instructor, td_c=1, bu_c=0, lateral=laterals.ConvAddLateral,
+                 td_out_lateral=None, embedding=fv.embedding, lateral_on='block',
                  img_size: Tuple[int, int] = (256, 256), bu_lateral=None, td_lateral=None):
         super().__init__()
         # first few layers are not in a block, we group all layers up through MaxPool to a single block
@@ -144,17 +276,21 @@ class CounterStream(nn.Module):
                 upsample = fv.conv_layer(sz_in[1], sz_out[1], ks=1, use_activ=False)
             td.append(td_block(sz_in[1], sz_out[1], upsample=upsample))
 
-        td_layered = self._group_td(td)
+        td_layered = _group_td(td, self.bu_body)
         self.td = nn.Sequential(*td_layered, TDHead(td_szs[-1][1], td_c))
         channels = [s[1] for s in szs]
         td.append(self.td[-1])
 
         if not bu_lateral:
             bu_lateral = lateral
+        if lateral_on == 'layer':
+            bu = [self.ifn] + [layer for layer in self.bu_body]
         self.laterals = laterals.create_laterals(bu_lateral, bu[:-1], td[1:], channels[:-1])
 
         if not td_lateral:
             td_lateral = lateral
+        if lateral_on == 'layer':
+            td = self.td
         td_laterals = laterals.create_laterals(td_lateral, td[:-1], bu[1:], reversed(channels[:-1]))
         self.laterals.extend(td_laterals)
 
@@ -167,23 +303,6 @@ class CounterStream(nn.Module):
         self.bu_head = fv.create_head(channels[-1] * 2, bu_c) if bu_c else None
         self.instructor = instructor
         self.instructor.on_init_end(self)
-
-    def _group_td(self, td):
-        """group TDBlocks to mirror the layer groups in the BU network"""
-        layer_len = [len(layer) for layer in self.bu_body]
-        layer_len.reverse()
-        end_idx = np.cumsum(layer_len)
-        start_idx = np.roll(end_idx, 1)
-        start_idx[0] = 0
-        td_layered = []
-        for start, end in zip(start_idx, end_idx):
-            td_layered.append(nn.Sequential(*td[start:end]))
-        return td_layered
-
-    def clear(self):
-        for lateral in self.laterals:
-            del lateral.origin_out
-            lateral.origin_out = None
 
     def forward(self, img):
         self.instructor.on_forward_begin(self)
@@ -209,7 +328,7 @@ class CounterStream(nn.Module):
 
 
 def cs_learner(data: fv.DataBunch, arch: Callable, instructor, td_c=1, bu_c=0, embedding=fv.embedding,
-               lateral=laterals.conv_add_lateral, td_out_lateral=None,
+               lateral=laterals.ConvAddLateral, td_out_lateral=None,
                pretrained: bool = True, **learn_kwargs: Any) -> fv.Learner:
     """Build Counter Stream learner from `data` and `arch`."""
     body = fv.create_body(arch, pretrained)
@@ -234,7 +353,6 @@ class BaseInstructor(ABC):
 
     def on_forward_begin(self, model):
         self.i = 0
-        model.clear()
 
     def on_bu_body_begin(self, model):
         raise NotImplementedError
