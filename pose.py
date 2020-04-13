@@ -369,6 +369,9 @@ class RecurrentLoss:
         self.r = repeats
 
     def __call__(self, outputs, targets):
+        if isinstance(outputs, list):
+            outputs = torch.cat(outputs, dim=1)
+
         targets = targets.repeat(1, self.r, 1)
         return pose_ce_loss(outputs, targets)
 
