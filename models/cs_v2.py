@@ -152,12 +152,13 @@ def _bu_laterals_idx(bu):
 
 class DoubleUnet(nn.Module):
 
-    def __init__(self, bu, iterations=2, td_c=16, img_size=(256, 256)):
+    def __init__(self, bu, iterations=2, td_c=16, img_size=(256, 256), weighted_sum=False):
         super().__init__()
         concat_idx = 4
         self.fe = bu[:concat_idx]
         self.bu = nn.Sequential(*bu[concat_idx:])
         self.iterations = iterations
+        self.weights = torch.ones()
 
         bu_flat = [bu[:concat_idx]] + list(itertools.chain(*bu[concat_idx:]))
         bu_flat = nn.Sequential(*bu_flat)

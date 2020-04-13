@@ -28,7 +28,7 @@ class Lateral(nn.Module):
 
 
 class ConvAddLateral(Lateral):
-    def __init__(self, origin_layer, target_layer, channels, ks, detach=False):
+    def __init__(self, origin_layer, target_layer, channels, ks=3, detach=False):
         super().__init__(origin_layer, target_layer, detach)
         self.conv = conv_layer(channels, channels, ks=ks)
 
