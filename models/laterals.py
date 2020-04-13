@@ -10,19 +10,17 @@ class Lateral(nn.Module):
     def __init__(self, origin_layer: nn.Module, target_layer: nn.Module, detach=False):
         super().__init__()
         self.detach = detach
-        self._origin_out = None
+        self.origin_out = None
         self.origin_hook = origin_layer.register_forward_hook(self.origin_forward_hook)
         self.target_hook = target_layer.register_forward_pre_hook(self.target_forward_pre_hook)
 
     def origin_forward_hook(self, module, inp, output):
         if self.detach:
             output = output.detach()
-        self._origin_out = output
+        self.origin_out = output
 
     def target_forward_pre_hook(self, module, inp):
-        origin_out = self._origin_out
-        self._origin_out = None
-        return self(origin_out, inp[0])
+        return self(self.origin_out, inp[0])
 
     def remove(self):
         self.origin_hook.remove()

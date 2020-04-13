@@ -195,6 +195,11 @@ class DoubleUnet(nn.Module):
             self.bu_laterals.append(laterals.DenseLateral(bu_l, td_l))
             self.td_laterals.append(laterals.DenseLateral(td_l, bu_l))
 
+    def clear(self):
+        for lateral in itertools.chain(self.bu_laterals, self.td_laterals):
+            del lateral.origin_out
+            lateral.origin_out = None
+
     def forward(self, img):
         img_features = self.fe(img)
         out = []
@@ -204,6 +209,7 @@ class DoubleUnet(nn.Module):
             x = self.td(x)
             out.append(self.td_head(x))
 
+        self.clear()
         return out
 
 
@@ -304,6 +310,11 @@ class CounterStream(nn.Module):
         self.instructor = instructor
         self.instructor.on_init_end(self)
 
+    def clear(self):
+        for lateral in self.laterals:
+            del lateral.origin_out
+            lateral.origin_out = None
+
     def forward(self, img):
         self.instructor.on_forward_begin(self)
         img_features = self.ifn(img)
@@ -353,6 +364,7 @@ class BaseInstructor(ABC):
 
     def on_forward_begin(self, model):
         self.i = 0
+        model.clear()
 
     def on_bu_body_begin(self, model):
         raise NotImplementedError
