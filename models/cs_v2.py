@@ -207,8 +207,8 @@ class DoubleUnet(nn.Module):
         return out
 
 
-def double_unet_leaner(data: fv.DataBunch, arch: Callable, iterations=2, td_c=16,
-                       **learn_kwargs: Any) -> fv.Learner:
+def double_unet_learner(data: fv.DataBunch, arch: Callable, iterations=2, td_c=16,
+                        **learn_kwargs: Any) -> fv.Learner:
     """Build Counter Stream learner from `data` and `arch`."""
     body = fv.create_body(arch, pretrained=False)
     size = next(iter(data.train_dl))[0].shape[-2:]
