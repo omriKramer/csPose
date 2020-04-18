@@ -290,16 +290,15 @@ class CounterStream(nn.Module):
 
         if not bu_lateral:
             bu_lateral = lateral
-        if lateral_on == 'layer':
-            bu = [self.ifn] + [layer for layer in self.bu_body]
-        self.laterals = laterals.create_laterals(bu_lateral, bu[:-1], td[1:], channels[:-1])
-
         if not td_lateral:
             td_lateral = lateral
         if lateral_on == 'layer':
+            bu = [self.ifn] + [layer for layer in self.bu_body]
             td = self.td
+
+        bu_laterals = laterals.create_laterals(bu_lateral, bu[:-1], td[1:], channels[:-1])
         td_laterals = laterals.create_laterals(td_lateral, td[:-1], bu[1:], reversed(channels[:-1]))
-        self.laterals.extend(td_laterals)
+        self.laterals = nn.ModuleList(*bu_laterals, *td_laterals)
 
         if td_out_lateral:
             self.laterals[-1].remove()
@@ -336,6 +335,7 @@ class CounterStream(nn.Module):
 
         bu_out = torch.cat(bu_out, dim=1) if bu_out else None
         td_out = torch.cat(td_out, dim=1)
+        self.clear()
         return self.instructor.on_forward_end(bu_out, td_out)
 
 
@@ -365,7 +365,6 @@ class BaseInstructor(ABC):
 
     def on_forward_begin(self, model):
         self.i = 0
-        model.clear()
 
     def on_bu_body_begin(self, model):
         raise NotImplementedError
