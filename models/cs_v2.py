@@ -59,7 +59,7 @@ def _group_td(td, bu):
 
 class TDBlock(nn.Module):
 
-    def __init__(self, upsample, mode='nearest'):
+    def __init__(self, upsample, mode='bilinear'):
         super().__init__()
         self.upsample = upsample
         self.mode = mode
@@ -138,7 +138,7 @@ class UnetBlock(nn.Module):
     def forward(self, x):
         out = self.relu(self.bn1(self.conv1(x)))
         if self.upsample:
-            out = F.interpolate(out, scale_factor=2, mode='nearest')
+            out = F.interpolate(out, scale_factor=2, mode='bilinear')
         out = self.relu(self.bn2(self.conv2(out)))
         return out
 
@@ -252,7 +252,7 @@ def double_res_block(block):
 class CounterStream(nn.Module):
 
     def __init__(self, bu, instructor, td_c=1, bu_c=0, lateral=laterals.ConvAddLateral,
-                 td_out_lateral=None, embedding=fv.embedding, lateral_on='block',
+                 td_out_lateral=None, embedding=fv.embedding, lateral_on='block', ppm=False,
                  img_size: Tuple[int, int] = (256, 256), bu_lateral=None, td_lateral=None):
         super().__init__()
         # first few layers are not in a block, we group all layers up through MaxPool to a single block
@@ -276,7 +276,7 @@ class CounterStream(nn.Module):
             upsample = None
             if sz_in[-1] != sz_out[-1]:
                 upsample = nn.Sequential(
-                    fv.Lambda(lambda x: F.interpolate(x, scale_factor=2, mode='nearest')),
+                    fv.Lambda(lambda x: F.interpolate(x, scale_factor=2, mode='bilinear')),
                     fv.conv_layer(sz_in[1], sz_out[1], ks=1, use_activ=False)
                 )
             elif sz_in[1] != sz_out[1]:
@@ -296,14 +296,16 @@ class CounterStream(nn.Module):
             bu = [self.ifn] + [layer for layer in self.bu_body]
             td = self.td
 
-        bu_laterals = laterals.create_laterals(bu_lateral, bu[:-1], td[1:], channels[:-1])
-        td_laterals = laterals.create_laterals(td_lateral, td[:-1], bu[1:], reversed(channels[:-1]))
-        self.laterals = nn.ModuleList(*bu_laterals, *td_laterals)
+        self.bu_laterals = laterals.create_laterals(bu_lateral, bu[:-1], td[1:], channels[:-1])
+        self.td_laterals = laterals.create_laterals(td_lateral, td[:-1], bu[1:], reversed(channels[:-1]))
 
         if td_out_lateral:
-            self.laterals[-1].remove()
+            self.td_laterals[-1].remove()
             hm_lat = td_out_lateral(self.td[-1], self.bu_body[0], td_c, channels[0])
-            self.laterals[-1] = hm_lat
+            self.td_laterals[-1] = hm_lat
+
+        if ppm:
+            self.bu_body = nn.Sequential(*self.bu_body, layers.PPM(channels[-1]))
 
         self.emb = embedding(instructor.n_inst, channels[-1]) if embedding else None
         self.bu_head = fv.create_head(channels[-1] * 2, bu_c) if bu_c else None
@@ -311,7 +313,7 @@ class CounterStream(nn.Module):
         self.instructor.on_init_end(self)
 
     def clear(self):
-        for lateral in self.laterals:
+        for lateral in itertools.chain(self.bu_laterals, self.td_laterals):
             del lateral.origin_out
             lateral.origin_out = None
 
@@ -340,14 +342,14 @@ class CounterStream(nn.Module):
 
 
 def cs_learner(data: fv.DataBunch, arch: Callable, instructor, td_c=1, bu_c=0, embedding=fv.embedding,
-               lateral=laterals.ConvAddLateral, td_out_lateral=None,
+               lateral=laterals.ConvAddLateral, td_out_lateral=None, ppm=False,
                pretrained: bool = True, **learn_kwargs: Any) -> fv.Learner:
     """Build Counter Stream learner from `data` and `arch`."""
     body = fv.create_body(arch, pretrained)
     size = next(iter(data.train_dl))[0].shape[-2:]
     model = fv.to_device(
         CounterStream(body, instructor, td_c=td_c, bu_c=bu_c, img_size=size, embedding=embedding,
-                      lateral=lateral, td_out_lateral=td_out_lateral),
+                      lateral=lateral, td_out_lateral=td_out_lateral, ppm=ppm),
         data.device)
     learn = fv.Learner(data, model, **learn_kwargs)
     split = len(learn.model.laterals) // 2 + 1

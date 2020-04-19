@@ -7,7 +7,6 @@ import torchvision
 from torch.utils.data import TensorDataset
 
 import models.cs_v2 as cs
-import pose
 
 
 @pytest.fixture(scope="module", params=[fv.models.resnet18, fv.models.resnet34])
@@ -47,13 +46,13 @@ def learn(databunch, arch, bu_c, single_instructor):
     return cs.cs_learner(databunch, arch, single_instructor, td_c=16, bu_c=bu_c)
 
 
-def test_counter_stream_init(bu, single_instructor):
+def test_counter_stream_init(bu):
     nk = 16
     img_size = 128, 128
-    cs_net = cs.CounterStream(bu, single_instructor, td_c=nk, bu_c=nk, img_size=img_size)
+    cs_net = cs.CounterStream(bu, cs.RecurrentInstructor(1), td_c=nk, embedding=None, img_size=img_size, ppm=True)
     cs_net.eval()
     img = torch.rand(1, 3, *img_size)
-    bu_out, td_out = cs_net(img)
+    td_out = cs_net(img)
     td_out_size = 1, nk, img_size[0] / 4, img_size[1] / 4
     assert td_out.shape == td_out_size
 
@@ -85,22 +84,6 @@ def first_conv(module):
 def assert_params(m, params):
     for (name, p1), p2 in zip(m.named_parameters(), params):
         assert (p1 == p2).all()
-
-
-def disable(module):
-    if isinstance(module, torch.nn.BatchNorm2d):
-        module.eval()
-
-
-class FreezeBn(fv.Callback):
-    def __init__(self, learner):
-        self.learn = learner
-
-    def on_epoch_begin(self, **kwargs):
-        self.learn.model.bu_body.apply(disable)
-        self.learn.model.td.apply(disable)
-        self.learn.model.laterals[:17].apply(disable)
-
 
 class HookOutputs:
     def __init__(self, model):
@@ -153,50 +136,6 @@ def freeze_except_td_laterals(model):
         disable_grads(l)
 
     disable_grads(model.laterals[:17])
-
-
-def test_laterals_freeze(databunch):
-    learn = cs.cs_learner(databunch, fv.models.resnet34, cs.RecurrentInstructor(2), td_c=16, embedding=None,
-                          loss_func=pose.RecurrentLoss(2), callback_fns=[FreezeBn])
-    bu_hook = HookOutputs(learn.model.bu_body)
-    td_hook = HookOutputs(learn.model.td)
-
-    weight = learn.model.bu_body[0][1].weight.detach().clone()
-    learn.validate()
-    assert (learn.model.bu_body[0][1].weight == weight).all()
-
-    bu_n = len(bu_hook.outputs) // 2
-    td_n = len(td_hook.outputs) // 2
-    bu_before = bu_hook.outputs[:bu_n]
-    td_before = td_hook.outputs[:td_n]
-    bu_inp = bu_hook.inputs[:bu_n]
-    td_inp = td_hook.inputs[:td_n]
-    bu_weight = bu_hook.params[:bu_n]
-    td_weight = td_hook.params[:td_n]
-
-    bu_hook.clear()
-    td_hook.clear()
-    freeze_except_td_laterals(learn.model)
-    learn.fit(1, lr=(0, 0, 0, 2))
-    assert (learn.model.bu_body[0][1].weight == weight).all()
-    bu_ha = HookAndAssert(learn.model.bu_body, bu_before, bu_inp, bu_weight)
-    td_ha = HookAndAssert(learn.model.td, td_before, td_inp, td_weight)
-    learn.validate()
-
-
-def test_batchnorm():
-    m = torch.nn.BatchNorm2d(3)
-    m.eval()
-    weight = m.weight.detach().clone()
-    input = torch.rand(4, 3, 12, 12)
-    target = torch.rand(4, 3, 12, 12)
-    m.weight.requires_grad = False
-    opt = torch.optim.SGD([p for p in m.parameters()], lr=2)
-    opt.zero_grad()
-    loss = torch.nn.functional.mse_loss(m(input), target)
-    loss.backward()
-    opt.step()
-    assert (m.weight == weight).all()
 
 
 def test_double_unet(bu):

@@ -109,3 +109,29 @@ def conv1d(ni: int, no: int, ks: int = 1, stride: int = 1, padding: int = 0, bia
     if bias:
         conv.bias.data.zero_()
     return fv.spectral_norm(conv)
+
+
+class PPMHead(nn.Sequential):
+
+    def __init__(self, ni, nf, bin_size):
+        super().__init__(
+            nn.AdaptiveAvgPool2d(bin_size),
+            *conv_layer(ni, nf)
+        )
+
+
+class PPM(nn.Module):
+
+    def __init__(self, ni, bins=(1, 2, 3, 6)):
+        super().__init__()
+        heads = [PPMHead(ni, ni // len(bins), b) for b in bins]
+        self.ppm_heads = nn.ModuleList(heads)
+        self.conv = conv_layer(ni, ni)
+
+    def forward(self, x):
+        original_size = x.shape[2:]
+        out = [head(x) for head in self.ppm_heads]
+        out = [F.interpolate(o, size=original_size, mode='bilinear') for o in out]
+        out = torch.cat(out, dim=1)
+        out = self.conv(out)
+        return out
