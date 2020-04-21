@@ -213,6 +213,42 @@ def scale_targets(targets, size):
     return targets
 
 
+def calc_pckh(heatmaps, targets):
+    preds = output_to_scaled_pred(heatmaps)
+    is_visible = targets[..., 2] > 0
+    gt = targets[..., :2]
+
+    has_head = (is_visible[:, 8:10]).all(1)
+    preds = preds[has_head]
+    gt = gt[has_head]
+    is_visible = is_visible[has_head]
+
+    head_sizes = torch.norm(gt[:, 8] - gt[:, 9], dim=1)
+    thresholds = (head_sizes / 2)
+
+    distances = torch.norm(preds - gt, dim=2)
+    is_correct = (distances < thresholds[:, None]) * is_visible
+
+    correct = is_correct.sum(dim=0)
+    total = is_visible(dim=0)
+
+    idx_pairs = [(8, 9), (12, 13), (11, 14), (10, 15), (2, 3), (1, 4), (0, 5)]
+    accuracy = correct / total
+    pckh = [(accuracy[:, idx0] + accuracy[:, idx1]) / 2
+            for idx0, idx1
+            in idx_pairs]
+
+    # add upper body and total
+    pckh.extend([
+        correct[:, 8:].sum(dim=1) / total[:, 8:].sum(dim=1),
+        correct[:, Pckh.all_idx].sum(dim=1) / total[:, Pckh.all_idx].sum(dim=1)
+    ])
+
+    pckh = [o.item() for o in pckh]
+    results = dict(zip(CATEGORIES, pckh))
+    return results
+
+
 class Pckh(LearnerCallback):
     _order = -20  # Needs to run before the recorder
     all_idx = list(range(0, 6)) + list(range(8, 16))
