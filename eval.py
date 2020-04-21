@@ -14,7 +14,7 @@ def heatmap_to_preds(heatmap, add_visibility=True, offset=False):
     if offset:
         _, preds = heatmap.topk(2)
         y = (preds // w).to(float)
-        x = preds.reminder(w).to(float)
+        x = preds.remainder(w).to(float)
         y = y[..., 0] * 0.75 + y[..., 1] * 0.25
         x = x[..., 0] * 0.75 + x[..., 1] * 0.25
     else:
