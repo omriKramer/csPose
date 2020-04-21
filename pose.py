@@ -52,9 +52,9 @@ class LIPLabel:
         return True
 
 
-def output_to_scaled_pred(output):
+def output_to_scaled_pred(output, offset=False):
     h, w = output.shape[-2:]
-    pred = heatmap_to_preds(output, add_visibility=False).flip(-1).float()
+    pred = heatmap_to_preds(output, add_visibility=False, offset=offset).flip(-1).float()
     s = pred.new([h / 2, w / 2])[None, None]
     pred = pred / s - 1
     return pred
@@ -213,8 +213,8 @@ def scale_targets(targets, size):
     return targets
 
 
-def calc_pckh(heatmaps, targets):
-    preds = output_to_scaled_pred(heatmaps)
+def calc_pckh(heatmaps, targets, offset=False):
+    preds = output_to_scaled_pred(heatmaps, offset=offset)
     is_visible = targets[..., 2] > 0
     gt = targets[..., :2]
 
@@ -229,19 +229,19 @@ def calc_pckh(heatmaps, targets):
     distances = torch.norm(preds - gt, dim=2)
     is_correct = (distances < thresholds[:, None]) * is_visible
 
-    correct = is_correct.sum(dim=0)
-    total = is_visible(dim=0)
+    correct = is_correct.sum(dim=0).to(float)
+    total = is_visible.sum(dim=0).to(float)
 
     idx_pairs = [(8, 9), (12, 13), (11, 14), (10, 15), (2, 3), (1, 4), (0, 5)]
     accuracy = correct / total
-    pckh = [(accuracy[:, idx0] + accuracy[:, idx1]) / 2
+    pckh = [(accuracy[idx0] + accuracy[idx1]) / 2
             for idx0, idx1
             in idx_pairs]
 
     # add upper body and total
     pckh.extend([
-        correct[:, 8:].sum(dim=1) / total[:, 8:].sum(dim=1),
-        correct[:, Pckh.all_idx].sum(dim=1) / total[:, Pckh.all_idx].sum(dim=1)
+        correct[8:].sum() / total[8:].sum(),
+        correct[Pckh.all_idx].sum() / total[Pckh.all_idx].sum()
     ])
 
     pckh = [o.item() for o in pckh]
