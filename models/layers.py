@@ -131,7 +131,7 @@ class PPM(nn.Module):
     def forward(self, x):
         original_size = x.shape[2:]
         out = [head(x) for head in self.ppm_heads]
-        out = [F.interpolate(o, size=original_size, mode='bilinear') for o in out]
+        out = [F.interpolate(o, size=original_size, mode='bilinear', align_corners=False) for o in out]
         out = torch.cat(out, dim=1)
         out = self.conv(out)
         return out

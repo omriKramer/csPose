@@ -49,7 +49,8 @@ def learn(databunch, arch, bu_c, single_instructor):
 def test_counter_stream_init(bu):
     nk = 16
     img_size = 128, 128
-    cs_net = cs.CounterStream(bu, cs.RecurrentInstructor(1), td_c=nk, embedding=None, img_size=img_size, ppm=True)
+    instructor = cs.RecurrentInstructor(1)
+    cs_net = cs.CounterStream(bu, instructor, td_c=nk, embedding=None, img_size=img_size, ppm=True, fuse=True)
     cs_net.eval()
     img = torch.rand(1, 3, *img_size)
     td_out = cs_net(img)
@@ -84,6 +85,7 @@ def first_conv(module):
 def assert_params(m, params):
     for (name, p1), p2 in zip(m.named_parameters(), params):
         assert (p1 == p2).all()
+
 
 class HookOutputs:
     def __init__(self, model):

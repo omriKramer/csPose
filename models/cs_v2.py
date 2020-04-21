@@ -68,7 +68,7 @@ class TDBlock(nn.Module):
         if self.upsample:
             identity = self.upsample(identity)
             if x.shape[-1] != identity.shape[-1]:
-                x = F.interpolate(x, scale_factor=2, mode=self.mode)
+                x = F.interpolate(x, scale_factor=2, mode=self.mode, align_corners=False)
 
         return x, identity
 
@@ -120,8 +120,8 @@ class TDBottleNeck(TDBlock):
 
 class TDHead(nn.Sequential):
     def __init__(self, fi, fn):
-        super().__init__(fv.conv_layer(fi, fi),
-                         fv.conv2d(fi, fn, ks=1))
+        super().__init__(layers.conv_layer(fi, fi),
+                         nn.Conv2d(fi, fn, kernel_size=1, bias=True))
 
 
 class UnetBlock(nn.Module):
@@ -138,7 +138,7 @@ class UnetBlock(nn.Module):
     def forward(self, x):
         out = self.relu(self.bn1(self.conv1(x)))
         if self.upsample:
-            out = F.interpolate(out, scale_factor=2, mode='bilinear')
+            out = F.interpolate(out, scale_factor=2, mode='bilinear', align_corners=False)
         out = self.relu(self.bn2(self.conv2(out)))
         return out
 
@@ -249,10 +249,25 @@ def double_res_block(block):
             )
 
 
+class Fuse(nn.Module):
+
+    def __init__(self, m, channels, out_c):
+        super().__init__()
+        self.hooks = fv.callbacks.hook_outputs(m, detach=False)
+        self.fuse_conv = layers.conv_layer(sum(channels), out_c)
+
+    def forward(self, x):
+        size = x.shape[-2:]
+        stored = [F.interpolate(o, size=size, mode='bilinear', align_corners=False) for o in self.hooks.stored]
+        x = torch.cat([*stored, x], dim=1)
+        out = self.fuse_conv(x)
+        return out
+
+
 class CounterStream(nn.Module):
 
     def __init__(self, bu, instructor, td_c=1, bu_c=0, lateral=laterals.ConvAddLateral,
-                 td_out_lateral=None, embedding=fv.embedding, lateral_on='block', ppm=False,
+                 td_out_lateral=None, embedding=fv.embedding, lateral_on='block', ppm=False, fuse=False,
                  img_size: Tuple[int, int] = (256, 256), bu_lateral=None, td_lateral=None):
         super().__init__()
         # first few layers are not in a block, we group all layers up through MaxPool to a single block
@@ -276,7 +291,7 @@ class CounterStream(nn.Module):
             upsample = None
             if sz_in[-1] != sz_out[-1]:
                 upsample = nn.Sequential(
-                    fv.Lambda(lambda x: F.interpolate(x, scale_factor=2, mode='bilinear')),
+                    fv.Lambda(lambda x: F.interpolate(x, scale_factor=2, mode='bilinear', align_corners=False)),
                     fv.conv_layer(sz_in[1], sz_out[1], ks=1, use_activ=False)
                 )
             elif sz_in[1] != sz_out[1]:
@@ -284,8 +299,21 @@ class CounterStream(nn.Module):
             td.append(td_block(sz_in[1], sz_out[1], upsample=upsample))
 
         td_layered = _group_td(td, self.bu_body)
-        self.td = nn.Sequential(*td_layered, TDHead(td_szs[-1][1], td_c))
         channels = [s[1] for s in szs]
+
+        td_head = TDHead(channels[0], td_c)
+        if fuse:
+            td_channels = list(reversed(channels))
+            layers_c, i = [], 0
+            for layer in td_layered:
+                i += len(layer)
+                layers_c.append(td_channels[i])
+
+            fuse = Fuse(td_layered[:-1], layers_c, channels[0])
+            td_head = nn.Sequential(fuse, td_head)
+
+        self.td = nn.Sequential(*td_layered, td_head)
+
         td.append(self.td[-1])
 
         if not bu_lateral:
@@ -305,7 +333,7 @@ class CounterStream(nn.Module):
             self.td_laterals[-1] = hm_lat
 
         if ppm:
-            self.bu_body = nn.Sequential(*self.bu_body, layers.PPM(channels[-1]))
+            self.td = nn.Sequential(layers.PPM(channels[-1]), *self.td)
 
         self.emb = embedding(instructor.n_inst, channels[-1]) if embedding else None
         self.bu_head = fv.create_head(channels[-1] * 2, bu_c) if bu_c else None
@@ -352,6 +380,7 @@ def cs_learner(data: fv.DataBunch, arch: Callable, instructor, td_c=1, bu_c=0, e
                       lateral=lateral, td_out_lateral=td_out_lateral, ppm=ppm),
         data.device)
     learn = fv.Learner(data, model, **learn_kwargs)
+    learn.split([learn.model.td[0]])
     if pretrained:
         learn.freeze()
     else:
