@@ -54,14 +54,16 @@ class GaussianSmoothing(nn.Module):
         sigma (float, sequence): Standard deviation of the gaussian kernel.
     """
 
-    def __init__(self, sigma, kernel_size=3, scale=True, thresh=0):
+    def __init__(self, sigma, kernel_size=None, scale=True, thresh=0):
         super(GaussianSmoothing, self).__init__()
 
         if isinstance(sigma, numbers.Number):
             sigma = [sigma] * 2
 
+        if not kernel_size:
+            kernel_size = 2 * 3 * sigma + 1
         # The gaussian kernel is the product of the  gaussian function of each dimension.
-        kernel = 1
+        kernel = torch.ones(1)
         meshgrids = torch.meshgrid([torch.arange(size, dtype=torch.float32) for size in (kernel_size, kernel_size)])
 
         for std, mgrid in zip(sigma, meshgrids):
