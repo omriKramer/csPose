@@ -34,4 +34,4 @@ class AdeAdapter:
 
         obj_seg = self.ade2broden['object'][obj_seg]
         parts_seg = self.ade2broden['part'][parts_seg]
-        return torch.from_numpy(obj_seg), torch.from_numpy(parts_seg)
+        return torch.from_numpy(obj_seg)[None], torch.from_numpy(parts_seg)[None]

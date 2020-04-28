@@ -251,4 +251,4 @@ class PascalAdapter:
 
         obj = self.pascal2broden['object'][obj]
         parts = self.pascal2broden['part'][parts]
-        return torch.from_numpy(obj), torch.from_numpy(parts)
+        return torch.from_numpy(obj)[None], torch.from_numpy(parts)[None]
