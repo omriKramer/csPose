@@ -5,6 +5,8 @@ import numpy as np
 import torch
 from scipy.io import loadmat
 
+from datasets.broden_adapter import BrodenAdapter
+
 
 def load_part2ind(part2ind_filename):
     """
@@ -198,7 +200,7 @@ def load_context_labels(labels_filename):
     return object_names
 
 
-class PascalAdapter:
+class PascalAdapter(BrodenAdapter):
     collapse_adjectives = {'left', 'right', 'front', 'back', 'upper', 'lower', 'side'}
 
     def __init__(self, root):
@@ -212,8 +214,8 @@ class PascalAdapter:
         self.unknown_label = self.object_names.index('unknown')
         self.object_names[self.unknown_label] = '-'  # normalize unknown
         with (self.root / 'pascal_index_mapping.json').open() as f:
-            self.pascal2broden = json.load(f)
-            self.pascal2broden = {k: np.array(v) for k, v in self.pascal2broden.items()}
+            pascal2broden = json.load(f)
+        super().__init__(pascal2broden['object'], pascal2broden['part'])
 
     def load_parts_segmentation(self, filename):
         """
@@ -243,12 +245,10 @@ class PascalAdapter:
                 part_seg[part['mask'].astype(np.bool)] = part_code
         return object_seg, part_seg
 
-    def open(self, obj_file, parts_file):
-        obj = loadmat(obj_file)['LabelMap']
-        _, parts = self.load_parts_segmentation(parts_file)
-        if parts is None:
-            parts = np.zeros_like(obj)
+    def get_obj_mask(self, obj_fn):
+        obj = loadmat(obj_fn)['LabelMap']
+        return obj
 
-        obj = self.pascal2broden['object'][obj]
-        parts = self.pascal2broden['part'][parts]
-        return torch.from_numpy(obj)[None], torch.from_numpy(parts)[None]
+    def get_part_mask(self, part_fn):
+        _, part = self.load_parts_segmentation(part_fn)
+        return part
