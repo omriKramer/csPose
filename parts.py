@@ -14,8 +14,9 @@ class ObjectAndParts(fv.ItemBase):
         return self.objects.data, self.parts.data
 
     def apply_tfms(self, tfms, **kwargs):
-        self.objects = self.objects.apply_tfms(tfms, **kwargs)
-        self.parts = self.parts.apply_tfms(tfms, **kwargs)
+        objects = self.objects.apply_tfms(tfms, **kwargs)
+        parts = self.parts.apply_tfms(tfms, **kwargs)
+        return self.__class__(objects, parts)
 
     def __repr__(self):
         return f'{self.__class__.__name__} {tuple(self.objects.size)}'
