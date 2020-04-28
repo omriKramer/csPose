@@ -23,7 +23,7 @@ class AdeAdapter:
         self.root = root
         with (self.root / 'ade_index_mapping.json').open() as f:
             self.ade2broden = json.load(f)
-            self.ade2broden = {k: np.array(v) for k, v in self.ade2broden}
+            self.ade2broden = {k: np.array(v) for k, v in self.ade2broden.items()}
 
     def open_ade(self, object_fn, parts_fn):
         obj_seg = ade_load_seg(object_fn)
