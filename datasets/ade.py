@@ -21,7 +21,7 @@ def ade_load_seg(fn):
 class AdeAdapter:
     def __init__(self, root):
         self.root = root
-        with (self.root / 'ade_index_mapping.json').open as f:
+        with (self.root / 'ade_index_mapping.json').open() as f:
             self.ade2broden = json.load(f)
             self.ade2broden = {k: np.array(v) for k, v in self.ade2broden}
 
