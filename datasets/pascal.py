@@ -246,7 +246,7 @@ class PascalAdapter:
     def open(self, obj_file, parts_file):
         obj = loadmat(obj_file)['LabelMap']
         _, parts = self.load_parts_segmentation(parts_file)
-        if not parts:
+        if parts is None:
             parts = np.zeros_like(obj)
 
         obj = self.pascal2broden['object'][obj]
