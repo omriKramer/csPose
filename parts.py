@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 class ObjectAndParts(fv.ItemBase):
 
     def __init__(self, objects: fv.ImageSegment, parts: fv.ImageSegment):
+        assert objects.shape == parts.shape
         self.objects = objects
         self.parts = parts
 
@@ -16,8 +17,8 @@ class ObjectAndParts(fv.ItemBase):
         self.objects = self.objects.apply_tfms(tfms, **kwargs)
         self.parts = self.parts.apply_tfms(tfms, **kwargs)
 
-    def __str__(self):
-        return f'{self.__class__.__name__}({self.objects}, {self.parts})'
+    def __repr__(self):
+        return f'{self.__class__.__name__} {self.objects.shape})'
 
 
 class ObjectsPartsLabelList(fv.ItemList):
