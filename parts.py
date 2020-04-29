@@ -48,11 +48,19 @@ class ObjectsPartsLabelList(fv.ItemList):
 
 class ObjectsPartsItemList(fv.ImageList):
     _label_cls = ObjectsPartsLabelList
+    _square_show_res = False
 
-    def show_xys(self, xs, ys, imgsize=4, figsize=None, **kwargs):
+    def show_xys(self, xs, ys, imgsize=4, figsize=None, overlay=True, **kwargs):
         rows = len(xs)
-        axs = fv.subplots(rows, 2, imgsize=imgsize, figsize=figsize)
-        for x, y, ax_row in zip(xs, ys, axs):
-            x.show(ax=ax_row[0], y=y.objects, **kwargs)
-            x.show(ax=ax_row[1], y=y.parts, **kwargs)
-        plt.tight_layout()
+        if overlay:
+            axs = fv.subplots(rows, 2, imgsize=imgsize, figsize=figsize)
+            for x, y, ax_row in zip(xs, ys, axs):
+                x.show(ax=ax_row[0], y=y.objects, **kwargs)
+                x.show(ax=ax_row[1], y=y.parts, **kwargs)
+        else:
+            axs = fv.subplots(rows, 3, imgsize=imgsize, figsize=figsize)
+            for x, y, ax_row in zip(xs, ys, axs):
+                x.show(ax=ax_row[0], **kwargs)
+                y.objects.show(ax=ax_row[1], alpha=1, **kwargs)
+                y.parts.show(ax=ax_row[2], alpha=1, **kwargs)
+
