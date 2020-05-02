@@ -245,12 +245,11 @@ class Loss:
         self.part_ce = nn.CrossEntropyLoss(ignore_index=-1)
         self.preds_func = preds_func
 
-    def __call__(self, pred, gt):
+    def __call__(self, pred, obj_gt, part_gt):
         if self.preds_func:
             pred = self.preds_func(pred)
 
         obj_pred, part_pred = pred
-        obj_gt, part_gt = gt
         obj_gt, part_gt = resize_obj_part(obj_gt, part_gt, obj_pred.shape[-2:])
 
         obj_loss = self.obj_ce(obj_pred, obj_gt)
