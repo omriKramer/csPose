@@ -195,7 +195,7 @@ class BrodenMetrics(fv.LearnerCallback):
         if train:
             return
 
-        obj_gt, part_gt = last_output
+        obj_gt, part_gt = last_target
         if self.preds_func:
             last_output = self.preds_func(last_output)
         obj_pred, part_pred = last_output
