@@ -208,7 +208,7 @@ class BrodenMetrics(fv.LearnerCallback):
         obj_pred, part_pred = resize_obj_part(obj_pred, part_pred, obj_gt.shape[-2:])
 
         self.obj_pa.update(*pix_acc(obj_pred, obj_gt))
-        self.obj_iou.update(*iou(obj_pred, obj_gt, self.obj_tree.n_parts, obj_gt > 0))
+        self.obj_iou.update(*iou(obj_pred, obj_gt, self.obj_tree.n_obj, obj_gt > 0))
 
         self.part_pa.update(*pix_acc(part_pred, part_gt))
         for i, (obj, parts) in enumerate(self.obj_tree.obj_and_parts()):
