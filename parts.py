@@ -27,12 +27,9 @@ class ObjectAndParts(fv.ItemBase):
 
 
 class ObjectsPartsLabelList(fv.ItemList):
-    _processor = fv.data.SegmentationProcessor
 
-    def __init__(self, items, classes=None, **kwargs):
+    def __init__(self, items, **kwargs):
         super().__init__(items, **kwargs)
-        self.copy_new.append('classes')
-        self.classes = classes
 
     def get(self, i):
         object_fn, parts_fn, adapter = super().get(i)
@@ -60,13 +57,13 @@ class ObjectsPartsItemList(fv.ImageList):
         if overlay:
             axs = fv.subplots(rows, 2, imgsize=imgsize, figsize=figsize)
             for x, y, ax_row in zip(xs, ys, axs):
-                x.show(ax=ax_row[0], y=y.obj_names, **kwargs)
+                x.show(ax=ax_row[0], y=y.objects, **kwargs)
                 x.show(ax=ax_row[1], y=y.parts, **kwargs)
         else:
             axs = fv.subplots(rows, 3, imgsize=imgsize, figsize=figsize)
             for x, y, ax_row in zip(xs, ys, axs):
                 x.show(ax=ax_row[0], **kwargs)
-                y.obj_names.show(ax=ax_row[1], alpha=1, **kwargs)
+                y.objects.show(ax=ax_row[1], alpha=1, **kwargs)
                 y.parts.show(ax=ax_row[2], alpha=1, **kwargs)
 
 
