@@ -158,7 +158,7 @@ class ObjectTree:
 
         # if an object has parts then label background (non-part) pixels inside the object with 0
         is_part = gt > 0
-        has_parts = is_part.flatten(start_dim=2).any(dim=2, keepdim=True).reshape_as(is_part)
+        has_parts = is_part.flatten(start_dim=2).any(dim=2, keepdim=True)[..., None]
         bg_inside_obj = has_parts * obj_masks * (~is_part)
         gt[bg_inside_obj] = 0
         return gt
