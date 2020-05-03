@@ -20,12 +20,12 @@ def ade_load_seg(fn):
 
 
 class AdeAdapter(BrodenAdapter):
-    def __init__(self, root):
+    def __init__(self, root, to_tensor=True):
         self.root = root
         with (self.root / 'ade_index_mapping.json').open() as f:
             to_broden = json.load(f)
 
-        super().__init__(to_broden['object'], to_broden['part'])
+        super().__init__(to_broden['object'], to_broden['part'], to_tensor=to_tensor)
 
     def get_obj_mask(self, obj_fn):
         obj = ade_load_seg(obj_fn)
