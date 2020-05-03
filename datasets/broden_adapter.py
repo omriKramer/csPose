@@ -16,7 +16,7 @@ class BrodenAdapter(ABC):
     def get_part_mask(self, part_fn):
         raise NotImplemented
 
-    def open(self, obj_fn, part_fn):
+    def open(self, obj_fn, part_fn, to_tensor=True):
         obj = self.get_obj_mask(obj_fn)
         part = self.get_part_mask(part_fn) if part_fn else None
         # self.get_part_mask might return None
@@ -26,6 +26,7 @@ class BrodenAdapter(ABC):
         obj = self.obj_mapping[obj]
         part = self.part_mapping[part]
 
-        obj = fv.pil2tensor(obj, np.float32)
-        part = fv.pil2tensor(part, np.float32)
+        if to_tensor:
+            obj = fv.pil2tensor(obj, np.float32)
+            part = fv.pil2tensor(part, np.float32)
         return obj, part
