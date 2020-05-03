@@ -203,7 +203,7 @@ def load_context_labels(labels_filename):
 class PascalAdapter(BrodenAdapter):
     collapse_adjectives = {'left', 'right', 'front', 'back', 'upper', 'lower', 'side'}
 
-    def __init__(self, root, to_tenosr=True):
+    def __init__(self, root, to_tensor=True):
         self.root = Path(root)
         codes = load_part2ind(self.root / 'part2ind.m')
         # Normalized names
@@ -215,7 +215,7 @@ class PascalAdapter(BrodenAdapter):
         self.object_names[self.unknown_label] = '-'  # normalize unknown
         with (self.root / 'pascal_index_mapping.json').open() as f:
             pascal2broden = json.load(f)
-        super().__init__(pascal2broden['object'], pascal2broden['part'], to_tensor=to_tenosr)
+        super().__init__(pascal2broden['object'], pascal2broden['part'], to_tensor=to_tensor)
 
     def load_parts_segmentation(self, filename):
         """
