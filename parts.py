@@ -1,6 +1,7 @@
 from collections import OrderedDict
 
 import fastai.vision as fv
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -26,16 +27,24 @@ class ObjectAndParts(fv.ItemBase):
         return f'{self.__class__.__name__} {tuple(self.objects.size)}'
 
 
+def parts_after_open(x):
+    x = np.asarray(x)
+    x[x == 255] = -1
+    return x
+
+
 class ObjectsPartsLabelList(fv.ItemList):
 
     def __init__(self, items, **kwargs):
         super().__init__(items, **kwargs)
 
     def get(self, i):
-        object_fn, parts_fn, adapter = super().get(i)
-        obj, parts = adapter.open(object_fn, parts_fn)
-        obj = fv.ImageSegment(obj)
-        parts = fv.ImageSegment(parts)
+        object_fn, parts_fn = super().get(i)
+        obj = fv.open_mask(object_fn, convert_mode='I')
+        if parts_fn:
+            parts = fv.open_mask(parts_fn, convert_mode='L', after_open=parts_after_open)
+        else:
+            parts = fv.ImageSegment(torch.full_like(obj.px, -1))
         return ObjectAndParts(obj, parts)
 
     def analyze_pred(self, pred):
