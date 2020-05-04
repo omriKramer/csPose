@@ -28,7 +28,7 @@ class ObjectAndParts(fv.ItemBase):
 
 
 def parts_after_open(x):
-    x = np.asarray(x)
+    x = np.array(x)
     x[x == 255] = -1
     return x
 
