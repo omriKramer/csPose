@@ -27,12 +27,6 @@ class ObjectAndParts(fv.ItemBase):
         return f'{self.__class__.__name__} {tuple(self.objects.size)}'
 
 
-def parts_after_open(x):
-    x = np.array(x)
-    x[x == 255] = -1
-    return x
-
-
 class ObjectsPartsLabelList(fv.ItemList):
 
     def __init__(self, items, **kwargs):
@@ -42,9 +36,9 @@ class ObjectsPartsLabelList(fv.ItemList):
         object_fn, parts_fn = super().get(i)
         obj = fv.open_mask(object_fn, convert_mode='I')
         if parts_fn:
-            parts = fv.open_mask(parts_fn, convert_mode='L', after_open=parts_after_open)
+            parts = fv.open_mask(parts_fn, convert_mode='L')
         else:
-            parts = fv.ImageSegment(torch.full_like(obj.px, -1))
+            parts = fv.ImageSegment(torch.zeros_like(obj.px))
         return ObjectAndParts(obj, parts)
 
     def analyze_pred(self, pred):
@@ -113,6 +107,7 @@ class ObjectTree:
 
     def __init__(self, tree, obj_names):
         self.tree = OrderedDict(sorted(tree.items(), key=lambda item: item[0]))
+        self.obj2idx = {o: i for i, o in enumerate(self.tree.keys())}
         self.obj_names = obj_names
 
     def obj_and_parts(self):
@@ -155,11 +150,15 @@ class ObjectTree:
         Returns: Tensor of shape (n_obj_with_parts, bs, h, w)
 
         """
+        present_obj = obj.unique().cpu().tolist()
+        present_obj = [o for o in present_obj if o in self.tree]
         classes = torch.tensor(self.obj_with_parts, device=obj.device)
         obj_masks = obj == classes[:, None, None, None]
         parts_inside_obj = part[None] * obj_masks
         gt = torch.full_like(parts_inside_obj, -1)
-        for i, obj_parts in enumerate(self.tree.values()):
+        for o in present_obj:
+            obj_parts = self.tree[o]
+            i = self.obj2idx[o]
             inside_obj_i = parts_inside_obj[i]
             for part_idx, part in enumerate(obj_parts[1:], start=1):
                 part_mask = inside_obj_i == part
