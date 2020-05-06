@@ -150,6 +150,9 @@ class ObjectTree:
         Returns: Tensor of shape (n_obj_with_parts, bs, h, w)
 
         """
+        obj = obj.squeeze()
+        part = part.squeeze()
+
         present_obj = obj.unique().cpu().tolist()
         present_obj = [o for o in present_obj if o in self.tree]
         classes = torch.tensor(self.obj_with_parts, device=obj.device)
