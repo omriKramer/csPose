@@ -100,7 +100,9 @@ class Accuracy:
         self.total += total.cpu()
 
     def accuracy(self):
-        return torch.mean(self.correct.float() / self.total.float()).item()
+        c = self.correct.float()
+        t = self.total.float() + 1e-10
+        return torch.mean(c/t).item()
 
 
 class ObjectTree:
@@ -266,7 +268,8 @@ class Loss:
         obj_loss = self.obj_ce(obj_pred, obj_gt)
         part_loss = []
         for i, obj_i_parts in enumerate(self.object_tree.split_parts_pred(part_pred)):
-            part_loss.append(self.part_ce(obj_i_parts, part_gt[i]))
+            if torch.any(part_gt[i] > -1):
+                part_loss.append(self.part_ce(obj_i_parts, part_gt[i]))
 
         loss = obj_loss + sum(part_loss)
         return loss
