@@ -1,7 +1,6 @@
 from collections import OrderedDict
 
 import fastai.vision as fv
-import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -217,6 +216,9 @@ class BrodenMetrics(fv.LearnerCallback):
         part_pred = self.obj_tree.split_parts_pred(part_pred)
         # part_pred shape: (n_obj_with_parts, bs, h, w)
         part_pred = torch.stack([obj_parts.argmax(dim=1) for obj_parts in part_pred], dim=0)
+        objects_with_parts = torch.tensor(self.obj_tree.obj_with_parts, device=obj_pred.device)[:, None, None, None]
+        object_pred_mask = obj_pred == objects_with_parts
+        part_pred = part_pred * object_pred_mask
 
         obj_pred, part_pred = resize_obj_part(obj_pred, part_pred, obj_gt.shape[-2:])
 
