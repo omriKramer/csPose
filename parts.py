@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from pathlib import Path
 
 import fastai.vision as fv
 import torch
@@ -15,7 +16,7 @@ class ObjectAndParts(fv.ItemBase):
 
     @property
     def data(self):
-        return self.objects.data, self.parts.data
+        return self.objects.data.squeeze(), self.parts.data.squeeze()
 
     def apply_tfms(self, tfms, **kwargs):
         objects = self.objects.apply_tfms(tfms, **kwargs)
@@ -100,8 +101,8 @@ class Accuracy:
 
     def accuracy(self):
         c = self.correct.float()
-        t = self.total.float() + 1e-10
-        return torch.mean(c/t).item()
+        t = self.total.float()
+        return torch.mean(c / t).item()
 
 
 class ObjectTree:
@@ -151,8 +152,6 @@ class ObjectTree:
         Returns: Tensor of shape (n_obj_with_parts, bs, h, w)
 
         """
-        obj = obj.squeeze()
-        part = part.squeeze()
 
         present_obj = obj.unique().cpu().tolist()
         present_obj = [o for o in present_obj if o in self.tree]
@@ -208,6 +207,8 @@ class BrodenMetrics(fv.LearnerCallback):
             return
 
         obj_gt, part_gt = last_target
+        part_gt = self.object_tree.split_parts_gt(obj_gt, part_gt)
+
         if self.preds_func:
             last_output = self.preds_func(last_output)
         obj_pred, part_pred = last_output
@@ -266,6 +267,7 @@ class Loss:
 
         obj_pred, part_pred = pred
         obj_gt, part_gt = resize_obj_part(obj_gt, part_gt, obj_pred.shape[-2:])
+        part_gt = self.object_tree.split_parts_gt(obj_gt, part_gt)
 
         obj_loss = self.obj_ce(obj_pred, obj_gt)
         part_loss = []
@@ -275,3 +277,31 @@ class Loss:
 
         loss = obj_loss + sum(part_loss)
         return loss
+
+
+class Labeler:
+
+    def __init__(self, ann_folder):
+        self.ann_folder = ann_folder
+
+    def __call__(self, item):
+        stem = Path(item).stem
+        obj_seg = self.ann_folder / f'{stem}_obj.png'
+        part_seg = self.ann_folder / f'{stem}_part.png'
+        if not part_seg.exists():
+            part_seg = None
+
+        return obj_seg, part_seg
+
+
+def get_data(broden_root, size=256, bs=8, norm_stats=fv.imagenet_stats, padding_mode='zeros'):
+    labeler = Labeler(broden_root / 'reindexed2')
+    tfms = fv.get_transforms()
+
+    data = (ObjectsPartsItemList.from_csv(broden_root, 'trainval.csv')
+            .split_from_df(col='is_valid')
+            .label_from_func(labeler)
+            .transform(tfms, tfm_y=True, size=size, resize_method=fv.ResizeMethod.PAD, padding_mode=padding_mode)
+            .databunch(bs)
+            .normalize(norm_stats))
+    return data
