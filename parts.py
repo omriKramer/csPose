@@ -114,6 +114,20 @@ class ObjectTree:
         self.obj_names = obj_names
         self.part_names = part_names
 
+    @classmethod
+    def from_meta_folder(cls, meta):
+        tree = pd.read_csv(meta / 'part.csv')
+        tree = {row.object_label: row.part_labels.split(';') for row in tree.itertuples()}
+        tree = {k: [int(o) for o in v] for k, v in tree.items()}
+
+        objects = pd.read_csv(meta / 'object.csv')
+        objects = objects['name'].tolist()
+
+        parts = pd.read_csv(meta / 'part.csv')
+        parts = parts['name'].tolist()
+
+        return cls(tree, objects, parts)
+
     def obj_and_parts(self):
         return self.tree.items()
 
@@ -307,18 +321,3 @@ def get_data(broden_root, size=256, bs=8, norm_stats=fv.imagenet_stats, padding_
             .databunch(bs=bs)
             .normalize(norm_stats))
     return data
-
-
-def get_obj_tree(broden_root):
-    tree = pd.read_csv(broden_root / 'meta/part.csv')
-    tree = {row.object_label: row.part_labels.split(';') for row in tree.itertuples()}
-    tree = {k: [int(o) for o in v] for k, v in tree.items()}
-
-    objects = pd.read_csv(broden_root / 'meta/object.csv')
-    objects = objects['name'].tolist()
-
-    parts = pd.read_csv(broden_root / 'meta/part.csv')
-    parts = parts['name'].tolist()
-
-    obj_tree = ObjectTree(tree, objects, parts)
-    return obj_tree
