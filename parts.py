@@ -233,11 +233,11 @@ class BrodenMetrics(fv.LearnerCallback):
         part_pred = self.obj_tree.split_parts_pred(part_pred)
         # part_pred shape: (n_obj_with_parts, bs, h, w)
         part_pred = torch.stack([obj_parts.argmax(dim=1) for obj_parts in part_pred], dim=0)
+        obj_pred, part_pred = resize_obj_part(obj_pred, part_pred, obj_gt.shape[-2:])
+
         objects_with_parts = torch.tensor(self.obj_tree.obj_with_parts, device=obj_pred.device)[:, None, None, None]
         object_pred_mask = obj_pred == objects_with_parts
         part_pred = part_pred * object_pred_mask
-
-        obj_pred, part_pred = resize_obj_part(obj_pred, part_pred, obj_gt.shape[-2:])
 
         self.obj_pa.update(*pix_acc(obj_pred, obj_gt))
         self.obj_iou.update(*iou(obj_pred, obj_gt, self.obj_tree.n_obj, obj_gt > 0))
@@ -262,8 +262,12 @@ class BrodenMetrics(fv.LearnerCallback):
 
 def resize_obj_part(obj, part, size):
     if obj.shape[-2:] != size:
-        obj = F.interpolate(obj[None].float(), size=size, mode='nearest')[0].long()
-        part = F.interpolate(part.float(), size=size, mode='nearest').long()
+        obj = F.interpolate(obj[None].float(), size=size, mode='nearest').long().squeeze()
+
+        if part.ndim == 3:
+            part = part[None]
+        part = F.interpolate(part.float(), size=size, mode='nearest').long().squeeze()
+
     return obj, part
 
 
