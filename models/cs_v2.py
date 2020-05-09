@@ -350,11 +350,12 @@ class CounterStream(nn.Module):
         img_features = self.ifn(img)
 
         td_out, bu_out = [], []
-        while self.instructor.on_bu_body_begin(self):
+        while self.instructor.on_iter_begin(self):
 
-            last_bu = self.bu_body(img_features)
-            if self.instructor.on_bu_pred_begin(self) and self.bu_head:
-                bu_out.append(self.bu_head(last_bu))
+            if self.instructor.on_bu_begin(self):
+                last_bu = self.bu_body(img_features)
+                if self.bu_head:
+                    bu_out.append(self.bu_head(last_bu))
 
             inst = self.instructor.on_td_begin(self, img_features, last_bu, bu_out, td_out)
             if self.emb:
@@ -383,6 +384,10 @@ def cs_learner(data: fv.DataBunch, arch: Callable, instructor, td_c=1, bu_c=0, e
     learn.split([learn.model.td[0]])
     if pretrained:
         learn.freeze()
+        fv.apply_init(learn.model.bu_laterals, nn.init.kaiming_normal_)
+        fv.apply_init(learn.model.td_laterals, nn.init.kaiming_normal_)
+        if learn.model.bu_head:
+            fv.apply_init(learn.model.bu_head, nn.init.kaiming_normal_)
     else:
         fv.apply_init(learn.model, nn.init.kaiming_normal_)
     return learn
@@ -395,10 +400,10 @@ class BaseInstructor(ABC):
     def on_forward_begin(self, model):
         self.i = 0
 
-    def on_bu_body_begin(self, model):
+    def on_iter_begin(self, model):
         raise NotImplementedError
 
-    def on_bu_pred_begin(self, model):
+    def on_bu_begin(self, model):
         return True
 
     def on_td_begin(self, model, img_features, last_bu, bu_out, td_out):
@@ -419,6 +424,6 @@ class RecurrentInstructor(BaseInstructor):
         self.repeats = repeats
         super().__init__()
 
-    def on_bu_body_begin(self, model):
+    def on_iter_begin(self, model):
         should_continue = self.i < self.repeats
         return should_continue

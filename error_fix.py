@@ -12,7 +12,7 @@ class SelfObserveInstructor(cs.RecurrentInstructor):
     def __init__(self):
         super().__init__(2)
 
-    def on_bu_pred_begin(self, model):
+    def on_bu_begin(self, model):
         if self.i == 0:
             return False
 
