@@ -1,0 +1,6 @@
+object,part,px
+column,shaft,0
+airplane,tail,8
+chandelier,bulb,0
+glass,stem,0
+bus license,plate,0

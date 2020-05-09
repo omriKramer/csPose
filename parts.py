@@ -102,7 +102,8 @@ class Accuracy:
 
     def accuracy(self):
         c = self.correct.float()
-        t = self.total.float()
+        # some parts have 0 pixels in the validation set, add epsilon for now
+        t = self.total.float() + 1e-10
         return torch.mean(c / t).item()
 
 
@@ -133,7 +134,7 @@ class ObjectTree:
 
     @property
     def obj_with_parts(self):
-        return list(self.tree.keys())
+        return self.tree.keys()
 
     @property
     def n_obj(self):
@@ -176,7 +177,7 @@ class ObjectTree:
 
         present_obj = obj.unique().cpu().tolist()
         present_obj = [o for o in present_obj if o in self.tree]
-        classes = torch.tensor(self.obj_with_parts, device=obj.device)
+        classes = torch.tensor(list(self.obj_with_parts), device=obj.device)
         obj_masks = obj == classes[:, None, None, None]
         parts_inside_obj = part[None] * obj_masks
         gt = torch.full_like(parts_inside_obj, -1)
@@ -235,7 +236,7 @@ class BrodenMetrics(fv.LearnerCallback):
         part_pred = torch.stack([obj_parts.argmax(dim=1) for obj_parts in part_pred], dim=0)
         obj_pred, part_pred = resize_obj_part(obj_pred, part_pred, obj_gt.shape[-2:])
 
-        objects_with_parts = torch.tensor(self.obj_tree.obj_with_parts, device=obj_pred.device)[:, None, None, None]
+        objects_with_parts = torch.tensor(list(self.obj_tree.obj_with_parts), device=obj_pred.device)[:, None, None, None]
         object_pred_mask = obj_pred == objects_with_parts
         part_pred = part_pred * object_pred_mask
 
