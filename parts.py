@@ -2,6 +2,7 @@ from collections import OrderedDict
 from pathlib import Path
 
 import fastai.vision as fv
+import pandas as pd
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -107,21 +108,22 @@ class Accuracy:
 
 class ObjectTree:
 
-    def __init__(self, tree, obj_names):
+    def __init__(self, tree, obj_names, part_names):
         self.tree = OrderedDict(sorted(tree.items(), key=lambda item: item[0]))
         self.obj2idx = {o: i for i, o in enumerate(self.tree.keys())}
         self.obj_names = obj_names
+        self.part_names = part_names
 
     def obj_and_parts(self):
         return self.tree.items()
 
     @property
-    def n_obj(self):
-        return len(self.obj_names)
-
-    @property
     def obj_with_parts(self):
         return list(self.tree.keys())
+
+    @property
+    def n_obj(self):
+        return len(self.obj_names)
 
     @property
     def n_obj_with_parts(self):
@@ -130,6 +132,11 @@ class ObjectTree:
     @property
     def n_parts(self):
         return sum(len(parts) for parts in self.tree.values())
+
+    @property
+    def sections(self):
+        sections = [len(parts) for parts in self.tree.values()]
+        return sections
 
     def split_parts_pred(self, t: fv.Tensor):
         """
@@ -173,11 +180,6 @@ class ObjectTree:
         bg_inside_obj = has_parts * obj_masks * (~is_part)
         gt[bg_inside_obj] = 0
         return gt
-
-    @property
-    def sections(self):
-        sections = [len(parts) for parts in self.tree.values()]
-        return sections
 
 
 class BrodenMetrics(fv.LearnerCallback):
@@ -302,6 +304,21 @@ def get_data(broden_root, size=256, bs=8, norm_stats=fv.imagenet_stats, padding_
             .split_from_df(col='is_valid')
             .label_from_func(labeler)
             .transform(tfms, tfm_y=True, size=size, resize_method=fv.ResizeMethod.PAD, padding_mode=padding_mode)
-            .databunch(bs)
+            .databunch(bs=bs)
             .normalize(norm_stats))
     return data
+
+
+def get_obj_tree(broden_root):
+    tree = pd.read_csv(broden_root / 'meta/part.csv')
+    tree = {row.object_label: row.part_labels.split(';') for row in tree.itertuples()}
+    tree = {k: [int(o) for o in v] for k, v in tree.items()}
+
+    objects = pd.read_csv(broden_root / 'meta/object.csv')
+    objects = objects['name'].tolist()
+
+    parts = pd.read_csv(broden_root / 'meta/part.csv')
+    parts = parts['name'].tolist()
+
+    obj_tree = ObjectTree(tree, objects, parts)
+    return obj_tree
