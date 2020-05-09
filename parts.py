@@ -116,7 +116,7 @@ class ObjectTree:
 
     @classmethod
     def from_meta_folder(cls, meta):
-        tree = pd.read_csv(meta / 'part.csv')
+        tree = pd.read_csv(meta / 'object_part_hierarchy.csv')
         tree = {row.object_label: row.part_labels.split(';') for row in tree.itertuples()}
         tree = {k: [int(o) for o in v] for k, v in tree.items()}
 
