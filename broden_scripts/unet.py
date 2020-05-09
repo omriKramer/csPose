@@ -15,7 +15,7 @@ def split_pred(last_output):
     return last_output[:, :n_obj], last_output[:, n_obj:]
 
 
-c = tree.n_obj + tree.n_parts
+data.c = tree.n_obj + tree.n_parts
 
 loss = parts.Loss(tree, preds_func=split_pred)
 metrics = partial(parts.BrodenMetrics, obj_tree=tree, preds_func=split_pred)
