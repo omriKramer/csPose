@@ -370,7 +370,7 @@ class TDHead(nn.ModuleDict):
                                     fv.conv2d(in_channels, n_objects, ks=1))
         part_head = nn.Sequential(*layers.conv_layer(in_channels, in_channels),
                                   fv.conv2d(in_channels, n_parts, ks=1))
-        super().__init__({'object': object_head, 'parts': part_head})
+        super().__init__({'objects': object_head, 'parts': part_head})
 
 
 class CsNet(nn.Module):
@@ -391,7 +391,7 @@ class CsNet(nn.Module):
         x = self.bu(features)
         obj_inst = torch.zeros(bs, dtype=torch.long, device=img.device)
         x = x * self.embedding(obj_inst)[..., None, None]
-        obj_pred = self.td_head['object'](self.td(x))
+        obj_pred = self.td_head['objects'](self.td(x))
 
         if self.training:
             objects = gt.unique()
@@ -404,7 +404,7 @@ class CsNet(nn.Module):
         for o in objects:
             td_in = x * self.embedding(o)[..., None, None]
             start, end = self.obj_tree.obj2part_idx[o]
-            part_pred[o] = self.td_head['part'](self.td(td_in))[:, start:end]
+            part_pred[o] = self.td_head['parts'](self.td(td_in))[:, start:end]
 
         return obj_pred, part_pred
 
