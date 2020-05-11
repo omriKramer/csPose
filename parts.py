@@ -395,7 +395,8 @@ class CsNet(nn.Module):
         obj_pred = self.td_head['objects'](self.td(x))
 
         if self.training:
-            objects = gt.unique()
+            obj_gt = gt[0]
+            objects = obj_gt.unique()
         else:
             objects = obj_pred.argmax(dim=1).unique()
 
