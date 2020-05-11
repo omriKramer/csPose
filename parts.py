@@ -1,3 +1,4 @@
+import itertools
 from collections import OrderedDict
 from pathlib import Path
 
@@ -406,7 +407,13 @@ class CsNet(nn.Module):
             start, end = self.obj_tree.obj2part_idx[o]
             part_pred[o] = self.td_head['parts'](self.td(td_in))[:, start:end]
 
+        self.clear()
         return obj_pred, part_pred
+
+    def clear(self):
+        for lateral in itertools.chain(self.bu_laterals, self.td_laterals):
+            del lateral.origin_out
+            lateral.origin_out = None
 
 
 def part_learner(data, arch, obj_tree: ObjectTree, pretrained=False, **learn_kwargs):

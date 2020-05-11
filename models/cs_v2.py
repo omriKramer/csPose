@@ -121,7 +121,7 @@ class TDBottleNeck(TDBlock):
 class TDHead(nn.Sequential):
     def __init__(self, ni, nf):
         super().__init__(layers.conv_layer(ni, ni),
-                         fv.conv2d(ni, nf, kernel_size=1, bias=True))
+                         fv.conv2d(ni, nf, ks=1, bias=True))
 
 
 class UnetBlock(nn.Module):
@@ -269,7 +269,7 @@ def create_bu_td(body, td_head=1, lateral=laterals.ConvAddLateral, img_size=(256
     concat_idx = 4
     bu = nn.Sequential(body[:concat_idx], *body[concat_idx:])
 
-    bu_flat = [bu[:concat_idx]] + list(itertools.chain(*bu[concat_idx:]))
+    bu_flat = [body[:concat_idx]] + list(itertools.chain(*body[concat_idx:]))
     bu_flat = nn.Sequential(*bu_flat)
 
     if isinstance(bu_flat[1], torchvision.models.resnet.BasicBlock):
