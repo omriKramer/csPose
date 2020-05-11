@@ -375,6 +375,7 @@ class TDHead(nn.ModuleDict):
 
 class CsNet(nn.Module):
     def __init__(self, body, obj_tree: ObjectTree):
+        super().__init__()
         td_head_ni = body[0].out_channels
         td_head = TDHead(td_head_ni, obj_tree.n_obj, obj_tree.n_parts)
         bu, td, bu_laterals, td_laterls, channels = cs.create_bu_td(body, td_head)
