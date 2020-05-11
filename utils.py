@@ -162,7 +162,7 @@ class AddTargetClbk(Callback):
     def __init__(self):
         super().__init__()
 
-    def on_train_begin(self, last_input, last_target, train, **kwargs):
+    def on_batch_begin(self, last_input, last_target, train, **kwargs):
         if train:
             return {'last_input': (last_input, last_target)}
 
