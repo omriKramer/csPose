@@ -376,12 +376,12 @@ class TDHead(nn.ModuleDict):
 class CsNet(nn.Module):
     def __init__(self, body, obj_tree: ObjectTree):
         td_head_ni = body[0].out_channels
-        td_head = TDHead(td_head_ni, obj_tree.n_objects, obj_tree.n_parts)
+        td_head = TDHead(td_head_ni, obj_tree.n_obj, obj_tree.n_parts)
         bu, td, bu_laterals, td_laterls, channels = cs.create_bu_td(body, td_head)
         self.ifn, self.bu = bu[0], bu[1:]
         self.td, self.td_head = td[:-1], td[:1]
         self.bu_laterals, self.td_laterals = bu_laterals, td_laterls
-        self.embedding = fv.embedding(obj_tree.n_objects, channels[-1])
+        self.embedding = fv.embedding(obj_tree.n_obj, channels[-1])
         self.obj_tree = obj_tree
 
     def forward(self, img, gt=None):
