@@ -214,7 +214,7 @@ class ObjectTree:
 
         bs, h, w = obj_pred.shape
         n_obj_with_parts = self.n_obj_with_parts
-        part_pred = torch.zeros(n_obj_with_parts, bs, h, w, type=torch.long, device=obj_pred.device)
+        part_pred = torch.zeros((n_obj_with_parts, bs, h, w), dtype=torch.long, device=obj_pred.device)
         for o, p_pred in part_pred_dict.items():
             has_obj = torch.flatten(obj_pred == o, start_dim=1).any(dim=1)
             p_pred = p_pred.argmax(dim=1) * has_obj[: None, None]
