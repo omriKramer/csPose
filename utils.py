@@ -7,7 +7,7 @@ import torch
 import torch.distributed as dist
 import torch.nn.functional as F
 from fastai import callbacks
-from fastai.basic_train import LearnerCallback, add_metrics
+from fastai.basic_train import LearnerCallback, add_metrics, Callback
 from fastai.core import master_bar, progress_bar
 from fastprogress.fastprogress import force_console_behavior
 from torch.utils.data import DataLoader
@@ -155,6 +155,16 @@ class DataTime(LearnerCallback):
 
     def on_epoch_end(self, last_metrics, **kwargs):
         return add_metrics(last_metrics, self.total_time / 60)
+
+
+class AddTargetClbk(Callback):
+
+    def __init__(self):
+        super().__init__()
+
+    def on_train_begin(self, last_input, last_target, train, **kwargs):
+        if train:
+            return {'last_input': (last_input, last_target)}
 
 
 def fit_and_log(learn, args, monitor):

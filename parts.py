@@ -1,5 +1,4 @@
 from collections import OrderedDict
-from functools import partial
 from pathlib import Path
 
 import fastai.vision as fv
@@ -9,6 +8,7 @@ import torch.nn.functional as F
 from torch import nn
 
 import models.cs_v2 as cs
+import utils
 from models import layers
 
 
@@ -380,7 +380,7 @@ class CsNet(nn.Module):
         td_head = TDHead(td_head_ni, obj_tree.n_obj, obj_tree.n_parts)
         bu, td, bu_laterals, td_laterls, channels = cs.create_bu_td(body, td_head)
         self.ifn, self.bu = bu[0], bu[1:]
-        self.td, self.td_head = td[:-1], td[:1]
+        self.td, self.td_head = td[:-1], td[-1]
         self.bu_laterals, self.td_laterals = bu_laterals, td_laterls
         self.embedding = fv.embedding(obj_tree.n_obj, channels[-1])
         self.obj_tree = obj_tree
@@ -416,8 +416,8 @@ def part_learner(data, arch, obj_tree: ObjectTree, pretrained=False, **learn_kwa
 
     loss = Loss(obj_tree)
     learn = fv.Learner(data, model, loss_func=loss, **learn_kwargs)
-    metrics = partial(BrodenMetrics, obj_tree=obj_tree, preds_func=obj_tree.cs_preds_func)
-    learn.callback_fns.append(metrics)
+    metrics = BrodenMetrics(learn, obj_tree=obj_tree, preds_func=obj_tree.cs_preds_func)
+    learn.callbacks.extend([metrics, utils.AddTargetClbk()])
 
     learn.split([learn.model.td[0]])
     if pretrained:
