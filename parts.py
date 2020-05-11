@@ -121,8 +121,8 @@ class ObjectTree:
 
         self.obj2part_idx = {}
         start = 0
-        for sec, o in zip(self.sections, self.obj_with_parts):
-            end = start + len(sec)
+        for n_parts, o in zip(self.sections, self.obj_with_parts):
+            end = start + n_parts
             self.obj2part_idx[o] = start, end
             start = end
 
