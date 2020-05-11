@@ -77,9 +77,9 @@ class TDBasicBlock(TDBlock):
 
     def __init__(self, ni, nf, upsample=None):
         super().__init__(upsample)
-        self.conv1 = conv3x3(ni, ni)
+        self.conv1 = fv.conv2d(ni, ni)
         self.bn1 = nn.BatchNorm2d(ni)
-        self.conv2 = conv3x3(ni, nf)
+        self.conv2 = fv.conv2d(ni, nf)
         self.bn2 = nn.BatchNorm2d(nf)
         self.relu = nn.ReLU(inplace=True)
 
@@ -99,11 +99,11 @@ class TDBottleNeck(TDBlock):
     def __init__(self, ni, nf, upsample=None):
         super().__init__(upsample)
         width = ni // self.expansion
-        self.conv1 = conv1x1(ni, width)
+        self.conv1 = fv.conv2d(ni, width, ks=1)
         self.bn1 = nn.BatchNorm2d(width)
-        self.conv2 = conv3x3(width, width)
+        self.conv2 = fv.conv2d(width, width)
         self.bn2 = nn.BatchNorm2d(width)
-        self.conv3 = conv1x1(width, nf)
+        self.conv3 = fv.conv2d(width, nf, ks=1)
         self.bn3 = nn.BatchNorm2d(nf)
         self.relu = nn.ReLU(inplace=True)
 
@@ -119,9 +119,9 @@ class TDBottleNeck(TDBlock):
 
 
 class TDHead(nn.Sequential):
-    def __init__(self, fi, fn):
-        super().__init__(layers.conv_layer(fi, fi),
-                         nn.Conv2d(fi, fn, kernel_size=1, bias=True))
+    def __init__(self, ni, nf):
+        super().__init__(layers.conv_layer(ni, ni),
+                         fv.conv2d(ni, nf, kernel_size=1, bias=True))
 
 
 class UnetBlock(nn.Module):
@@ -264,76 +264,68 @@ class Fuse(nn.Module):
         return out
 
 
+def create_bu_td(body, td_head=1, lateral=laterals.ConvAddLateral, img_size=(256, 256)):
+    # first few layers are not in a block, we group all layers up through MaxPool to a single block
+    concat_idx = 4
+    bu = nn.Sequential(body[:concat_idx], *body[concat_idx:])
+
+    bu_flat = [bu[:concat_idx]] + list(itertools.chain(*bu[concat_idx:]))
+    bu_flat = nn.Sequential(*bu_flat)
+
+    if isinstance(bu_flat[1], torchvision.models.resnet.BasicBlock):
+        td_block = TDBasicBlock
+    elif isinstance(bu_flat[1], torchvision.models.resnet.Bottleneck):
+        td_block = TDBottleNeck
+    else:
+        raise ValueError
+
+    szs = fv.learner.model_sizes(bu_flat, img_size)
+    td_szs = list(reversed(szs))
+    td_flat = []
+    for sz_in, sz_out in zip(td_szs, td_szs[1:]):
+        upsample = None
+        if sz_in[-1] != sz_out[-1]:
+            upsample = nn.Sequential(
+                fv.Lambda(lambda x: F.interpolate(x, scale_factor=2, mode='bilinear', align_corners=False)),
+                fv.conv_layer(sz_in[1], sz_out[1], ks=1, use_activ=False)
+            )
+        elif sz_in[1] != sz_out[1]:
+            upsample = fv.conv_layer(sz_in[1], sz_out[1], ks=1, use_activ=False)
+        td_flat.append(td_block(sz_in[1], sz_out[1], upsample=upsample))
+
+    channels = [s[1] for s in szs]
+
+    if isinstance(td_head, int):
+        td_head = TDHead(channels[0], td_head)
+    td_flat.append(td_head)
+
+    bu_laterals = laterals.create_laterals(lateral, bu_flat[:-1], td_flat[1:], channels[:-1])
+    td_laterals = laterals.create_laterals(lateral, td_flat[:-1], bu_flat[1:], reversed(channels[:-1]))
+
+    td_layered = _group_td(td_flat[:-1], bu[1:])
+    td = nn.Sequential(*td_layered, td_flat[-1])
+
+    return bu, td, bu_laterals, td_laterals, channels
+
+
 class CounterStream(nn.Module):
 
     def __init__(self, bu, instructor, td_c=1, bu_c=0, lateral=laterals.ConvAddLateral,
-                 td_out_lateral=None, embedding=fv.embedding, lateral_on='block', ppm=False, fuse=False,
-                 img_size: Tuple[int, int] = (256, 256), bu_lateral=None, td_lateral=None):
+                 td_out_lateral=None, embedding=fv.embedding,
+                 img_size: Tuple[int, int] = (256, 256)):
         super().__init__()
-        # first few layers are not in a block, we group all layers up through MaxPool to a single block
-        concat_idx = 4
-        self.ifn = bu[:concat_idx]
-        self.bu_body = nn.Sequential(*bu[concat_idx:])
-        bu = [bu[:concat_idx]] + list(itertools.chain(*bu[concat_idx:]))
-        bu = nn.Sequential(*bu)
 
-        if isinstance(bu[1], torchvision.models.resnet.BasicBlock):
-            td_block = TDBasicBlock
-        elif isinstance(bu[1], torchvision.models.resnet.Bottleneck):
-            td_block = TDBottleNeck
-        else:
-            raise ValueError
-
-        szs = fv.learner.model_sizes(bu, img_size)
-        td_szs = list(reversed(szs))
-        td = []
-        for sz_in, sz_out in zip(td_szs, td_szs[1:]):
-            upsample = None
-            if sz_in[-1] != sz_out[-1]:
-                upsample = nn.Sequential(
-                    fv.Lambda(lambda x: F.interpolate(x, scale_factor=2, mode='bilinear', align_corners=False)),
-                    fv.conv_layer(sz_in[1], sz_out[1], ks=1, use_activ=False)
-                )
-            elif sz_in[1] != sz_out[1]:
-                upsample = fv.conv_layer(sz_in[1], sz_out[1], ks=1, use_activ=False)
-            td.append(td_block(sz_in[1], sz_out[1], upsample=upsample))
-
-        td_layered = _group_td(td, self.bu_body)
-        channels = [s[1] for s in szs]
-
-        td_head = TDHead(channels[0], td_c)
-        if fuse:
-            td_channels = list(reversed(channels))
-            layers_c, i = [], 0
-            for layer in td_layered:
-                i += len(layer)
-                layers_c.append(td_channels[i])
-
-            fuse = Fuse(td_layered[:-1], layers_c, channels[0])
-            td_head = nn.Sequential(fuse, td_head)
-
-        self.td = nn.Sequential(*td_layered, td_head)
-
-        td.append(self.td[-1])
-
-        if not bu_lateral:
-            bu_lateral = lateral
-        if not td_lateral:
-            td_lateral = lateral
-        if lateral_on == 'layer':
-            bu = [self.ifn] + [layer for layer in self.bu_body]
-            td = self.td
-
-        self.bu_laterals = laterals.create_laterals(bu_lateral, bu[:-1], td[1:], channels[:-1])
-        self.td_laterals = laterals.create_laterals(td_lateral, td[:-1], bu[1:], reversed(channels[:-1]))
+        bu, td, bu_laterals, td_laterals, channels = create_bu_td(bu, td_head=td_c, lateral=lateral, img_size=img_size)
+        self.ifn = bu[0]
+        self.bu_body = bu[1:]
+        self.td = td
+        self.bu_laterals = bu_laterals
+        self.td_laterals = td_laterals
 
         if td_out_lateral:
             self.td_laterals[-1].remove()
             hm_lat = td_out_lateral(self.td[-1], self.bu_body[0], td_c, channels[0])
             self.td_laterals[-1] = hm_lat
-
-        if ppm:
-            self.td = nn.Sequential(layers.PPM(channels[-1]), *self.td)
 
         self.emb = embedding(instructor.n_inst, channels[-1]) if embedding else None
         self.bu_head = fv.create_head(channels[-1] * 2, bu_c) if bu_c else None
@@ -384,12 +376,6 @@ def cs_learner(data: fv.DataBunch, arch: Callable, instructor, td_c=1, bu_c=0, e
     learn.split([learn.model.td[0]])
     if pretrained:
         learn.freeze()
-        fv.apply_init(learn.model.bu_laterals, nn.init.kaiming_normal_)
-        fv.apply_init(learn.model.td_laterals, nn.init.kaiming_normal_)
-        if learn.model.bu_head:
-            fv.apply_init(learn.model.bu_head, nn.init.kaiming_normal_)
-    else:
-        fv.apply_init(learn.model, nn.init.kaiming_normal_)
     return learn
 
 

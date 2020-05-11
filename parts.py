@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from functools import partial
 from pathlib import Path
 
 import fastai.vision as fv
@@ -6,6 +7,9 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 from torch import nn
+
+import models.cs_v2 as cs
+from models import layers
 
 
 class ObjectAndParts(fv.ItemBase):
@@ -115,6 +119,13 @@ class ObjectTree:
         self.obj_names = obj_names
         self.part_names = part_names
 
+        self.obj2part_idx = {}
+        start = 0
+        for i, (sec, o) in zip(self.sections, self.obj_with_parts):
+            end = start + len(sec)
+            self.obj2part_idx[o] = start, end
+            start = end
+
     @classmethod
     def from_meta_folder(cls, meta):
         tree = pd.read_csv(meta / 'object_part_hierarchy.csv')
@@ -196,12 +207,27 @@ class ObjectTree:
         gt[bg_inside_obj] = 0
         return gt
 
+    def cs_preds_func(self, last_output):
+        obj_pred, part_pred_dict = last_output
+        obj_pred = obj_pred.argmax(dim=1)
+
+        bs, h, w = obj_pred.shape
+        n_obj_with_parts = self.n_obj_with_parts
+        part_pred = torch.zeros(n_obj_with_parts, bs, h, w, type=torch.long, device=obj_pred.device)
+        for o, p_pred in part_pred_dict.items():
+            has_obj = torch.flatten(obj_pred == o, start_dim=1).any(dim=1)
+            p_pred = p_pred.argmax(dim=1) * has_obj[: None, None]
+            part_pred[self.obj2idx[o]] = p_pred
+
+        return obj_pred, part_pred
+
 
 class BrodenMetrics(fv.LearnerCallback):
     _order = -20
 
-    def __init__(self, learn, obj_tree: ObjectTree, preds_func=None):
+    def __init__(self, learn, obj_tree: ObjectTree, preds_func=None, restrict=True):
         super().__init__(learn)
+        self.restrict = restrict
         self.obj_tree = obj_tree
         self.preds_func = preds_func
         self._reset()
@@ -227,18 +253,18 @@ class BrodenMetrics(fv.LearnerCallback):
         part_gt = self.obj_tree.split_parts_gt(obj_gt, part_gt)
 
         if self.preds_func:
-            last_output = self.preds_func(last_output)
-        obj_pred, part_pred = last_output
+            obj_pred, part_pred = self.preds_func(last_output)
+        else:
+            obj_pred, part_pred = last_output[:self.obj_tree.n_obj], last_output[self.obj_tree.n_obj:]
+            obj_pred = obj_pred.argmax(dim=1)
+            part_pred = self.obj_tree.split_parts_pred(part_pred)
+            # part_pred shape: (n_obj_with_parts, bs, h, w)
+            part_pred = torch.stack([obj_parts.argmax(dim=1) for obj_parts in part_pred], dim=0)
 
-        obj_pred = obj_pred.argmax(dim=1)
-        part_pred = self.obj_tree.split_parts_pred(part_pred)
-        # part_pred shape: (n_obj_with_parts, bs, h, w)
-        part_pred = torch.stack([obj_parts.argmax(dim=1) for obj_parts in part_pred], dim=0)
         obj_pred, part_pred = resize_obj_part(obj_pred, part_pred, obj_gt.shape[-2:])
 
-        objects_with_parts = torch.tensor(list(self.obj_tree.obj_with_parts), device=obj_pred.device)[:, None, None, None]
-        object_pred_mask = obj_pred == objects_with_parts
-        part_pred = part_pred * object_pred_mask
+        if self.restrict:
+            part_pred = self.restrict_part_to_obj(obj_pred, part_pred)
 
         self.obj_pa.update(*pix_acc(obj_pred, obj_gt))
         self.obj_iou.update(*iou(obj_pred, obj_gt, self.obj_tree.n_obj, obj_gt > 0))
@@ -247,6 +273,13 @@ class BrodenMetrics(fv.LearnerCallback):
         for i, (obj, parts) in enumerate(self.obj_tree.obj_and_parts()):
             mask = part_gt[i] > -1
             self.part_iou[i].update(*iou(part_pred[i], part_gt[i], len(parts), mask))
+
+    def restrict_part_to_obj(self, obj_pred, part_pred):
+        objects_with_parts = list(self.obj_tree.obj_with_parts)
+        objects_with_parts = torch.tensor(objects_with_parts, device=obj_pred.device)[:, None, None, None]
+        object_pred_mask = obj_pred == objects_with_parts
+        part_pred = part_pred * object_pred_mask
+        return part_pred
 
     def on_epoch_end(self, last_metrics, **kwargs):
         parts_iou = [c.accuracy() for c in self.part_iou]
@@ -274,27 +307,29 @@ def resize_obj_part(obj, part, size):
 
 class Loss:
 
-    def __init__(self, object_tree: ObjectTree, preds_func=None):
+    def __init__(self, object_tree: ObjectTree, split_func=None):
         self.object_tree = object_tree
         # unlabeled pixels are zeros
         self.obj_ce = nn.CrossEntropyLoss(ignore_index=0)
         # outside objects gt values are expected to be -1, background inside objects is 0
         self.part_ce = nn.CrossEntropyLoss(ignore_index=-1)
-        self.preds_func = preds_func
+        self.split = split_func
 
     def __call__(self, pred, obj_gt, part_gt):
-        if self.preds_func:
-            pred = self.preds_func(pred)
+        if self.split:
+            obj_pred, part_pred = self.split(pred)
+        else:
+            obj_pred, part_pred = pred
 
-        obj_pred, part_pred = pred
         obj_gt, part_gt = resize_obj_part(obj_gt, part_gt, obj_pred.shape[-2:])
         part_gt = self.object_tree.split_parts_gt(obj_gt, part_gt)
 
         obj_loss = self.obj_ce(obj_pred, obj_gt)
         part_loss = []
-        for i, obj_i_parts in enumerate(self.object_tree.split_parts_pred(part_pred)):
+        for o, obj_parts in part_pred.items():
+            i = self.object_tree.obj2idx[o]
             if torch.any(part_gt[i] > -1):
-                part_loss.append(self.part_ce(obj_i_parts, part_gt[i]))
+                part_loss.append(self.part_ce(obj_parts, part_gt[i]))
 
         loss = obj_loss + sum(part_loss)
         return loss
@@ -326,3 +361,64 @@ def get_data(broden_root, size=256, bs=8, norm_stats=fv.imagenet_stats, padding_
             .databunch(bs=bs)
             .normalize(norm_stats))
     return data
+
+
+class TDHead(nn.ModuleDict):
+
+    def __init__(self, in_channels, n_objects, n_parts):
+        object_head = nn.Sequential(*layers.conv_layer(in_channels, in_channels),
+                                    fv.conv2d(in_channels, n_objects, ks=1))
+        part_head = nn.Sequential(*layers.conv_layer(in_channels, in_channels),
+                                  fv.conv2d(in_channels, n_parts, ks=1))
+        super().__init__({'object': object_head, 'parts': part_head})
+
+
+class CsNet(nn.Module):
+    def __init__(self, body, obj_tree: ObjectTree):
+        td_head_ni = body[0].out_channels
+        td_head = TDHead(td_head_ni, obj_tree.n_objects, obj_tree.n_parts)
+        bu, td, bu_laterals, td_laterls, channels = cs.create_bu_td(body, td_head)
+        self.ifn, self.bu = bu[0], bu[1:]
+        self.td, self.td_head = td[:-1], td[:1]
+        self.bu_laterals, self.td_laterals = bu_laterals, td_laterls
+        self.embedding = fv.embedding(obj_tree.n_objects, channels[-1])
+        self.obj_tree = obj_tree
+
+    def forward(self, img, gt=None):
+        bs = img.shape[0]
+        features = self.ifn(img)
+        x = self.bu(features)
+        obj_inst = torch.zeros(bs, dtype=torch.long, device=img.device)
+        x = x * self.emb(obj_inst)[..., None, None]
+        obj_pred = self.td_head['objects'](self.td(x))
+
+        if self.training:
+            objects = gt.unique()
+        else:
+            objects = obj_pred.argmax(dim=1).unique()
+
+        objects = [o for o in objects if o in self.obj_tree.obj_with_parts]
+        x = self.bu(features)
+        part_pred = {}
+        for o in objects:
+            td_in = x * self.emb(o)[..., None, None]
+            start, end = self.obj_tree.obj2part_idx[o]
+            part_pred[o] = self.td_head['parts'](self.td(td_in))[:, start:end]
+
+        return obj_pred, part_pred
+
+
+def part_learner(data, arch, obj_tree: ObjectTree, pretrained=False, **learn_kwargs):
+    body = fv.create_body(arch, pretrained)
+    model = CsNet(body, obj_tree)
+    model = fv.to_device(model, device=data.device)
+
+    loss = Loss(obj_tree)
+    learn = fv.Learner(data, model, loss_func=loss, **learn_kwargs)
+    metrics = partial(BrodenMetrics, obj_tree=obj_tree, preds_func=obj_tree.cs_preds_func)
+    learn.callback_fns.append(metrics)
+
+    learn.split([learn.model.td[0]])
+    if pretrained:
+        learn.freeze()
+    return learn

@@ -99,7 +99,7 @@ class GaussianSmoothing(nn.Module):
 def conv_layer(ni, nf, ks=3):
     return nn.Sequential(
         fv.conv2d(ni, nf, ks=ks, bias=False),
-        fv.batchnorm_2d(nf),
+        nn.BatchNorm2d(nf),
         nn.ReLU(inplace=True)
     )
 
