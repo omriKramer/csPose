@@ -221,7 +221,7 @@ class ObjectTree:
         part_pred = torch.zeros((n_obj_with_parts, bs, h, w), dtype=torch.long, device=obj_pred.device)
         for o, p_pred in part_pred_dict.items():
             has_obj = torch.flatten(obj_pred == o, start_dim=1).any(dim=1)
-            p_pred = p_pred.argmax(dim=1) * has_obj[: None, None]
+            p_pred = p_pred.argmax(dim=1) * has_obj[:, None, None]
             part_pred[self.obj2idx[o]] = p_pred
 
         return obj_pred, part_pred
