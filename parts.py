@@ -400,7 +400,8 @@ class CsNet(nn.Module):
         else:
             objects = obj_pred.argmax(dim=1).unique()
 
-        objects = [o for o in objects if o in self.obj_tree.obj_with_parts]
+        objects_int = objects.tolist()
+        objects = [o for o, o_int in zip(objects, objects_int) if o_int in self.obj_tree.obj_with_parts]
         x = self.bu(features)
         part_pred = {}
         for o in objects:
