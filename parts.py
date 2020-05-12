@@ -145,8 +145,8 @@ class ObjectTree:
         if not names:
             return self.tree.items()
 
-        return {self.obj_names[o]: [self.part_names[p] for p in parts]
-                for o, parts in self.tree.items()}
+        return [(self.obj_names[o], [self.part_names[p] for p in parts])
+                for o, parts in self.tree.items()]
 
     @property
     def obj_with_parts(self):
@@ -417,7 +417,7 @@ class CsNet(nn.Module):
         part_pred = {}
         for o, o_int in objects:
             td_in = x * self.embedding(o)[..., None, None]
-            part_pred[o_int] = self.td_head(self.td(td_in), self.obj_tree.part_names[o_int])
+            part_pred[o_int] = self.td_head(self.td(td_in), self.obj_tree.obj_names[o_int])
 
         self.clear()
         return obj_pred, part_pred
