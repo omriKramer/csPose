@@ -415,7 +415,7 @@ class CsNet(nn.Module):
         part_pred = {}
         for o, o_int in objects:
             td_in = x * self.embedding(o)[..., None, None]
-            o_idx = self.obj_tree.obj2idx
+            o_idx = self.obj_tree.obj2idx[o_int]
             part_pred[o_int] = self.td_head(self.td(td_in), o_idx)
 
         self.clear()
