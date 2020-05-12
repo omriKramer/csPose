@@ -364,21 +364,26 @@ def get_data(broden_root, size=256, bs=8, norm_stats=fv.imagenet_stats, padding_
     return data
 
 
-class TDHead(nn.ModuleDict):
+class TDHead(nn.Module):
 
-    def __init__(self, in_channels, n_objects, n_parts):
-        object_head = nn.Sequential(*layers.conv_layer(in_channels, in_channels),
-                                    fv.conv2d(in_channels, n_objects, ks=1))
-        part_head = nn.Sequential(*layers.conv_layer(in_channels, in_channels),
-                                  fv.conv2d(in_channels, n_parts, ks=1))
-        super().__init__({'objects': object_head, 'parts': part_head})
+    def __init__(self, in_channels, n_objects, obj_and_parts):
+        super().__init__()
+        self.conv = layers.conv_layer(in_channels, in_channels)
+        d = {o: fv.conv2d(in_channels, len(parts), ks=1, bias=True) for o, parts in obj_and_parts}
+        d[0] = fv.conv2d(in_channels, n_objects, ks=1, bias=True)
+        self.classifier = nn.ModuleDict(d)
+
+    def forward(self, x, o):
+        out = self.conv(x)
+        out = self.classifier[o](out)
+        return out
 
 
 class CsNet(nn.Module):
     def __init__(self, body, obj_tree: ObjectTree):
         super().__init__()
         td_head_ni = body[0].out_channels
-        td_head = TDHead(td_head_ni, obj_tree.n_obj, obj_tree.n_parts)
+        td_head = TDHead(td_head_ni, obj_tree.n_obj, obj_tree.obj_and_parts())
         bu, td, bu_laterals, td_laterls, channels = cs.create_bu_td(body, td_head)
         self.ifn, self.bu = bu[0], bu[1:]
         self.td, self.td_head = td[:-1], td[-1]
@@ -392,7 +397,7 @@ class CsNet(nn.Module):
         x = self.bu(features)
         obj_inst = torch.zeros(bs, dtype=torch.long, device=img.device)
         x = x * self.embedding(obj_inst)[..., None, None]
-        obj_pred = self.td_head['objects'](self.td(x))
+        obj_pred = self.td_head(self.td(x), 0)
 
         if self.training:
             obj_gt = gt[0]
@@ -401,13 +406,12 @@ class CsNet(nn.Module):
             objects = obj_pred.argmax(dim=1).unique()
 
         objects_int = objects.tolist()
-        objects = [o for o, o_int in zip(objects, objects_int) if o_int in self.obj_tree.obj_with_parts]
+        objects = [(o, o_int) for o, o_int in zip(objects, objects_int) if o_int in self.obj_tree.obj_with_parts]
         x = self.bu(features)
         part_pred = {}
-        for o in objects:
+        for o, o_int in objects:
             td_in = x * self.embedding(o)[..., None, None]
-            start, end = self.obj_tree.obj2part_idx[o]
-            part_pred[o] = self.td_head['parts'](self.td(td_in))[:, start:end]
+            part_pred[o_int] = self.td_head(self.td(td_in), o_int)
 
         self.clear()
         return obj_pred, part_pred
