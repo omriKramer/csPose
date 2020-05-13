@@ -332,14 +332,11 @@ class Loss:
         obj_loss = self.obj_ce(obj_pred, obj_gt)
         part_loss = []
 
-        objects = obj_gt.unique().tolist()
-        objects = [o for o in objects if o in self.object_tree.obj_with_parts]
-        for o in objects:
+        for o, o_part_pred in part_pred.items():
             i = self.object_tree.obj2idx[o]
-            o_parts_gt = part_gt[i]
-            if torch.any(o_parts_gt > -1):
-                obj_parts = part_pred[o] if o in part_pred else torch.zeros_like(o_parts_gt)
-                part_loss.append(self.part_ce(obj_parts, o_parts_gt))
+            o_part_gt = part_gt[i]
+            if torch.any(o_part_gt > -1):
+                part_loss.append(self.part_ce(o_part_pred, o_part_gt))
 
         loss = obj_loss + sum(part_loss)
         return loss
