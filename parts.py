@@ -437,7 +437,7 @@ def part_learner(data, arch, obj_tree: ObjectTree, pretrained=False, **learn_kwa
 
     loss = Loss(obj_tree)
     learn = fv.Learner(data, model, loss_func=loss, **learn_kwargs)
-    metrics = BrodenMetrics(learn, obj_tree=obj_tree, preds_func=obj_tree.cs_preds_func)
+    metrics = BrodenMetrics(learn, obj_tree=obj_tree, preds_func=obj_tree.cs_preds_func, restrict=False)
     learn.callbacks.extend([metrics, utils.AddTargetClbk()])
 
     learn.split([learn.model.td[0]])
