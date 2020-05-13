@@ -370,7 +370,7 @@ def cs_learner(data: fv.DataBunch, arch: Callable, instructor, td_c=1, bu_c=0, e
     size = next(iter(data.train_dl))[0].shape[-2:]
     model = fv.to_device(
         CounterStream(body, instructor, td_c=td_c, bu_c=bu_c, img_size=size, embedding=embedding,
-                      lateral=lateral, td_out_lateral=td_out_lateral, ppm=ppm),
+                      lateral=lateral, td_out_lateral=td_out_lateral),
         data.device)
     learn = fv.Learner(data, model, **learn_kwargs)
     learn.split([learn.model.td[0]])
