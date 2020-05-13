@@ -332,7 +332,7 @@ class Loss:
         obj_loss = self.obj_ce(obj_pred, obj_gt)
         part_loss = []
 
-        objects = obj_gt.unique().tolsit()
+        objects = obj_gt.unique().tolist()
         objects = [o for o in objects if o in self.object_tree.obj_with_parts]
         for o, in objects:
             i = self.object_tree.obj2idx[o]
