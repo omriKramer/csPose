@@ -260,7 +260,7 @@ class BrodenMetrics(fv.LearnerCallback):
         if self.preds_func:
             obj_pred, part_pred = self.preds_func(last_output)
         else:
-            obj_pred, part_pred = last_output[:self.obj_tree.n_obj], last_output[self.obj_tree.n_obj:]
+            obj_pred, part_pred = last_output[:, :self.obj_tree.n_obj], last_output[:, self.obj_tree.n_obj:]
             obj_pred = obj_pred.argmax(dim=1)
             part_pred = self.obj_tree.split_parts_pred(part_pred)
             # part_pred shape: (n_obj_with_parts, bs, h, w)
