@@ -331,10 +331,15 @@ class Loss:
 
         obj_loss = self.obj_ce(obj_pred, obj_gt)
         part_loss = []
-        for o, obj_parts in part_pred.items():
+
+        objects = obj_gt.unique().tolsit()
+        objects = [o for o in objects if o in self.object_tree.obj_with_parts]
+        for o, in objects:
             i = self.object_tree.obj2idx[o]
-            if torch.any(part_gt[i] > -1):
-                part_loss.append(self.part_ce(obj_parts, part_gt[i]))
+            o_parts_gt = part_gt[i]
+            if torch.any(o_parts_gt > -1):
+                obj_parts = part_pred[o] if o in part_pred else torch.zeros_like(o_parts_gt)
+                part_loss.append(self.part_ce(obj_parts, o_parts_gt))
 
         loss = obj_loss + sum(part_loss)
         return loss
@@ -398,6 +403,7 @@ class CsNet(nn.Module):
     def forward(self, img, gt=None):
         bs = img.shape[0]
         features = self.ifn(img)
+
         x = self.bu(features)
         obj_inst = torch.zeros(bs, dtype=torch.long, device=img.device)
         x = x * self.embedding(obj_inst)[..., None, None]
