@@ -129,7 +129,8 @@ class ObjectTree:
 
     @classmethod
     def from_meta_folder(cls, meta):
-        tree = pd.read_csv(meta / 'object_part_hierarchy.csv')
+        meta = Path(meta)
+        tree = pd.read_csv(Path(meta) / 'object_part_hierarchy.csv')
         tree = {row.object_label: row.part_labels.split(';') for row in tree.itertuples()}
         tree = {k: [int(o) for o in v] for k, v in tree.items()}
 
@@ -390,10 +391,7 @@ class CsNet(nn.Module):
         super().__init__()
         td_head_ni = body[0].out_channels
         td_head = TDHead(td_head_ni, obj_tree.n_obj, obj_tree.sections)
-        bu, td, bu_laterals, td_laterls, channels = cs.create_bu_td(body, td_head)
-        self.ifn, self.bu = bu[0], bu[1:]
-        self.td, self.td_head = td[:-1], td[-1]
-        self.bu_laterals, self.td_laterals = bu_laterals, td_laterls
+        self.ifn, self.bu, self.td, self.td_head, self.laterals, channels = cs.create_bu_td(body, td_head)
         self.embedding = fv.embedding(obj_tree.n_obj, channels[-1])
         self.obj_tree = obj_tree
 
@@ -404,7 +402,8 @@ class CsNet(nn.Module):
         x = self.bu(features)
         obj_inst = torch.zeros(bs, dtype=torch.long, device=img.device)
         x = x * self.embedding(obj_inst)[..., None, None]
-        obj_pred = self.td_head(self.td(x), -1)
+        obj_pred = self.td(x)
+        obj_pred = self.td_head(obj_pred, -1)
 
         if self.training:
             obj_gt = gt[0]
@@ -419,13 +418,15 @@ class CsNet(nn.Module):
         for o, o_int in objects:
             td_in = x * self.embedding(o)[..., None, None]
             o_idx = self.obj_tree.obj2idx[o_int]
-            part_pred[o_int] = self.td_head(self.td(td_in), o_idx)
+            out = self.td(td_in)
+            out = self.td_head(out, o_idx)
+            part_pred[o_int] = out
 
         self.clear()
         return obj_pred, part_pred
 
     def clear(self):
-        for lateral in itertools.chain(self.bu_laterals, self.td_laterals):
+        for lateral in self.laterals:
             del lateral.origin_out
             lateral.origin_out = None
 

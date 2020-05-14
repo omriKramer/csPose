@@ -20,7 +20,8 @@ class Lateral(nn.Module):
         self.origin_out = output
 
     def target_forward_pre_hook(self, module, inp):
-        return self(self.origin_out, inp[0])
+        new = self(self.origin_out, inp[0])
+        return (new, *inp[1:])
 
     def remove(self):
         self.origin_hook.remove()

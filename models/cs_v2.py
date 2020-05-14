@@ -267,7 +267,7 @@ class Fuse(nn.Module):
 def create_bu_td(body, td_head=1, lateral=laterals.ConvAddLateral, img_size=(256, 256)):
     # first few layers are not in a block, we group all layers up through MaxPool to a single block
     concat_idx = 4
-    bu = nn.Sequential(body[:concat_idx], *body[concat_idx:])
+    bu = nn.Sequential(*body[concat_idx:])
 
     bu_flat = [body[:concat_idx]] + list(itertools.chain(*body[concat_idx:]))
     bu_flat = nn.Sequential(*bu_flat)
@@ -297,15 +297,16 @@ def create_bu_td(body, td_head=1, lateral=laterals.ConvAddLateral, img_size=(256
 
     if isinstance(td_head, int):
         td_head = TDHead(channels[0], td_head)
-    td_flat.append(td_head)
 
-    bu_laterals = laterals.create_laterals(lateral, bu_flat[:-1], td_flat[1:], channels[:-1])
-    td_laterals = laterals.create_laterals(lateral, td_flat[:-1], bu_flat[1:], reversed(channels[:-1]))
+    ifn = bu_flat[0]
+    lat = nn.ModuleList([lateral(ifn, td_head, channels[0])])
+    lat.extend(laterals.create_laterals(lateral, bu_flat[1:-1], td_flat[1:], channels[1:-1]))
+    lat.extend(laterals.create_laterals(lateral, td_flat, bu_flat[1:], reversed(channels[:-1])))
 
-    td_layered = _group_td(td_flat[:-1], bu[1:])
-    td = nn.Sequential(*td_layered, td_flat[-1])
+    td_layered = _group_td(td_flat, bu)
+    td = nn.Sequential(*td_layered)
 
-    return bu, td, bu_laterals, td_laterals, channels
+    return ifn, bu, td, td_head, lat, channels
 
 
 class CounterStream(nn.Module):
@@ -315,17 +316,15 @@ class CounterStream(nn.Module):
                  img_size: Tuple[int, int] = (256, 256)):
         super().__init__()
 
-        bu, td, bu_laterals, td_laterals, channels = create_bu_td(bu, td_head=td_c, lateral=lateral, img_size=img_size)
-        self.ifn = bu[0]
-        self.bu_body = bu[1:]
-        self.td = td
-        self.bu_laterals = bu_laterals
-        self.td_laterals = td_laterals
+        self.ifn, self.bu_body, self.td, self.td_head, self.laterals, channels = create_bu_td(bu,
+                                                                                              td_head=td_c,
+                                                                                              lateral=lateral,
+                                                                                              img_size=img_size)
 
         if td_out_lateral:
-            self.td_laterals[-1].remove()
+            self.laterls[-1].remove()
             hm_lat = td_out_lateral(self.td[-1], self.bu_body[0], td_c, channels[0])
-            self.td_laterals[-1] = hm_lat
+            self.laterls[-1] = hm_lat
 
         self.emb = embedding(instructor.n_inst, channels[-1]) if embedding else None
         self.bu_head = fv.create_head(channels[-1] * 2, bu_c) if bu_c else None
@@ -333,7 +332,7 @@ class CounterStream(nn.Module):
         self.instructor.on_init_end(self)
 
     def clear(self):
-        for lateral in itertools.chain(self.bu_laterals, self.td_laterals):
+        for lateral in self.laterals:
             del lateral.origin_out
             lateral.origin_out = None
 
@@ -352,7 +351,7 @@ class CounterStream(nn.Module):
             inst = self.instructor.on_td_begin(self, img_features, last_bu, bu_out, td_out)
             if self.emb:
                 last_bu = last_bu * self.emb(inst)[..., None, None]
-            td_out.append(self.td(last_bu))
+            td_out.append(self.td_head(self.td(last_bu)))
 
             self.instructor.i += 1
 
