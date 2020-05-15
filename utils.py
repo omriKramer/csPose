@@ -167,7 +167,7 @@ class AddTargetClbk(Callback):
             return {'last_input': (last_input, last_target)}
 
 
-def fit_and_log(learn, monitor, save='bestmodel', epochs=40, start_epoch=0, lr=1e-2, load=None, wd=None,
+def fit_and_log(learn, monitor, save='bestmodel', epochs=40, start_epoch=0, lr=1e-2, wd=None, load=None,
                 no_one_cycle=False):
     if load:
         learn.load(load)
