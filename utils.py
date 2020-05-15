@@ -195,4 +195,5 @@ def basic_train_parser():
     parser.add_argument('-s', '--size', default=128, type=int)
     parser.add_argument('-l', '--load', default=None, type=str)
     parser.add_argument('--no-one-cycle', action='store_true')
+    parser.add_argument('--pretraind', action='store_true')
     return parser
