@@ -167,18 +167,19 @@ class AddTargetClbk(Callback):
             return {'last_input': (last_input, last_target)}
 
 
-def fit_and_log(learn, args, monitor):
-    if args.load:
-        learn.load(args.load)
+def fit_and_log(learn, monitor, save='bestmodel', epochs=40, start_epoch=0, lr=1e-2, load=None, wd=None,
+                no_one_cycle=False):
+    if load:
+        learn.load(load)
 
-    logger = callbacks.CSVLogger(learn, filename=args.save)
-    save_clbk = callbacks.SaveModelCallback(learn, monitor=monitor, mode='max', every='improvement', name=args.save)
+    logger = callbacks.CSVLogger(learn, filename=save)
+    save_clbk = callbacks.SaveModelCallback(learn, monitor=monitor, mode='max', every='improvement', name=save)
 
-    if args.no_one_cycle:
-        epochs = args.epochs - args.start_epoch
-        learn.fit(epochs, args.lr, wd=args.wd, callbacks=[logger, save_clbk])
+    if no_one_cycle:
+        epochs = epochs - start_epoch
+        learn.fit(epochs, lr, wd=wd, callbacks=[logger, save_clbk])
     else:
-        learn.fit_one_cycle(args.epochs, args.lr, wd=args.wd, start_epoch=args.start_epoch,
+        learn.fit_one_cycle(epochs, lr, wd=wd, start_epoch=start_epoch,
                             callbacks=[logger, save_clbk])
 
 
