@@ -142,6 +142,9 @@ class ObjectTree:
 
         return cls(tree, objects, parts)
 
+    def __getitem__(self, item):
+        return self.tree[item]
+
     def obj_and_parts(self, names=False):
         if not names:
             return self.tree.items()
