@@ -187,16 +187,17 @@ class ModelBuilder:
     def build_decoder(self, tree,
                       arch='ppm_bilinear_deepsup', fc_dim=512,
                       weights='', use_softmax=False):
+        nr_classes = {'scene': 365, 'object': tree.n_obj, 'part': tree.n_part, 'material': 26, 'texture': 47}
         if arch == 'upernet_lite':
             net_decoder = UPerNet(
-                tree.n_obj,
+                nr_classes,
                 tree,
                 fc_dim=fc_dim,
                 use_softmax=use_softmax,
                 fpn_dim=256)
         elif arch == 'upernet':
             net_decoder = UPerNet(
-                tree.n_obj,
+                nr_classes,
                 tree,
                 fc_dim=fc_dim,
                 use_softmax=True,
