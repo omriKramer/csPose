@@ -414,7 +414,7 @@ class CsNet(nn.Module):
 
         objects_int = objects.tolist()
         objects = [(o, o_int) for o, o_int in zip(objects, objects_int) if o_int in self.obj_tree.obj_with_parts]
-        if self.sample_one:
+        if self.sample_one and self.training:
             objects = random.sample(objects, 1)
 
         x = self.bu(features)
