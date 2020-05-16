@@ -249,7 +249,10 @@ class BrodenMetrics(fv.LearnerCallback):
         self.part_iou = [Accuracy(n - 1) for n in self.obj_tree.sections]
 
     def on_train_begin(self, **kwargs):
-        self.learn.recorder.add_metric_names(['object-P.A.', 'object-mIoU', 'part-P.A.', 'part-mIoU(bg)'])
+        try:
+            self.learn.recorder.add_metric_names(['object-P.A.', 'object-mIoU', 'part-P.A.', 'part-mIoU(bg)'])
+        except AttributeError:
+            print('Warning: recorder is not initialized for learner')
 
     def on_epoch_begin(self, **kwargs):
         self._reset()
