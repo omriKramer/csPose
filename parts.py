@@ -1,4 +1,5 @@
 import itertools
+import random
 from collections import OrderedDict
 from pathlib import Path
 
@@ -16,7 +17,6 @@ from models import layers
 class ObjectAndParts(fv.ItemBase):
 
     def __init__(self, objects: fv.ImageSegment, parts: fv.ImageSegment):
-        assert objects.shape == parts.shape
         self.objects = objects
         self.parts = parts
 
@@ -387,8 +387,9 @@ class TDHead(nn.Module):
 
 
 class CsNet(nn.Module):
-    def __init__(self, body, obj_tree: ObjectTree):
+    def __init__(self, body, obj_tree: ObjectTree, sample_one=False):
         super().__init__()
+        self.sample_one = sample_one
         td_head_ni = body[0].out_channels
         td_head = TDHead(td_head_ni, obj_tree.n_obj, obj_tree.sections)
         self.ifn, self.bu, self.td, self.td_head, self.laterals, channels = cs.create_bu_td(body, td_head)
@@ -413,6 +414,9 @@ class CsNet(nn.Module):
 
         objects_int = objects.tolist()
         objects = [(o, o_int) for o, o_int in zip(objects, objects_int) if o_int in self.obj_tree.obj_with_parts]
+        if self.sample_one:
+            objects = random.sample(objects, 1)
+
         x = self.bu(features)
         part_pred = {}
         for o, o_int in objects:
@@ -431,9 +435,9 @@ class CsNet(nn.Module):
             lateral.origin_out = None
 
 
-def part_learner(data, arch, obj_tree: ObjectTree, pretrained=False, **learn_kwargs):
+def part_learner(data, arch, obj_tree: ObjectTree, pretrained=False, sample_one=False, **learn_kwargs):
     body = fv.create_body(arch, pretrained)
-    model = CsNet(body, obj_tree)
+    model = CsNet(body, obj_tree, sample_one=sample_one)
     model = fv.to_device(model, device=data.device)
 
     loss = Loss(obj_tree)
