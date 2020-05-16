@@ -42,7 +42,7 @@ class SegmentationModuleBase(nn.Module):
 
 
 class SegmentationModule(SegmentationModuleBase):
-    def __init__(self, net_enc, net_dec, tree, loss_scale=None):
+    def __init__(self, net_enc, net_dec, tree, loss_scale=None, seg_size=None):
         super(SegmentationModule, self).__init__()
         self.encoder = net_enc
         self.decoder = net_dec
@@ -57,9 +57,10 @@ class SegmentationModule(SegmentationModuleBase):
         self.crit_dict["material"] = nn.NLLLoss(ignore_index=0)  # ignore background 0
         self.crit_dict["scene"] = nn.NLLLoss(ignore_index=-1)  # ignore unlabelled -1
         self.tree = tree
+        self.seg_size = seg_size
 
     def forward(self, feed_dict, *, seg_size=None):
-        if seg_size is None:  # training
+        if self.training:
 
             if feed_dict['source_idx'] == 0:
                 output_switch = {"object": True, "part": True, "scene": True, "material": False}
@@ -114,6 +115,8 @@ class SegmentationModule(SegmentationModuleBase):
             return {'metric': metric_dict, 'loss': loss_dict}
         else:  # inference
             output_switch = {"object": True, "part": True, "scene": True, "material": True}
+            if not seg_size:
+                seg_size = self.seg_size
             pred = self.decoder(self.encoder(feed_dict['img'], return_feature_maps=True),
                                 output_switch=output_switch, seg_size=seg_size)
             return pred
@@ -433,7 +436,7 @@ class UPerNet(nn.Module):
         return output_dict
 
 
-def get_upernet(tree, weights_encoder, weights_decoder):
+def get_upernet(tree, weights_encoder, weights_decoder, seg_size=256):
     fc_dim = 2048
     builder = ModelBuilder()
     net_encoder = builder.build_encoder(
@@ -447,5 +450,5 @@ def get_upernet(tree, weights_encoder, weights_decoder):
         weights=weights_decoder,
         use_softmax=True)
 
-    segmentation_module = SegmentationModule(net_encoder, net_decoder, tree)
+    segmentation_module = SegmentationModule(net_encoder, net_decoder, tree, seg_size=seg_size)
     return segmentation_module
