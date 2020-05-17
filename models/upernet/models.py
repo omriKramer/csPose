@@ -115,8 +115,7 @@ class SegmentationModule(SegmentationModuleBase):
             return {'metric': metric_dict, 'loss': loss_dict}
         else:  # inference
             output_switch = {"object": True, "part": True, "scene": True, "material": True}
-            if not seg_size:
-                seg_size = self.seg_size
+            seg_size = feed_dict.get('seg_size', self.seg_size)
             pred = self.decoder(self.encoder(feed_dict['img'], return_feature_maps=True),
                                 output_switch=output_switch, seg_size=seg_size)
             return pred

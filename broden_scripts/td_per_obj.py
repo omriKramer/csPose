@@ -18,5 +18,5 @@ def main(args):
 if __name__ == '__main__':
     parser = utils.basic_train_parser()
     parser.add_argument('--root', default='unifiedparsing/broden_dataset')
-    parser.add_argument('--sample_one', action='store_true')
+    parser.add_argument('--sample-one', action='store_true')
     main(parser.parse_args())
