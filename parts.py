@@ -393,7 +393,7 @@ class TDHead(nn.Module):
 
 
 class CsNet(nn.Module):
-    def __init__(self, body, obj_tree: ObjectTree, sample_one=False):
+    def __init__(self, body, obj_tree: ObjectTree, sample_one=False, emb_op=torch.mul):
         super().__init__()
         self.sample_one = sample_one
         td_head_ni = body[0].out_channels
@@ -401,6 +401,7 @@ class CsNet(nn.Module):
         self.ifn, self.bu, self.td, self.td_head, self.laterals, channels = cs.create_bu_td(body, td_head)
         self.embedding = fv.embedding(obj_tree.n_obj, channels[-1])
         self.obj_tree = obj_tree
+        self.emb_op = emb_op
 
     def forward(self, img, gt=None):
         bs = img.shape[0]
@@ -408,7 +409,8 @@ class CsNet(nn.Module):
 
         x = self.bu(features)
         obj_inst = torch.zeros(bs, dtype=torch.long, device=img.device)
-        x = x * self.embedding(obj_inst)[..., None, None]
+        emb = self.embedding(obj_inst)[..., None, None]
+        x = self.emb_op(x, emb)
         obj_pred = self.td(x)
         obj_pred = self.td_head(obj_pred, -1)
 
@@ -426,7 +428,8 @@ class CsNet(nn.Module):
         x = self.bu(features)
         part_pred = {}
         for o, o_int in objects:
-            td_in = x * self.embedding(o)[..., None, None]
+            emb = self.embedding(o)[..., None, None]
+            td_in = self.emb_op(x, emb)
             o_idx = self.obj_tree.obj2idx[o_int]
             out = self.td(td_in)
             out = self.td_head(out, o_idx)
@@ -441,9 +444,11 @@ class CsNet(nn.Module):
             lateral.origin_out = None
 
 
-def part_learner(data, arch, obj_tree: ObjectTree, pretrained=False, sample_one=False, **learn_kwargs):
+def part_learner(data, arch, obj_tree: ObjectTree,
+                 pretrained=False, sample_one=False, emb_op=torch.mul,
+                 **learn_kwargs):
     body = fv.create_body(arch, pretrained)
-    model = CsNet(body, obj_tree, sample_one=sample_one)
+    model = CsNet(body, obj_tree, sample_one=sample_one, emb_op=emb_op)
     model = fv.to_device(model, device=data.device)
 
     loss = Loss(obj_tree)
