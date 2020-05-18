@@ -59,66 +59,45 @@ class SegmentationModule(SegmentationModuleBase):
         self.tree = tree
         self.seg_size = seg_size
 
-    def forward(self, feed_dict, *, seg_size=None):
-        if self.training:
+    def forward(self, img):
+        output_switch = {"object": True, "part": True, "scene": False, "material": False}
+        pred = self.decoder(
+            self.encoder(img, return_feature_maps=True),
+            output_switch=output_switch
+        )
+        return pred
 
-            if feed_dict['source_idx'] == 0:
-                output_switch = {"object": True, "part": True, "scene": True, "material": False}
-            elif feed_dict['source_idx'] == 1:
-                output_switch = {"object": False, "part": False, "scene": False, "material": True}
-            else:
-                raise ValueError
+    def loss_func(self, pred, obj_gt, part_gt, valid_part):
+        # loss
+        loss_dict = {}
+        if pred['object'] is not None:  # object
+            loss_dict['object'] = self.crit_dict['object'](pred['object'], obj_gt)
+        if pred['part'] is not None:  # part
+            part_loss = 0
+            for idx_part, object_label in enumerate(self.tree.obj_with_parts):
+                # part_gt shape shoulf be:(bs, n_obj_with_part, h, w)
+                part_loss += self.part_loss(
+                    pred['part'][idx_part], part_gt,
+                    obj_gt, object_label, valid_part[:, idx_part])
+            loss_dict['part'] = part_loss
+        loss_dict['total'] = sum([loss_dict[k] * self.loss_scale[k] for k in loss_dict.keys()])
 
-            pred = self.decoder(
-                self.encoder(feed_dict['img'], return_feature_maps=True),
-                output_switch=output_switch
-            )
+        # metric
+        metric_dict = {}
+        if pred['object'] is not None:
+            metric_dict['object'] = self.pixel_acc(
+                pred['object'], obj_gt, ignore_index=0)
+        if pred['part'] is not None:
+            acc_sum, pixel_sum = 0, 0
+            for idx_part, object_label in enumerate(self.tree.obj_with_parts):
+                acc, pixel = self.part_pixel_acc(
+                    pred['part'][idx_part], part_gt, obj_gt,
+                    object_label, valid_part)
+                acc_sum += acc
+                pixel_sum += pixel
+            metric_dict['part'] = acc_sum.float() / (pixel_sum.float() + 1e-10)
 
-            # loss
-            loss_dict = {}
-            if pred['object'] is not None:  # object
-                loss_dict['object'] = self.crit_dict['object'](pred['object'], feed_dict['seg_object'])
-            if pred['part'] is not None:  # part
-                part_loss = 0
-                for idx_part, object_label in enumerate(self.tree.obj_with_parts):
-                    part_loss += self.part_loss(
-                        pred['part'][idx_part], feed_dict['seg_part'],
-                        feed_dict['seg_object'], object_label, feed_dict['valid_part'][:, idx_part])
-                loss_dict['part'] = part_loss
-            if pred['scene'] is not None:  # scene
-                loss_dict['scene'] = self.crit_dict['scene'](pred['scene'], feed_dict['scene_label'])
-            if pred['material'] is not None:  # material
-                loss_dict['material'] = self.crit_dict['material'](pred['material'], feed_dict['seg_material'])
-            loss_dict['total'] = sum([loss_dict[k] * self.loss_scale[k] for k in loss_dict.keys()])
-
-            # metric 
-            metric_dict = {}
-            if pred['object'] is not None:
-                metric_dict['object'] = self.pixel_acc(
-                    pred['object'], feed_dict['seg_object'], ignore_index=0)
-            if pred['material'] is not None:
-                metric_dict['material'] = self.pixel_acc(
-                    pred['material'], feed_dict['seg_material'], ignore_index=0)
-            if pred['part'] is not None:
-                acc_sum, pixel_sum = 0, 0
-                for idx_part, object_label in enumerate(self.tree.obj_with_parts):
-                    acc, pixel = self.part_pixel_acc(
-                        pred['part'][idx_part], feed_dict['seg_part'], feed_dict['seg_object'],
-                        object_label, feed_dict['valid_part'][:, idx_part])
-                    acc_sum += acc
-                    pixel_sum += pixel
-                metric_dict['part'] = acc_sum.float() / (pixel_sum.float() + 1e-10)
-            if pred['scene'] is not None:
-                metric_dict['scene'] = self.pixel_acc(
-                    pred['scene'], feed_dict['scene_label'], ignore_index=-1)
-
-            return {'metric': metric_dict, 'loss': loss_dict}
-        else:  # inference
-            output_switch = {"object": True, "part": True, "scene": True, "material": True}
-            seg_size = feed_dict.get('seg_size', self.seg_size)
-            pred = self.decoder(self.encoder(feed_dict['img'], return_feature_maps=True),
-                                output_switch=output_switch, seg_size=seg_size)
-            return pred
+        return {'metric': metric_dict, 'loss': loss_dict}
 
 
 def conv3x3(in_planes, out_planes, stride=1, has_bias=False):
@@ -243,14 +222,14 @@ class Resnet(nn.Module):
         x = self.relu3(self.bn3(self.conv3(x)))
         x = self.maxpool(x)
 
-        x = self.layer1(x);
-        conv_out.append(x);
-        x = self.layer2(x);
-        conv_out.append(x);
-        x = self.layer3(x);
-        conv_out.append(x);
-        x = self.layer4(x);
-        conv_out.append(x);
+        x = self.layer1(x)
+        conv_out.append(x)
+        x = self.layer2(x)
+        conv_out.append(x)
+        x = self.layer3(x)
+        conv_out.append(x)
+        x = self.layer4(x)
+        conv_out.append(x)
 
         if return_feature_maps:
             return conv_out
@@ -330,13 +309,12 @@ class UPerNet(nn.Module):
             nn.Conv2d(fpn_dim, self.nr_material_class, kernel_size=1, bias=True)
         )
 
-    def forward(self, conv_out, output_switch=None, seg_size=None):
+    def forward(self, conv_out, output_switch=None):
 
         output_dict = {k: None for k in output_switch.keys()}
 
         conv5 = conv_out[-1]
         input_size = conv5.size()
-        ppm_out = [conv5]
         roi = []  # fake rois, just used for pooling
         for i in range(input_size[0]):  # batch size
             roi.append(torch.Tensor([i, 0, 0, input_size[3], input_size[2]]).view(1, -1))  # b, x0, y0, x1, y1
@@ -385,52 +363,6 @@ class UPerNet(nn.Module):
                     output_dict['object'] = self.object_head(x)
                 if output_switch['part']:
                     output_dict['part'] = self.part_head(x)
-
-        if self.use_softmax:  # is True during inference
-            # inference scene
-            x = output_dict['scene']
-            x = x.squeeze(3).squeeze(2)
-            x = F.softmax(x, dim=1)
-            output_dict['scene'] = x
-
-            # inference object, material
-            for k in ['object', 'material']:
-                x = output_dict[k]
-                x = F.interpolate(x, size=seg_size, mode='bilinear', align_corners=False)
-                x = F.softmax(x, dim=1)
-                output_dict[k] = x
-
-            # inference part
-            x = output_dict['part']
-            x = F.interpolate(x, size=seg_size, mode='bilinear', align_corners=False)
-            part_pred_list, head = [], 0
-            for idx_part, object_label in enumerate(self.tree.obj_with_parts):
-                n_part = len(self.tree[object_label])
-                _x = F.interpolate(x[:, head: head + n_part], size=seg_size, mode='bilinear', align_corners=False)
-                _x = F.softmax(_x, dim=1)
-                part_pred_list.append(_x)
-                head += n_part
-            output_dict['part'] = part_pred_list
-
-        else:  # Training
-            # object, scene, material
-            for k in ['object', 'scene', 'material']:
-                if output_dict[k] is None:
-                    continue
-                x = output_dict[k]
-                x = F.log_softmax(x, dim=1)
-                if k == "scene":  # for scene
-                    x = x.squeeze(3).squeeze(2)
-                output_dict[k] = x
-            if output_dict['part'] is not None:
-                part_pred_list, head = [], 0
-                for idx_part, object_label in enumerate(self.tree.obj_with_parts):
-                    n_part = len(self.tree[object_label])
-                    x = output_dict['part'][:, head: head + n_part]
-                    x = F.log_softmax(x, dim=1)
-                    part_pred_list.append(x)
-                    head += n_part
-                output_dict['part'] = part_pred_list
 
         return output_dict
 
