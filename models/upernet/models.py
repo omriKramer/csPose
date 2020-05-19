@@ -75,7 +75,7 @@ class SegmentationModule(SegmentationModuleBase):
         if pred['part'] is not None:  # part
             part_loss = 0
             for idx_part, object_label in enumerate(self.tree.obj_with_parts):
-                # part_gt shape shoulf be:(bs, n_obj_with_part, h, w)
+                # part_gt shape should be:(bs, n_obj_with_part, h, w)
                 part_loss += self.part_loss(
                     pred['part'][idx_part], part_gt,
                     obj_gt, object_label, valid_part[:, idx_part])
@@ -92,7 +92,7 @@ class SegmentationModule(SegmentationModuleBase):
             for idx_part, object_label in enumerate(self.tree.obj_with_parts):
                 acc, pixel = self.part_pixel_acc(
                     pred['part'][idx_part], part_gt, obj_gt,
-                    object_label, valid_part)
+                    object_label, valid_part[:, idx_part])
                 acc_sum += acc
                 pixel_sum += pixel
             metric_dict['part'] = acc_sum.float() / (pixel_sum.float() + 1e-10)
@@ -367,7 +367,7 @@ class UPerNet(nn.Module):
         return output_dict
 
 
-def get_upernet(tree, weights_encoder, weights_decoder, seg_size=256):
+def get_upernet(tree, weights_encoder='', weights_decoder='', seg_size=256):
     fc_dim = 2048
     builder = ModelBuilder()
     net_encoder = builder.build_encoder(
