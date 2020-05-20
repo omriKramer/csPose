@@ -337,14 +337,13 @@ class Loss:
         else:
             obj_pred, part_pred = pred
 
-        pred_size = object.shape[-2:]
+        pred_size = obj_pred.shape[-2:]
         obj_gt = resize(obj_gt, pred_size)
         part_gt = resize(part_gt, pred_size)
         part_gt = self.object_tree.split_parts_gt(obj_gt, part_gt)
 
         obj_loss = self.obj_ce(obj_pred, obj_gt)
         part_loss = []
-
         for o, o_part_pred in part_pred.items():
             i = self.object_tree.obj2idx[o]
             o_part_gt = part_gt[i]
