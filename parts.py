@@ -181,6 +181,9 @@ class ObjectsPartsLabelList(fv.ItemList):
 
         obj = obj.argmax(dim=0)
         part = self.tree.get_part_pred(part)
+        part_agg = torch.zeros_like(obj)
+        for (o, parts), part_pred in zip(self.tree.obj_and_parts(), part):
+            part_agg = part_agg.where(obj != o, part_pred)
         return obj, part
 
     def reconstruct(self, t, x=None):
