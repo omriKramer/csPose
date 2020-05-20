@@ -268,12 +268,14 @@ class BrodenMetrics(fv.LearnerCallback):
             obj_pred, part_pred = self.preds_func(last_output)
         else:
             obj_pred, part_pred = last_output[:, :self.obj_tree.n_obj], last_output[:, self.obj_tree.n_obj:]
+            gt_size = obj_gt.shape[-2:]
+            obj_pred = resize(obj_pred, gt_size)
+            part_pred = resize(part_pred, gt_size)
+
             obj_pred = obj_pred.argmax(dim=1)
             part_pred = self.obj_tree.split_parts_pred(part_pred)
             # part_pred shape: (n_obj_with_parts, bs, h, w)
             part_pred = torch.stack([obj_parts.argmax(dim=1) for obj_parts in part_pred], dim=0)
-
-        obj_pred, part_pred = resize_obj_part(obj_pred, part_pred, obj_gt.shape[-2:])
 
         if self.restrict:
             part_pred = self.restrict_part_to_obj(obj_pred, part_pred)
@@ -306,15 +308,17 @@ class BrodenMetrics(fv.LearnerCallback):
         return fv.add_metrics(last_metrics, results)
 
 
-def resize_obj_part(obj, part, size):
-    if obj.shape[-2:] != size:
-        obj = F.interpolate(obj[None].float(), size=size, mode='nearest').long().squeeze()
+def resize(x, size):
+    if x.shape[-2:] == size:
+        return x
+    if x.ndim == 3:
+        x = x[None]
 
-        if part.ndim == 3:
-            part = part[None]
-        part = F.interpolate(part.float(), size=size, mode='nearest').long().squeeze()
+    if x.dtype == torch.long:
+        x = x.float()
+        return F.interpolate(x, size, mode='nearest').squeeze().long()
 
-    return obj, part
+    return F.interpolate(x, size, mode='bilinear', align_corners=False).squeeze()
 
 
 class Loss:
@@ -333,7 +337,9 @@ class Loss:
         else:
             obj_pred, part_pred = pred
 
-        obj_gt, part_gt = resize_obj_part(obj_gt, part_gt, obj_pred.shape[-2:])
+        pred_size = object.shape[-2:]
+        obj_gt = resize(obj_gt, pred_size)
+        part_gt = resize(part_gt, pred_size)
         part_gt = self.object_tree.split_parts_gt(obj_gt, part_gt)
 
         obj_loss = self.obj_ce(obj_pred, obj_gt)
