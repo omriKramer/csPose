@@ -186,6 +186,9 @@ class ObjectsPartsLabelList(fv.ItemList):
     def reconstruct(self, t, x=None):
         obj = fv.ImageSegment(t[0])
         parts = fv.ImageSegment(t[1])
+        if obj.ndim == 2:
+            obj = obj[None]
+            parts = parts[None]
         return ObjectAndParts(obj, parts)
 
 
