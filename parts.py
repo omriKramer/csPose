@@ -173,9 +173,13 @@ class ObjectsPartsLabelList(fv.ItemList):
             parts = fv.ImageSegment(torch.zeros_like(obj.px))
         return ObjectAndParts(obj, parts)
 
-    def analyze_pred(self, pred):
-        obj, part = pred[:, :self.tree.n_obj], pred[:, self.tree.n_obj:]
-        obj = obj.argmax(dim=1)
+    def analyze_pred(self, pred, scale=4):
+        obj, part = pred[:self.tree.n_obj], pred[self.tree.n_obj:]
+        size = [s*scale for s in obj.shape[-2:]]
+        obj = resize(obj, size)
+        part = resize(part, size)
+
+        obj = obj.argmax(dim=0)
         part = self.tree.get_part_pred(part)
         return obj, part
 
