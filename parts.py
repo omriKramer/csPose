@@ -147,7 +147,7 @@ class ObjectAndParts(fv.ItemBase):
 
     @property
     def data(self):
-        return self.objects.data.squeeze(), self.parts.data.squeeze()
+        return self.objects.data, self.parts.data
 
     def apply_tfms(self, tfms, **kwargs):
         objects = self.objects.apply_tfms(tfms, **kwargs)
@@ -175,7 +175,7 @@ class ObjectsPartsLabelList(fv.ItemList):
 
     def analyze_pred(self, pred, scale=4):
         obj, part = pred[:self.tree.n_obj], pred[self.tree.n_obj:]
-        size = [s*scale for s in obj.shape[-2:]]
+        size = [s * scale for s in obj.shape[-2:]]
         obj = resize(obj, size)
         part = resize(part, size)
 
@@ -290,6 +290,8 @@ class BrodenMetrics(fv.LearnerCallback):
             return
 
         obj_gt, part_gt = last_target
+        obj_gt = obj_gt.squeeze(dim=1)
+        part_gt = part_gt.squeeze(dim=1)
         part_gt = self.obj_tree.split_parts_gt(obj_gt, part_gt)
 
         if self.split_func:
@@ -365,6 +367,9 @@ class Loss:
             obj_pred, part_pred = self.split(pred)
         else:
             obj_pred, part_pred = pred
+
+        obj_gt = obj_gt.squeeze(dim=1)
+        part_gt = part_gt.squeeze(dim=1)
 
         pred_size = obj_pred.shape[-2:]
         obj_gt = resize(obj_gt, pred_size)
