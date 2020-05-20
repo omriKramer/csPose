@@ -184,7 +184,7 @@ class ObjectsPartsLabelList(fv.ItemList):
         part_agg = torch.zeros_like(obj)
         for (o, parts), part_pred in zip(self.tree.obj_and_parts(), part):
             part_agg = part_agg.where(obj != o, part_pred)
-        return obj, part
+        return obj, part_agg
 
     def reconstruct(self, t, x=None):
         obj, parts = t
