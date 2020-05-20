@@ -1,4 +1,3 @@
-import itertools
 import random
 from collections import OrderedDict
 from pathlib import Path
@@ -12,104 +11,6 @@ from torch import nn
 import models.cs_v2 as cs
 import utils
 from models import layers
-
-
-class ObjectAndParts(fv.ItemBase):
-
-    def __init__(self, objects: fv.ImageSegment, parts: fv.ImageSegment):
-        self.objects = objects
-        self.parts = parts
-
-    @property
-    def data(self):
-        return self.objects.data.squeeze(), self.parts.data.squeeze()
-
-    def apply_tfms(self, tfms, **kwargs):
-        objects = self.objects.apply_tfms(tfms, **kwargs)
-        parts = self.parts.apply_tfms(tfms, **kwargs)
-        return self.__class__(objects, parts)
-
-    def __repr__(self):
-        return f'{self.__class__.__name__} {tuple(self.objects.size)}'
-
-
-class ObjectsPartsLabelList(fv.ItemList):
-
-    def __init__(self, items, **kwargs):
-        super().__init__(items, **kwargs)
-
-    def get(self, i):
-        object_fn, parts_fn = super().get(i)
-        obj = fv.open_mask(object_fn, convert_mode='I')
-        if parts_fn:
-            parts = fv.open_mask(parts_fn, convert_mode='L')
-        else:
-            parts = fv.ImageSegment(torch.zeros_like(obj.px))
-        return ObjectAndParts(obj, parts)
-
-    def analyze_pred(self, pred):
-        raise NotImplemented
-
-    def reconstruct(self, t, x=None):
-        obj = fv.ImageSegment(t[0])
-        parts = fv.ImageSegment(t[1])
-        return ObjectAndParts(obj, parts)
-
-
-class ObjectsPartsItemList(fv.ImageList):
-    _label_cls = ObjectsPartsLabelList
-    _square_show = False
-    _square_show_res = False
-
-    def show_xys(self, xs, ys, imgsize=4, figsize=None, overlay=True, **kwargs):
-        rows = len(xs)
-        if overlay:
-            axs = fv.subplots(rows, 2, imgsize=imgsize, figsize=figsize)
-            for x, y, ax_row in zip(xs, ys, axs):
-                x.show(ax=ax_row[0], y=y.objects, **kwargs)
-                x.show(ax=ax_row[1], y=y.parts, **kwargs)
-        else:
-            axs = fv.subplots(rows, 3, imgsize=imgsize, figsize=figsize)
-            for x, y, ax_row in zip(xs, ys, axs):
-                x.show(ax=ax_row[0], **kwargs)
-                y.objects.show(ax=ax_row[1], alpha=1, **kwargs)
-                y.parts.show(ax=ax_row[2], alpha=1, **kwargs)
-
-
-def pix_acc(pred, gt):
-    mask = gt > 0
-    correct = (pred == gt) * mask
-    correct = correct.sum()
-    total = mask.sum()
-    return correct, total
-
-
-def iou(pred, gt, n_classes, mask):
-    # ignore pixels outside mask (gt is already inside mask)
-    pred = pred * mask
-    classes = torch.arange(1, n_classes, device=pred.device)[:, None, None, None]
-    # {pred\gt}_i shape: (n_classes-1, bs, h, w)
-    pred_i = pred == classes
-    gt_i = gt == classes
-    intersection = torch.sum(pred_i * gt_i, dim=(1, 2, 3))
-    union = torch.sum(pred_i + gt_i, dim=(1, 2, 3))
-    return intersection, union
-
-
-class Accuracy:
-    def __init__(self, n=1):
-        self.correct = torch.zeros(n)
-        self.total = torch.zeros(n)
-
-    def update(self, correct, total):
-        self.correct += correct.cpu()
-        self.total += total.cpu()
-
-    def accuracy(self):
-        c = self.correct.float()
-        # some parts have 0 pixels in the validation set, add epsilon for now
-        t = self.total.float() + 1e-10
-        return torch.mean(c / t).item()
 
 
 class ObjectTree:
@@ -184,6 +85,13 @@ class ObjectTree:
         """
         return t.split(self.sections, dim=1)
 
+    def get_part_pred(self, t):
+        if t.ndim == 3:
+            t = t[None]
+        part_pred_list = self.split_parts_pred(t)
+        pred = torch.stack([o.argmax(dim=1) for o in part_pred_list])
+        return pred.squeeze()
+
     def split_parts_gt(self, obj: fv.Tensor, part: fv.Tensor):
         """
         Splits parts gt by objects.
@@ -229,6 +137,122 @@ class ObjectTree:
             part_pred[self.obj2idx[o]] = p_pred
 
         return obj_pred, part_pred
+
+
+class ObjectAndParts(fv.ItemBase):
+
+    def __init__(self, objects: fv.ImageSegment, parts: fv.ImageSegment):
+        self.objects = objects
+        self.parts = parts
+
+    @property
+    def data(self):
+        return self.objects.data.squeeze(), self.parts.data.squeeze()
+
+    def apply_tfms(self, tfms, **kwargs):
+        objects = self.objects.apply_tfms(tfms, **kwargs)
+        parts = self.parts.apply_tfms(tfms, **kwargs)
+        return self.__class__(objects, parts)
+
+    def __repr__(self):
+        return f'{self.__class__.__name__} {tuple(self.objects.size)}'
+
+
+class ObjectsPartsLabelList(fv.ItemList):
+
+    def __init__(self, items, tree: ObjectTree = None, **kwargs):
+        super().__init__(items, **kwargs)
+        self.tree = tree
+
+    def get(self, i):
+        object_fn, parts_fn = super().get(i)
+        obj = fv.open_mask(object_fn, convert_mode='I')
+        if parts_fn:
+            parts = fv.open_mask(parts_fn, convert_mode='L')
+        else:
+            parts = fv.ImageSegment(torch.zeros_like(obj.px))
+        return ObjectAndParts(obj, parts)
+
+    def analyze_pred(self, pred):
+        obj, part = pred[:, :self.tree.n_obj], pred[:, self.tree.n_obj:]
+        obj = obj.argmax(dim=1)
+        part = self.tree.get_part_pred(part)
+        return obj, part
+
+    def reconstruct(self, t, x=None):
+        obj = fv.ImageSegment(t[0])
+        parts = fv.ImageSegment(t[1])
+        return ObjectAndParts(obj, parts)
+
+
+class ObjectsPartsItemList(fv.ImageList):
+    _label_cls = ObjectsPartsLabelList
+    _square_show = False
+    _square_show_res = False
+
+    def show_xys(self, xs, ys, imgsize=4, figsize=None, overlay=True, **kwargs):
+        rows = len(xs)
+        if overlay:
+            axs = fv.subplots(rows, 2, imgsize=imgsize, figsize=figsize)
+            for x, y, ax_row in zip(xs, ys, axs):
+                x.show(ax=ax_row[0], y=y.objects, **kwargs)
+                x.show(ax=ax_row[1], y=y.parts, **kwargs)
+        else:
+            axs = fv.subplots(rows, 3, imgsize=imgsize, figsize=figsize)
+            for x, y, ax_row in zip(xs, ys, axs):
+                x.show(ax=ax_row[0], **kwargs)
+                y.objects.show(ax=ax_row[1], alpha=1, **kwargs)
+                y.parts.show(ax=ax_row[2], alpha=1, **kwargs)
+
+    def show_xyzs(self, xs, ys, zs, imgsize=4, figsize=None, **kwargs):
+        rows = len(xs)
+        axs = fv.subplots(rows, 4, imgsize=imgsize, figsize=figsize)
+        for x, y, z, ax_row in zip(xs, ys, zs, axs):
+            x.show(ax=ax_row[0], y=y.objects, **kwargs)
+            x.show(ax=ax_row[1], y=z.objects, **kwargs)
+
+            x.show(ax=ax_row[2], y=y.parts, **kwargs)
+            x.show(ax=ax_row[3], y=z.parts, **kwargs)
+
+        titles = 'objet-GT', 'object-Pred', 'part-GT', 'part-pred'
+        for ax, t in zip(axs[0], titles):
+            ax.set_title(t)
+
+
+def pix_acc(pred, gt):
+    mask = gt > 0
+    correct = (pred == gt) * mask
+    correct = correct.sum()
+    total = mask.sum()
+    return correct, total
+
+
+def iou(pred, gt, n_classes, mask):
+    # ignore pixels outside mask (gt is already inside mask)
+    pred = pred * mask
+    classes = torch.arange(1, n_classes, device=pred.device)[:, None, None, None]
+    # {pred\gt}_i shape: (n_classes-1, bs, h, w)
+    pred_i = pred == classes
+    gt_i = gt == classes
+    intersection = torch.sum(pred_i * gt_i, dim=(1, 2, 3))
+    union = torch.sum(pred_i + gt_i, dim=(1, 2, 3))
+    return intersection, union
+
+
+class Accuracy:
+    def __init__(self, n=1):
+        self.correct = torch.zeros(n)
+        self.total = torch.zeros(n)
+
+    def update(self, correct, total):
+        self.correct += correct.cpu()
+        self.total += total.cpu()
+
+    def accuracy(self):
+        c = self.correct.float()
+        # some parts have 0 pixels in the validation set, add epsilon for now
+        t = self.total.float() + 1e-10
+        return torch.mean(c / t).item()
 
 
 class BrodenMetrics(fv.LearnerCallback):
@@ -370,14 +394,14 @@ class Labeler:
         return obj_seg, part_seg
 
 
-def get_data(broden_root, size=256, norm_stats=fv.imagenet_stats, padding_mode='zeros',
+def get_data(broden_root, tree=None, size=256, norm_stats=fv.imagenet_stats, padding_mode='zeros',
              do_flip=True, max_rotate=10., max_zoom=1.1, max_lighting=0.2, max_warp=0.2,
              p_affine=0.75, p_lighting=0.75, **databunch_kwargs):
     labeler = Labeler(broden_root / 'reindexed2')
     tfms = fv.get_transforms(do_flip=do_flip, max_rotate=max_rotate, max_zoom=max_zoom, max_lighting=max_lighting,
                              max_warp=max_warp, p_affine=p_affine, p_lighting=p_lighting)
 
-    data = (ObjectsPartsItemList.from_csv(broden_root, 'trainval.csv')
+    data = (ObjectsPartsItemList.from_csv(broden_root, 'trainval.csv', tree=tree)
             .split_from_df(col='is_valid')
             .label_from_func(labeler)
             .transform(tfms, tfm_y=True, size=size, resize_method=fv.ResizeMethod.PAD, padding_mode=padding_mode)
