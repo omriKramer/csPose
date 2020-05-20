@@ -401,9 +401,9 @@ def get_data(broden_root, tree=None, size=256, norm_stats=fv.imagenet_stats, pad
     tfms = fv.get_transforms(do_flip=do_flip, max_rotate=max_rotate, max_zoom=max_zoom, max_lighting=max_lighting,
                              max_warp=max_warp, p_affine=p_affine, p_lighting=p_lighting)
 
-    data = (ObjectsPartsItemList.from_csv(broden_root, 'trainval.csv', tree=tree)
+    data = (ObjectsPartsItemList.from_csv(broden_root, 'trainval.csv')
             .split_from_df(col='is_valid')
-            .label_from_func(labeler)
+            .label_from_func(labeler, tree=tree)
             .transform(tfms, tfm_y=True, size=size, resize_method=fv.ResizeMethod.PAD, padding_mode=padding_mode)
             .databunch(**databunch_kwargs)
             .normalize(norm_stats))
