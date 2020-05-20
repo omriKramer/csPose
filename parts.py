@@ -265,7 +265,7 @@ class BrodenMetrics(fv.LearnerCallback):
         part_gt = self.obj_tree.split_parts_gt(obj_gt, part_gt)
 
         if self.split_func:
-            obj_pred, part_pred = self.preds_func(last_output)
+            obj_pred, part_pred = self.split_func(last_output)
         else:
             obj_pred, part_pred = last_output[:, :self.obj_tree.n_obj], last_output[:, self.obj_tree.n_obj:]
 
