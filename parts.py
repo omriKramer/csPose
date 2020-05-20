@@ -234,11 +234,11 @@ class ObjectTree:
 class BrodenMetrics(fv.LearnerCallback):
     _order = -20
 
-    def __init__(self, learn, obj_tree: ObjectTree, preds_func=None, restrict=True):
+    def __init__(self, learn, obj_tree: ObjectTree, split_func=None, restrict=True):
         super().__init__(learn)
         self.restrict = restrict
         self.obj_tree = obj_tree
-        self.preds_func = preds_func
+        self.split_func = split_func
         self._reset()
 
     def _reset(self):
@@ -264,18 +264,19 @@ class BrodenMetrics(fv.LearnerCallback):
         obj_gt, part_gt = last_target
         part_gt = self.obj_tree.split_parts_gt(obj_gt, part_gt)
 
-        if self.preds_func:
+        if self.split_func:
             obj_pred, part_pred = self.preds_func(last_output)
         else:
             obj_pred, part_pred = last_output[:, :self.obj_tree.n_obj], last_output[:, self.obj_tree.n_obj:]
-            gt_size = obj_gt.shape[-2:]
-            obj_pred = resize(obj_pred, gt_size)
-            part_pred = resize(part_pred, gt_size)
 
-            obj_pred = obj_pred.argmax(dim=1)
-            part_pred = self.obj_tree.split_parts_pred(part_pred)
-            # part_pred shape: (n_obj_with_parts, bs, h, w)
-            part_pred = torch.stack([obj_parts.argmax(dim=1) for obj_parts in part_pred], dim=0)
+        gt_size = obj_gt.shape[-2:]
+        obj_pred = resize(obj_pred, gt_size)
+        part_pred = resize(part_pred, gt_size)
+
+        obj_pred = obj_pred.argmax(dim=1)
+        part_pred = self.obj_tree.split_parts_pred(part_pred)
+        # part_pred shape: (n_obj_with_parts, bs, h, w)
+        part_pred = torch.stack([obj_parts.argmax(dim=1) for obj_parts in part_pred], dim=0)
 
         if self.restrict:
             part_pred = self.restrict_part_to_obj(obj_pred, part_pred)
@@ -369,15 +370,18 @@ class Labeler:
         return obj_seg, part_seg
 
 
-def get_data(broden_root, size=256, bs=8, norm_stats=fv.imagenet_stats, padding_mode='zeros'):
+def get_data(broden_root, size=256, norm_stats=fv.imagenet_stats, padding_mode='zeros',
+             do_flip=True, max_rotate=10., max_zoom=1.1, max_lighting=0.2, max_warp=0.2,
+             p_affine=0.75, p_lighting=0.75, **databunch_kwargs):
     labeler = Labeler(broden_root / 'reindexed2')
-    tfms = fv.get_transforms()
+    tfms = fv.get_transforms(do_flip=do_flip, max_rotate=max_rotate, max_zoom=max_zoom, max_lighting=max_lighting,
+                             max_warp=max_warp, p_affine=p_affine, p_lighting=p_lighting)
 
     data = (ObjectsPartsItemList.from_csv(broden_root, 'trainval.csv')
             .split_from_df(col='is_valid')
             .label_from_func(labeler)
             .transform(tfms, tfm_y=True, size=size, resize_method=fv.ResizeMethod.PAD, padding_mode=padding_mode)
-            .databunch(bs=bs)
+            .databunch(**databunch_kwargs)
             .normalize(norm_stats))
     return data
 
