@@ -166,22 +166,22 @@ def _encode_from_labels(t, labels):
 
 
 def _encode(t1, t2):
-    labels = torch.stack(t1, t2).unique()
+    labels = torch.stack((t1, t2)).unique()
     out1 = _encode_from_labels(t1, labels)
     out2 = _encode_from_labels(t2, labels)
-    return out1, out2
+    return out1, out2, len(labels) - 1
 
 
 def encode_colors(o1, o2):
     obj1, part1, = o1.data
     obj2, part2 = o2.data
 
-    obj1, obj2 = _encode(obj1, obj2)
-    part1, part2 = _encode(part1, part2)
+    obj1, obj2, vmax_obj = _encode(obj1, obj2)
+    part1, part2, vmax_part = _encode(part1, part2)
 
     encoded1 = ObjectAndParts(fv.ImageSegment(obj1), (fv.ImageSegment(part1)))
     encoded2 = ObjectAndParts(fv.ImageSegment(obj2), (fv.ImageSegment(part2)))
-    return encoded1, encoded2
+    return encoded1, encoded2, (vmax_obj, vmax_part)
 
 
 class ObjectsPartsLabelList(fv.ItemList):
@@ -263,13 +263,13 @@ class ObjectsPartsItemList(fv.ImageList):
         axs = fv.subplots(rows, 4, imgsize=imgsize, figsize=figsize)
         for x, y, z, ax_row in zip(xs, ys, zs, axs):
             z = restrict_to_labeled(z, y, tree=tree)
-            y, z = encode_colors(y, z)
+            y, z, vmax = encode_colors(y, z)
 
-            x.show(ax=ax_row[0], y=y.objects, **kwargs)
-            x.show(ax=ax_row[1], y=z.objects, **kwargs)
+            x.show(ax=ax_row[0], y=y.objects, vamx=vmax[0], **kwargs)
+            x.show(ax=ax_row[1], y=z.objects, vamx=vmax[0], **kwargs)
 
-            x.show(ax=ax_row[2], y=y.parts, **kwargs)
-            x.show(ax=ax_row[3], y=z.parts, **kwargs)
+            x.show(ax=ax_row[2], y=y.parts, vamx=vmax[1], **kwargs)
+            x.show(ax=ax_row[3], y=z.parts, vamx=vmax[1], **kwargs)
 
         titles = 'objet-GT', 'object-Pred', 'part-GT', 'part-pred'
         for ax, t in zip(axs[0], titles):
