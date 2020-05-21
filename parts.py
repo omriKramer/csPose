@@ -199,8 +199,6 @@ class ObjectsPartsLabelList(fv.ItemList):
 def restrict_to_labeled(pred: ObjectAndParts, gt: ObjectAndParts, tree: ObjectTree = None):
     obj_pred, part_pred = pred.data
     obj_gt, part_gt = gt.data
-    for o in (obj_pred, part_pred, obj_gt, part_gt):
-        o.squeeze_()
     obj_pred[obj_gt == 0] = 0
     if tree:
         classes = torch.tensor(list(tree.obj_with_parts))[:, None, None]
@@ -208,9 +206,9 @@ def restrict_to_labeled(pred: ObjectAndParts, gt: ObjectAndParts, tree: ObjectTr
         is_obj_and_part = is_obj * (part_gt > 0)
         obj_has_parts = is_obj_and_part.flatten(start_dim=1).any(dim=1)
         obj_with_parts_mask = is_obj * obj_has_parts[:, None, None]
-        part_pred = part_pred * obj_with_parts_mask.sum(dim=0)
+        part_pred = part_pred * obj_with_parts_mask.sum(dim=0, keepdim=True)
 
-    return ObjectAndParts(fv.ImageSegment(obj_pred[None]), fv.ImageSegment(part_pred[None]))
+    return ObjectAndParts(fv.ImageSegment(obj_pred), fv.ImageSegment(part_pred))
 
 
 class ObjectsPartsItemList(fv.ImageList):
