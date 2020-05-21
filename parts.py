@@ -265,11 +265,11 @@ class ObjectsPartsItemList(fv.ImageList):
             z = restrict_to_labeled(z, y, tree=tree)
             y, z, vmax = encode_colors(y, z)
 
-            x.show(ax=ax_row[0], y=y.objects, vamx=vmax[0], **kwargs)
-            x.show(ax=ax_row[1], y=z.objects, vamx=vmax[0], **kwargs)
+            x.show(ax=ax_row[0], y=y.objects, vmax=vmax[0], **kwargs)
+            x.show(ax=ax_row[1], y=z.objects, vmax=vmax[0], **kwargs)
 
-            x.show(ax=ax_row[2], y=y.parts, vamx=vmax[1], **kwargs)
-            x.show(ax=ax_row[3], y=z.parts, vamx=vmax[1], **kwargs)
+            x.show(ax=ax_row[2], y=y.parts, vmax=vmax[1], **kwargs)
+            x.show(ax=ax_row[3], y=z.parts, vmax=vmax[1], **kwargs)
 
         titles = 'objet-GT', 'object-Pred', 'part-GT', 'part-pred'
         for ax, t in zip(axs[0], titles):
