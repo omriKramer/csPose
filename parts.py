@@ -158,6 +158,32 @@ class ObjectAndParts(fv.ItemBase):
         return f'{self.__class__.__name__} {tuple(self.objects.size)}'
 
 
+def _encode_from_labels(t, labels):
+    out = t.clone()
+    for i, l in enumerate(labels):
+        out[t == l] = i
+    return out
+
+
+def _encode(t1, t2):
+    labels = torch.stack(t1, t2).unique()
+    out1 = _encode_from_labels(t1, labels)
+    out2 = _encode_from_labels(t2, labels)
+    return out1, out2
+
+
+def encode_colors(o1, o2):
+    obj1, part1, = o1.data
+    obj2, part2 = o2.data
+
+    obj1, obj2 = _encode(obj1, obj2)
+    part1, part2 = _encode(part1, part2)
+
+    encoded1 = ObjectAndParts(fv.ImageSegment(obj1), (fv.ImageSegment(part1)))
+    encoded2 = ObjectAndParts(fv.ImageSegment(obj2), (fv.ImageSegment(part2)))
+    return encoded1, encoded2
+
+
 class ObjectsPartsLabelList(fv.ItemList):
 
     def __init__(self, items, tree: ObjectTree = None, **kwargs):
@@ -183,6 +209,8 @@ class ObjectsPartsLabelList(fv.ItemList):
         part = self.tree.get_part_pred(part)
         part_agg = torch.zeros_like(obj)
         for (o, parts), part_pred in zip(self.tree.obj_and_parts(), part):
+            parts = torch.tensor(parts)
+            part_pred = parts[part_pred]
             part_agg = part_agg.where(obj != o, part_pred)
         return obj, part_agg
 
@@ -235,6 +263,8 @@ class ObjectsPartsItemList(fv.ImageList):
         axs = fv.subplots(rows, 4, imgsize=imgsize, figsize=figsize)
         for x, y, z, ax_row in zip(xs, ys, zs, axs):
             z = restrict_to_labeled(z, y, tree=tree)
+            y, z = encode_colors(y, z)
+
             x.show(ax=ax_row[0], y=y.objects, **kwargs)
             x.show(ax=ax_row[1], y=z.objects, **kwargs)
 
