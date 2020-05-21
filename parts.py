@@ -196,6 +196,23 @@ class ObjectsPartsLabelList(fv.ItemList):
         return ObjectAndParts(obj, parts)
 
 
+def restrict_to_labeled(pred: ObjectAndParts, gt: ObjectAndParts, tree: ObjectTree = None):
+    obj_pred, part_pred = pred.data
+    obj_gt, part_gt = gt.data
+    for o in (obj_pred, part_pred, obj_gt, part_gt):
+        o.squeeze_()
+    obj_pred[obj_gt == 0] = 0
+    if tree:
+        classes = torch.tensor(list(tree.obj_with_parts))[:, None, None]
+        is_obj = obj_gt == classes
+        is_obj_and_part = is_obj * (part_gt > 0)
+        obj_has_parts = is_obj_and_part.flatten(start_dim=1).any(dim=1)
+        obj_with_parts_mask = is_obj * obj_has_parts[:, None, None]
+        part_pred = part_pred * obj_with_parts_mask.sum(dim=0)
+
+    return ObjectAndParts(fv.ImageSegment(obj_pred[None]), fv.ImageSegment(part_pred[None]))
+
+
 class ObjectsPartsItemList(fv.ImageList):
     _label_cls = ObjectsPartsLabelList
     _square_show = False
@@ -215,10 +232,11 @@ class ObjectsPartsItemList(fv.ImageList):
                 y.objects.show(ax=ax_row[1], alpha=1, **kwargs)
                 y.parts.show(ax=ax_row[2], alpha=1, **kwargs)
 
-    def show_xyzs(self, xs, ys, zs, imgsize=4, figsize=None, **kwargs):
+    def show_xyzs(self, xs, ys, zs, tree=None, imgsize=4, figsize=None, **kwargs):
         rows = len(xs)
         axs = fv.subplots(rows, 4, imgsize=imgsize, figsize=figsize)
         for x, y, z, ax_row in zip(xs, ys, zs, axs):
+            z = restrict_to_labeled(z, y, tree=tree)
             x.show(ax=ax_row[0], y=y.objects, **kwargs)
             x.show(ax=ax_row[1], y=z.objects, **kwargs)
 
