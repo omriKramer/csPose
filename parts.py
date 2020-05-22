@@ -467,8 +467,9 @@ def get_data(broden_root, tree=None, size=256, norm_stats=fv.imagenet_stats, pad
             .split_from_df(col='is_valid')
             .label_from_func(labeler, tree=tree)
             .transform(tfms, tfm_y=True, size=size, resize_method=fv.ResizeMethod.PAD, padding_mode=padding_mode)
-            .databunch(**databunch_kwargs)
-            .normalize(norm_stats))
+            .databunch(**databunch_kwargs))
+    if norm_stats:
+        data = data.normalize(norm_stats)
     return data
 
 
