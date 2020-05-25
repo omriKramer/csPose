@@ -53,36 +53,42 @@ class UperNetAdapter(Callback):
         return img, yb
 
 
-def loss_func(model, tree, pred, obj_gt, part_gt):
-    obj_pred = pred['object']
-    obj_pred = F.log_softmax(obj_pred, dim=1)
+class LossAdapter:
 
-    part_pred_list, head = [], 0
-    for idx_part, (object_label, o_parts) in enumerate(tree.obj_and_parts()):
-        n_part = len(o_parts)
-        x = pred['part'][:, head: head + n_part]
-        x = F.log_softmax(x, dim=1)
-        part_pred_list.append(x)
-        head += n_part
-    pred_dict = {'object': obj_pred, 'part': part_pred_list}
+    def __init__(self, tree, loss):
+        self.tree = tree
+        self.loss = loss
 
-    obj_gt = obj_gt.squeeze(dim=1)
-    part_gt = part_gt.squeeze(dim=1)
+    def __call__(self, pred, obj_gt, part_gt):
+        obj_pred = pred['object']
+        obj_pred = F.log_softmax(obj_pred, dim=1)
 
-    size = obj_pred.shape[-2:]
-    obj_gt = parts.resize(obj_gt, size)
-    part_gt = parts.resize(part_gt, size)
+        part_pred_list, head = [], 0
+        for idx_part, (object_label, o_parts) in enumerate(self.tree.obj_and_parts()):
+            n_part = len(o_parts)
+            x = pred['part'][:, head: head + n_part]
+            x = F.log_softmax(x, dim=1)
+            part_pred_list.append(x)
+            head += n_part
+        pred_dict = {'object': obj_pred, 'part': part_pred_list}
 
-    part_gt = tree.split_parts_gt(obj_gt, part_gt).transpose(0, 1)
-    is_part = part_gt > 0
-    valid = is_part.flatten(start_dim=2).any(dim=2)
+        obj_gt = obj_gt.squeeze(dim=1)
+        part_gt = part_gt.squeeze(dim=1)
 
-    part_gt = part_gt.clone()
-    part_gt[part_gt == -1] = 0
-    part_gt = part_gt.sum(dim=1)
+        size = obj_pred.shape[-2:]
+        obj_gt = parts.resize(obj_gt, size)
+        part_gt = parts.resize(part_gt, size)
 
-    results = model.loss_func(pred_dict, obj_gt, part_gt, valid)
-    return results['loss']['total']
+        part_gt = self.tree.split_parts_gt(obj_gt, part_gt).transpose(0, 1)
+        is_part = part_gt > 0
+        valid = is_part.flatten(start_dim=2).any(dim=2)
+
+        part_gt = part_gt.clone()
+        part_gt[part_gt == -1] = 0
+        part_gt = part_gt.sum(dim=1)
+
+        results = self.loss(pred_dict, obj_gt, part_gt, valid)
+        return results['loss']['total']
 
 
 def split_func(last_output):
@@ -97,14 +103,14 @@ def main(args):
     model = get_upernet(tree)
     adapter_tfm = UperNetAdapter()
     scale_jitter = ScaleJitterCollate(model)
-    data = parts.get_data(broden_root, size=None, norm_stats=None,
-                          max_rotate=None, max_zoom=1, max_warp=None, max_lighting=None,
-                          bs=args.bs, collate_fn=scale_jitter, dl_tfms=adapter_tfm)
-    loss = partial(loss_func, model=model, tree=tree)
+    db = parts.get_data(broden_root, size=None, norm_stats=None,
+                        max_rotate=None, max_zoom=1, max_warp=None, max_lighting=None,
+                        bs=args.bs, collate_fn=scale_jitter, dl_tfms=adapter_tfm)
+    loss = LossAdapter(tree, model.loss_func)
     metrics = partial(parts.BrodenMetrics, obj_tree=tree, restrict=True, split_func=split_func)
     sgd = partial(optim.SGD, momentum=0.9)
-    learn = Learner(data, model, loss_func=loss, callback_fns=metrics,
-                    opt_func=sgd, wd=1e-4, true_wd=False, bn_wd=False, )
+    learn = Learner(db, model, loss_func=loss, callback_fns=metrics,
+                    opt_func=sgd, wd=1e-4, true_wd=False, bn_wd=False)
     n = len(learn.data.train_dl)
     phase = callbacks.TrainingPhase(n * args.epochs).schedule_hp('lr', 2e-2, anneal=annealing_poly(0.9))
     sched = callbacks.GeneralScheduler(learn, [phase], start_epoch=args.start_epoch)
