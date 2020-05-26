@@ -98,6 +98,8 @@ def split_func(last_output):
 
 
 def main(args):
+    save = args.save
+
     broden_root = Path(args.root).resolve()
     tree = parts.ObjectTree.from_meta_folder(broden_root / 'meta')
     model = get_upernet(tree)
@@ -111,15 +113,32 @@ def main(args):
     sgd = partial(optim.SGD, momentum=0.9)
     learn = Learner(db, model, loss_func=loss, callback_fns=metrics,
                     opt_func=sgd, wd=1e-4, true_wd=False, bn_wd=False)
+    if not args.start_epoch and args.auto_continue:
+        start_epoch = find_last_epoch(learn, save) + 1
+    else:
+        start_epoch = args.start_epoch
+
     n = len(learn.data.train_dl)
     phase = callbacks.TrainingPhase(n * args.epochs).schedule_hp('lr', 2e-2, anneal=annealing_poly(0.9))
-    sched = callbacks.GeneralScheduler(learn, [phase], start_epoch=args.start_epoch)
-    logger = callbacks.CSVLogger(learn, filename=args.save, append=args.start_epoch > 0)
-    save_clbk = callbacks.SaveModelCallback(learn, monitor='object-P.A.', mode='max', every='epoch', name=args.save)
+    sched = callbacks.GeneralScheduler(learn, [phase], start_epoch=start_epoch)
+    logger = callbacks.CSVLogger(learn, filename=args.save, append=start_epoch > 0)
+    save_clbk = callbacks.SaveModelCallback(learn, monitor='object-P.A.', mode='max', every='epoch', name=save)
     learn.fit(args.epochs, callbacks=[sched, logger, save_clbk])
+
+
+def find_last_epoch(learn, save):
+    p = Path(learn.path).resolve() / 'models'
+    last_epoch = 0
+    pat = re.compile(fr'{save}_(\d+)\.pth')
+    for f in p.iterdir():
+        match = re.match(pat, f.name)
+        if match:
+            last_epoch = max(last_epoch, int(match.group(1)))
+    return last_epoch
 
 
 if __name__ == '__main__':
     parser = utils.basic_train_parser()
     parser.add_argument('--root', default='unifiedparsing/broden_dataset')
+    parser.add_argument('--auto-continue', action='store_true')
     main(parser.parse_args())
