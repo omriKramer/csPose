@@ -312,45 +312,23 @@ class Accuracy:
         return torch.mean(c / t).item()
 
 
-class BrodenMetrics(fv.LearnerCallback):
-    _order = -20
-
-    def __init__(self, learn, obj_tree: ObjectTree, split_func=None, restrict=True):
-        super().__init__(learn)
-        self.restrict = restrict
+class BrodenMetrics:
+    def __init__(self, obj_tree: ObjectTree, restrict=True):
         self.obj_tree = obj_tree
-        self.split_func = split_func
-        self._reset()
+        self.restrict = restrict
+        self.reset()
 
-    def _reset(self):
+    def reset(self):
         self.obj_pa = Accuracy()
         self.obj_iou = Accuracy(self.obj_tree.n_obj - 1)
 
         self.part_pa = Accuracy()
         self.part_iou = [Accuracy(n - 1) for n in self.obj_tree.sections]
 
-    def on_train_begin(self, **kwargs):
-        try:
-            self.learn.recorder.add_metric_names(['object-P.A.', 'object-mIoU', 'part-P.A.', 'part-mIoU(bg)'])
-        except AttributeError:
-            print('Warning: recorder is not initialized for learner')
-
-    def on_epoch_begin(self, **kwargs):
-        self._reset()
-
-    def on_batch_end(self, last_output, last_target, train, **kwargs):
-        if train:
-            return
-
-        obj_gt, part_gt = last_target
+    def update(self, obj_gt, part_gt, obj_pred, part_pred):
         obj_gt = obj_gt.squeeze(dim=1)
         part_gt = part_gt.squeeze(dim=1)
         part_gt = self.obj_tree.split_parts_gt(obj_gt, part_gt)
-
-        if self.split_func:
-            obj_pred, part_pred = self.split_func(last_output)
-        else:
-            obj_pred, part_pred = last_output[:, :self.obj_tree.n_obj], last_output[:, self.obj_tree.n_obj:]
 
         gt_size = obj_gt.shape[-2:]
         obj_pred = resize(obj_pred, gt_size)
@@ -379,7 +357,7 @@ class BrodenMetrics(fv.LearnerCallback):
         part_pred = part_pred * object_pred_mask
         return part_pred
 
-    def on_epoch_end(self, last_metrics, **kwargs):
+    def avg(self):
         parts_iou = [c.accuracy() for c in self.part_iou]
         parts_iou = sum(parts_iou) / len(parts_iou)
         results = [
@@ -388,7 +366,40 @@ class BrodenMetrics(fv.LearnerCallback):
             self.part_pa.accuracy(),
             parts_iou
         ]
+        return results
 
+
+class BrodenMetricsClbk(fv.LearnerCallback):
+    _order = -20
+
+    def __init__(self, learn, obj_tree: ObjectTree, split_func=None, restrict=True):
+        super().__init__(learn)
+        self.split_func = split_func
+        self.metrics = BrodenMetrics(obj_tree, restrict=restrict)
+
+    def on_train_begin(self, **kwargs):
+        try:
+            self.learn.recorder.add_metric_names(['object-P.A.', 'object-mIoU', 'part-P.A.', 'part-mIoU(bg)'])
+        except AttributeError:
+            print('Warning: recorder is not initialized for learner')
+
+    def on_epoch_begin(self, **kwargs):
+        self.metrics.reset()
+
+    def on_batch_end(self, last_output, last_target, train, **kwargs):
+        if train:
+            return
+
+        obj_gt, part_gt = last_target
+        if self.split_func:
+            obj_pred, part_pred = self.split_func(last_output)
+        else:
+            obj_pred, part_pred = last_output[:, :self.obj_tree.n_obj], last_output[:, self.obj_tree.n_obj:]
+
+        self.metrics.update(obj_gt, part_gt, obj_pred, part_pred)
+
+    def on_epoch_end(self, last_metrics, **kwargs):
+        results = self.metrics.avg()
         return fv.add_metrics(last_metrics, results)
 
 
