@@ -128,7 +128,7 @@ def main(args):
     db.valid_dl = MyDataLoader.from_device_dl(db.valid_dl, pre_proc_batch=scale_jitter.tfm_val)
 
     loss = LossAdapter(tree, model.loss_func)
-    metrics = partial(parts.BrodenMetrics, obj_tree=tree, restrict=True, split_func=split_func)
+    metrics = partial(parts.BrodenMetricsClbk, obj_tree=tree, restrict=True, split_func=split_func)
     sgd = partial(optim.SGD, momentum=0.9)
     learn = Learner(db, model, loss_func=loss, callback_fns=metrics,
                     opt_func=sgd, wd=1e-4, true_wd=False, bn_wd=False)
