@@ -12,25 +12,41 @@ def resize_sample(sample, size):
     return tuple(t)
 
 
-class ScaleJitterCollate:
+class MyDataLoader(DeviceDataLoader):
 
-    def __init__(self, model, train_sizes=None, eval_size=480):
+    def __init__(self, dl, device, tfms=None, pre_proc_batch=None):
+        super().__init__(dl, device, tfms, collate_fn=lambda x: x)
+        self.pre_proc_batch = pre_proc_batch
+
+    def proc_batch(self, b):
+        if self.pre_proc_batch:
+            b = self.pre_proc_batch(b)
+        b = data_collate(b)
+        b = super().proc_batch(b)
+        return b
+
+    @classmethod
+    def from_device_dl(cls, ddl, pre_proc_batch):
+        return cls(ddl.dl, ddl.device, tfms=ddl.tfms, pre_proc_batch=pre_proc_batch)
+
+
+class ScaleJitter:
+
+    def __init__(self, train_sizes=None, eval_size=480):
         if not train_sizes:
             train_sizes = [320, 384, 480, 544, 608]
 
         self.train_sizes = train_sizes
         self.eval_size = eval_size
-        self.model = model
 
-    def __call__(self, samples):
-        if self.model.training:
-            size = random.choice(self.train_sizes)
-        else:
-            size = self.eval_size
-
+    def tfm_train(self, samples):
+        size = random.choice(self.train_sizes)
         samples = [resize_sample(s, size) for s in samples]
-        batched = data_collate(samples)
-        return batched
+        return samples
+
+    def tfm_val(self, samples):
+        samples = [resize_sample(s, self.eval_size, resize_method=ResizeMethod.SQUISH) for s in samples]
+        return samples
 
 
 class UperNetAdapter(Callback):
@@ -104,10 +120,13 @@ def main(args):
     tree = parts.ObjectTree.from_meta_folder(broden_root / 'meta')
     model = get_upernet(tree)
     adapter_tfm = UperNetAdapter()
-    scale_jitter = ScaleJitterCollate(model)
+    scale_jitter = ScaleJitter()
     db = parts.get_data(broden_root, size=None, norm_stats=None,
                         max_rotate=None, max_zoom=1, max_warp=None, max_lighting=None,
-                        bs=args.bs, collate_fn=scale_jitter, dl_tfms=adapter_tfm)
+                        bs=4, dl_tfms=[adapter_tfm], collate_fn=lambda x: x)
+    db.train_dl = MyDataLoader.from_device_dl(db.train_dl, pre_proc_batch=scale_jitter.tfm_train)
+    db.valid_dl = MyDataLoader.from_device_dl(db.valid_dl, pre_proc_batch=scale_jitter.tfm_val)
+
     loss = LossAdapter(tree, model.loss_func)
     metrics = partial(parts.BrodenMetrics, obj_tree=tree, restrict=True, split_func=split_func)
     sgd = partial(optim.SGD, momentum=0.9)
