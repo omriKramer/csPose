@@ -45,7 +45,7 @@ class ScaleJitter:
         return samples
 
     def tfm_val(self, samples):
-        samples = [resize_sample(s, self.eval_size, resize_method=ResizeMethod.SQUISH) for s in samples]
+        samples = [resize_sample(s, self.eval_size) for s in samples]
         return samples
 
 
