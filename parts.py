@@ -411,9 +411,9 @@ def resize(x, size):
 
     if x.dtype == torch.long:
         x = x.float()
-        return F.interpolate(x, size, mode='nearest').squeeze().long()
+        return F.interpolate(x, size, mode='nearest').squeeze(dim=0).long()
 
-    return F.interpolate(x, size, mode='bilinear', align_corners=False).squeeze()
+    return F.interpolate(x, size, mode='bilinear', align_corners=False).squeeze(dim=0)
 
 
 class Loss:
