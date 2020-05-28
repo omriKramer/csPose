@@ -406,14 +406,21 @@ class BrodenMetricsClbk(fv.LearnerCallback):
 def resize(x, size):
     if x.shape[-2:] == size:
         return x
+    three_dim = False
     if x.ndim == 3:
         x = x[None]
+        three_dim = True
 
     if x.dtype == torch.long:
         x = x.float()
-        return F.interpolate(x, size, mode='nearest').squeeze(dim=0).long()
+        out = F.interpolate(x, size, mode='nearest').long()
+    else:
+        out = F.interpolate(x, size, mode='bilinear', align_corners=False)
 
-    return F.interpolate(x, size, mode='bilinear', align_corners=False).squeeze(dim=0)
+    if three_dim:
+        out = out.squeeze(dim=0)
+
+    return out
 
 
 class Loss:
