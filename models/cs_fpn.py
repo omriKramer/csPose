@@ -27,7 +27,7 @@ class BottomUp(nn.ModuleList):
 
     def forward(self, x):
         out = [self[0](x)]
-        for layer in self.bu[1:]:
+        for layer in self[1:]:
             out.append(layer(out[-1]))
         return out
 
