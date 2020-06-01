@@ -35,7 +35,7 @@ class FPN(nn.Module):
 
     def __init__(self, body, out_dims, fpn_dim=256):
         super().__init__()
-        self.ifn, self.bu, self.td_ind, self.td_out, self.td_bu_laterals, self.busion = build_fpn(body, fpn_dim)
+        self.ifn, self.bu, self.td_in, self.td_out, self.td_bu_laterals, self.fusion = build_fpn(body, fpn_dim)
         self.td_head = SplitHead(fpn_dim, out_dims)
 
     def forward(self, images):
