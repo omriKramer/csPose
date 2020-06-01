@@ -142,7 +142,7 @@ class TwoIterFPN(nn.Module):
         c = ch[-1]
         embeddings = {k: nn.Sequential(layers.conv_layer(c, 2 * c), layers.conv_layer(2 * c, c))
                       for k in out_dims.keys()}
-        self.embedding = embeddings
+        self.embedding = nn.ModuleDict(embeddings)
         head = {key: nn.Sequential(layers.conv_layer(fpn_dim, fpn_dim), conv2d(fpn_dim, fn, ks=1, bias=True))
                 for key, fn in out_dims.items()}
         self.head = nn.ModuleDict(head)
