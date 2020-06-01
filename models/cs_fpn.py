@@ -39,10 +39,10 @@ class BottomUpWithLaterals(nn.Module):
         laterals = [layers.conv_layer(fpn_dim, c) for c in channels]
         self.laterals = nn.ModuleList(laterals)
 
-    def _layer_forward(self, x, i, lateral_in):
+    def _layer_forward(self, x, i, laterals_in):
         out = self.bb[i](x)
-        if self.laterals_in:
-            out = out + self.laterals[i](lateral_in[i])
+        if laterals_in:
+            out = out + self.laterals[i](laterals_in[i])
         return out
 
     def forward(self, x, lateral_in=None):
