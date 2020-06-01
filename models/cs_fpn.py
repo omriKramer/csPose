@@ -33,10 +33,10 @@ class BottomUp(nn.ModuleList):
 
 
 class BottomUpWithLaterals(nn.Module):
-    def __init__(self, modules, channels, fpn_dim):
+    def __init__(self, modules, channels_out, channels_in):
         super().__init__()
         self.bb = nn.ModuleList(modules)
-        laterals = [layers.conv_layer(fpn_dim, c) for c in channels]
+        laterals = [layers.conv_layer(c_in, c_out) for c_in, c_out in zip(channels_in, channels_out)]
         self.laterals = nn.ModuleList(laterals)
 
     def _layer_forward(self, x, i, laterals_in):
@@ -105,8 +105,9 @@ def build_fpn(body, fpn_dim, bu_in_lateral=False, out_dim=None):
     if not bu_in_lateral:
         bu = BottomUp(bu_bb)
     else:
-        lateral_channels = [out_dim] + channels[1:-1]
-        bu = BottomUpWithLaterals(bu_bb, lateral_channels, fpn_dim)
+        channel_in = [out_dim] + [fpn_dim, fpn_dim]
+        channels_out = channels[:3]
+        bu = BottomUpWithLaterals(bu_bb, channels_out, channel_in)
     td = TopDown(channels, fpn_dim)
 
     fusion = Fusion(len(channels), fpn_dim)
