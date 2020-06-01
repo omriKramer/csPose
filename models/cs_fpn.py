@@ -13,7 +13,7 @@ def build_fpn(body, fpn_dim):
     bu = body[layers_idx:]
     szs = model_sizes(bu)
     channels = [s[1] for s in szs]
-    bu = nn.ModuleList(list(*bu))
+    bu = nn.ModuleList([m for m in bu])
 
     td_in, td_out = [], []
     for c in reversed(channels):
