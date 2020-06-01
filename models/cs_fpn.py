@@ -157,13 +157,15 @@ class TwoIterFPN(nn.Module):
         bu_out.reverse()
 
         td_out = self.td(bu_out)
+        td_out.reverse()
         out['object'] = self.head['object'](self.fusion(td_out))
 
-        bu_lateral_in = [out['object']] + td_out[-2:0:-1]
+        bu_lateral_in = [out['object']] + td_out[1:-1]
         bu_out = self.bu(features, lateral_in=bu_lateral_in)
         bu_out[-1] = self.embedding['part'](bu_out[-1])
         bu_out.reverse()
 
         td_out = self.td(bu_out)
+        td_out.reverse()
         out['part'] = self.head['part'](self.fusion(td_out))
         return out
