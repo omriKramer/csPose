@@ -58,7 +58,7 @@ class FPN(nn.Module):
             td_out.append(self.td_out[i](last_inner))
 
         td_out.reverse()
-        out_size = td_out[0].shpae[-2:]
+        out_size = td_out[0].shape[-2:]
         fusion_list = [td_out[0]]
         for i in range(1, len(td_out)):
             fusion_list.append(F.interpolate(td_out[i], size=out_size, mode='bilinear', align_corners=False))
