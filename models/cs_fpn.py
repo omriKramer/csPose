@@ -40,14 +40,14 @@ class BottomUpWithLaterals(nn.Module):
         self.laterals = nn.ModuleList(laterals)
 
     def _layer_forward(self, x, i, lateral_in):
-        out = self.bb(x)
+        out = self.bb[i](x)
         if self.laterals_in:
             out = out + self.laterals[i](lateral_in[i])
         return out
 
     def forward(self, x, lateral_in=None):
         out = [self._layer_forward(x, 0, lateral_in)]
-        for i in range(1, len(self.bb)-1):
+        for i in range(1, len(self.bb) - 1):
             out.append(self._layer_forward(out[-1], i, lateral_in))
         out.append(self.bb[-1](out[-1]))
         return out
