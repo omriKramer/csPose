@@ -47,7 +47,7 @@ class FPN(nn.Module):
 
         bu_out.reverse()
         td_out = []
-        last_inner = self.td[0](bu_out[0])
+        last_inner = self.td_in[0](bu_out[0])
         td_out.append(self.td_out[0](last_inner))
 
         for i in range(1, len(self.td_out)):
