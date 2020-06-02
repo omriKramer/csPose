@@ -164,7 +164,7 @@ class ApplyEmbedding(nn.Module):
         self.op = op
 
     def forward(self, key, x):
-        out = self.op(x, self.emb('key')[:, None, None])
+        out = self.op(x, self.emb(key)[:, None, None])
         return out
 
 
