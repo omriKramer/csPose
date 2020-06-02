@@ -2,7 +2,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from fastai.callbacks import model_sizes
-from fastai.layers import conv2d
+from fastai.layers import conv2d, embedding
 
 from models import layers
 
@@ -134,16 +134,60 @@ class FPN(nn.Module):
         return out
 
 
+class ApplyModuleDict(nn.ModuleDict):
+
+    def __init__(self, modules):
+        super().__init__(modules)
+
+    def forward(self, key, x):
+        return self[key](x)
+
+
+class EmbeddingDict(nn.Module):
+
+    def __init__(self, keys, embedding_dim):
+        super().__init__()
+        self.embedding = embedding(len(keys), embedding_dim)
+        self.keys = list(keys)
+
+    def forward(self, key):
+        device = self.embedding.weight.device
+        i = torch.tensor([self.keys.index(key)], dtype=torch.int64, device=device)
+        return self.embedding(i)
+
+
+class ApplyEmbedding(nn.Module):
+
+    def __init__(self, emb, op=torch.add):
+        super().__init__()
+        self.emb = emb
+        self.op = op
+
+    def forward(self, key, x):
+        out = self.op(x, self.emb('key')[:, None, None])
+        return out
+
+
+def resolve_embedding(emb_type, keys, dim):
+    if emb_type == 'conv':
+        emb = {k: nn.Sequential(layers.conv_layer(dim, 2 * dim), layers.conv_layer(2 * dim, dim))
+               for k in keys}
+        emb = ApplyModuleDict(emb)
+    elif emb_type == 'emb-add':
+        emb_dict = EmbeddingDict(keys, dim)
+        emb = ApplyEmbedding(emb_dict)
+    else:
+        raise ValueError
+    return emb
+
+
 class TwoIterFPN(nn.Module):
 
-    def __init__(self, body, out_dims, fpn_dim=256):
+    def __init__(self, body, out_dims, fpn_dim=256, emb_type='conv'):
         super().__init__()
         self.ifn, self.bu, self.td, self.fusion, ch = build_fpn(body, fpn_dim, bu_in_lateral=True,
                                                                 out_dim=out_dims['object'])
-        c = ch[-1]
-        embeddings = {k: nn.Sequential(layers.conv_layer(c, 2 * c), layers.conv_layer(2 * c, c))
-                      for k in out_dims.keys()}
-        self.embedding = nn.ModuleDict(embeddings)
+        self.embedding = resolve_embedding(emb_type, out_dims.keus(), fpn_dim)
         head = {key: nn.Sequential(layers.conv_layer(fpn_dim, fpn_dim), conv2d(fpn_dim, fn, ks=1, bias=True))
                 for key, fn in out_dims.items()}
         self.head = nn.ModuleDict(head)
@@ -153,7 +197,7 @@ class TwoIterFPN(nn.Module):
 
         features = self.ifn(images)
         bu_out = self.bu(features)
-        bu_out[-1] = self.embedding['object'](bu_out[-1])
+        bu_out[-1] = self.embedding('object', bu_out[-1])
         bu_out.reverse()
 
         td_out = self.td(bu_out)
@@ -162,7 +206,7 @@ class TwoIterFPN(nn.Module):
 
         bu_lateral_in = [out['object']] + td_out[1:-1]
         bu_out = self.bu(features, lateral_in=bu_lateral_in)
-        bu_out[-1] = self.embedding['part'](bu_out[-1])
+        bu_out[-1] = self.embedding('part', bu_out[-1])
         bu_out.reverse()
 
         td_out = self.td(bu_out)
