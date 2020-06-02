@@ -164,7 +164,8 @@ class ApplyEmbedding(nn.Module):
         self.op = op
 
     def forward(self, key, x):
-        out = self.op(x, self.emb(key)[:, None, None])
+        emb_vec = self.emb(key)[:, None, None]
+        out = self.op(x, emb_vec)
         return out
 
 
@@ -187,7 +188,7 @@ class TwoIterFPN(nn.Module):
         super().__init__()
         self.ifn, self.bu, self.td, self.fusion, ch = build_fpn(body, fpn_dim, bu_in_lateral=True,
                                                                 out_dim=out_dims['object'])
-        self.embedding = resolve_embedding(emb_type, out_dims.keys(), fpn_dim)
+        self.embedding = resolve_embedding(emb_type, out_dims.keys(), ch[-1])
         head = {key: nn.Sequential(layers.conv_layer(fpn_dim, fpn_dim), conv2d(fpn_dim, fn, ks=1, bias=True))
                 for key, fn in out_dims.items()}
         self.head = nn.ModuleDict(head)
