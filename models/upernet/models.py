@@ -42,7 +42,7 @@ class SegmentationModuleBase(nn.Module):
 
 
 class SegmentationModule(SegmentationModuleBase):
-    def __init__(self, net_enc, net_dec, tree, loss_scale=None, seg_size=None):
+    def __init__(self, net_enc, net_dec, tree, loss_scale=None):
         super(SegmentationModule, self).__init__()
         self.encoder = net_enc
         self.decoder = net_dec
@@ -57,7 +57,6 @@ class SegmentationModule(SegmentationModuleBase):
         self.crit_dict["material"] = nn.NLLLoss(ignore_index=0)  # ignore background 0
         self.crit_dict["scene"] = nn.NLLLoss(ignore_index=-1)  # ignore unlabelled -1
         self.tree = tree
-        self.seg_size = seg_size
 
     def forward(self, img):
         output_switch = {"object": True, "part": True, "scene": False, "material": False}
@@ -367,7 +366,7 @@ class UPerNet(nn.Module):
         return output_dict
 
 
-def get_upernet(tree, weights_encoder='', weights_decoder='', seg_size=256):
+def get_upernet(tree, weights_encoder='', weights_decoder=''):
     fc_dim = 2048
     builder = ModelBuilder()
     net_encoder = builder.build_encoder(
@@ -381,5 +380,84 @@ def get_upernet(tree, weights_encoder='', weights_decoder='', seg_size=256):
         weights=weights_decoder,
         use_softmax=True)
 
-    segmentation_module = SegmentationModule(net_encoder, net_decoder, tree, seg_size=seg_size)
+    segmentation_module = SegmentationModule(net_encoder, net_decoder, tree)
     return segmentation_module
+
+
+class FpnTD(nn.Module):
+
+    def __init__(self, ppm_pooling, ppm_conv, ppm_last_conv, fpn_in, fpn_out, conv_fusion):
+        super().__init__()
+        self.conv_fusion = conv_fusion
+        self.fpn_out = fpn_out
+        self.fpn_in = fpn_in
+        self.ppm_last_conv = ppm_last_conv
+        self.ppm_conv = ppm_conv
+        self.ppm_pooling = ppm_pooling
+
+    def forward(self, conv_out):
+        conv5 = conv_out[-1]
+        input_size = conv5.size()
+        roi = []  # fake rois, just used for pooling
+        for i in range(input_size[0]):  # batch size
+            roi.append(torch.Tensor([i, 0, 0, input_size[3], input_size[2]]).view(1, -1))  # b, x0, y0, x1, y1
+        roi = torch.cat(roi, dim=0).type_as(conv5)
+        ppm_out = [conv5]
+        for pool_scale, pool_conv in zip(self.ppm_pooling, self.ppm_conv):
+            ppm_out.append(pool_conv(F.interpolate(
+                pool_scale(conv5, roi.detach()),
+                (input_size[2], input_size[3]),
+                mode='bilinear', align_corners=False)))
+        ppm_out = torch.cat(ppm_out, 1)
+        f = self.ppm_last_conv(ppm_out)
+
+        fpn_feature_list = [f]
+        for i in reversed(range(len(conv_out) - 1)):
+            conv_x = conv_out[i]
+            conv_x = self.fpn_in[i](conv_x)  # lateral branch
+
+            f = F.interpolate(
+                f, size=conv_x.size()[2:], mode='bilinear', align_corners=False)  # top-down branch
+            f = conv_x + f
+
+            fpn_feature_list.append(self.fpn_out[i](f))
+        fpn_feature_list.reverse()  # [P2 - P5]
+
+        output_size = fpn_feature_list[0].size()[2:]
+        fusion_list = [fpn_feature_list[0]]
+        for i in range(1, len(fpn_feature_list)):
+            fusion_list.append(F.interpolate(
+                fpn_feature_list[i],
+                output_size,
+                mode='bilinear', align_corners=False))
+        fusion_out = torch.cat(fusion_list, 1)
+        x = self.conv_fusion(fusion_out)
+        return x
+
+
+class FPN(nn.Module):
+
+    def __init__(self, encoder, decoder):
+        super().__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+
+    def forward(self, img):
+        out = self.encoder(img, return_feature_maps=True)
+        out = self.decoder(out)
+        return out
+
+
+def extract_fpn(seg_model: SegmentationModule):
+    encoder = seg_model.encoder
+    decoder = seg_model.decoder
+    decoder = FpnTD(decoder.ppm_pooling, decoder.ppm_conv, decoder.ppm_last_conv, decoder.fpn_in, decoder.fpn_out,
+                    decoder.conv_fusion)
+    fpn = FPN(encoder, decoder)
+    return fpn
+
+
+def get_fpn(tree, weights_encoder='', weights_decoder=''):
+    seg_model = get_upernet(tree, weights_encoder=weights_encoder, weights_decoder=weights_decoder)
+    fpn = extract_fpn(seg_model)
+    return fpn
