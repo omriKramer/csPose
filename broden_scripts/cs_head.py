@@ -65,7 +65,7 @@ def split_func(last_output):
 
 
 def get_model(root, tree):
-    ckpt_dir = root.parnet.resolve() / 'ckpt'
+    ckpt_dir = root.parent.resolve() / 'ckpt'
     encoder_ckpt = str(ckpt_dir / 'trained/encoder_epoch_40.pth')
     decoder_ckpt = str(ckpt_dir / 'trained/decoder_epoch_40.pth')
 
