@@ -313,10 +313,11 @@ class Accuracy:
 
 
 class BrodenMetrics:
-    def __init__(self, obj_tree: ObjectTree, restrict=True):
+    def __init__(self, obj_tree: ObjectTree, restrict=True, object_only=False):
         self.obj_tree = obj_tree
         self.restrict = restrict
         self.reset()
+        self.object_only = object_only
 
     def reset(self):
         self.obj_pa = Accuracy()
@@ -332,18 +333,21 @@ class BrodenMetrics:
 
         gt_size = obj_gt.shape[-2:]
         obj_pred = resize(obj_pred, gt_size)
-        part_pred = resize(part_pred, gt_size)
 
         obj_pred = obj_pred.argmax(dim=1)
-        part_pred = self.obj_tree.split_parts_pred(part_pred)
-        # part_pred shape: (n_obj_with_parts, bs, h, w)
-        part_pred = torch.stack([obj_parts.argmax(dim=1) for obj_parts in part_pred], dim=0)
-
-        if self.restrict:
-            part_pred = self.restrict_part_to_obj(obj_pred, part_pred)
 
         self.obj_pa.update(*pix_acc(obj_pred, obj_gt))
         self.obj_iou.update(*iou(obj_pred, obj_gt, self.obj_tree.n_obj, obj_gt > 0))
+
+        if self.object_only:
+            return
+
+        part_pred = resize(part_pred, gt_size)
+        part_pred = self.obj_tree.split_parts_pred(part_pred)
+        # part_pred shape: (n_obj_with_parts, bs, h, w)
+        part_pred = torch.stack([obj_parts.argmax(dim=1) for obj_parts in part_pred], dim=0)
+        if self.restrict:
+            part_pred = self.restrict_part_to_obj(obj_pred, part_pred)
 
         self.part_pa.update(*pix_acc(part_pred, part_gt))
         for i, (obj, parts) in enumerate(self.obj_tree.obj_and_parts()):

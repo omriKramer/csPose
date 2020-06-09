@@ -7,19 +7,6 @@ from fastai.layers import conv2d, embedding
 from models import layers
 
 
-class SplitHead(nn.Module):
-
-    def __init__(self, in_dim, out_dims):
-        super().__init__()
-        d = {key: nn.Sequential(layers.conv_layer(in_dim, in_dim), conv2d(in_dim, fn, ks=1, bias=True))
-             for key, fn in out_dims.items()}
-        self.heads = nn.ModuleDict(d)
-
-    def forward(self, x):
-        out = {k: m(x) for k, m in self.heads.items()}
-        return out
-
-
 class BottomUp(nn.ModuleList):
 
     def __init__(self, modules):
@@ -119,7 +106,7 @@ class FPN(nn.Module):
     def __init__(self, body, out_dims, fpn_dim=256):
         super().__init__()
         self.ifn, self.bu, self.td, self.fusion, _ = build_fpn(body, fpn_dim)
-        self.td_head = SplitHead(fpn_dim, out_dims)
+        self.td_head = layers.SplitHead(fpn_dim, out_dims)
 
     def forward(self, images):
         features = self.ifn(images)

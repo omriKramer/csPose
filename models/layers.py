@@ -2,6 +2,7 @@ import numbers
 
 import torch
 from fastai import vision as fv
+from fastai.layers import conv2d
 from torch import nn
 from torch.nn import functional as F
 
@@ -136,4 +137,17 @@ class PPM(nn.Module):
         out = [F.interpolate(o, size=original_size, mode='bilinear', align_corners=False) for o in out]
         out = torch.cat(out, dim=1)
         out = self.conv(out)
+        return out
+
+
+class SplitHead(nn.Module):
+
+    def __init__(self, in_dim, out_dims):
+        super().__init__()
+        d = {key: nn.Sequential(conv_layer(in_dim, in_dim), conv2d(in_dim, fn, ks=1, bias=True))
+             for key, fn in out_dims.items()}
+        self.heads = nn.ModuleDict(d)
+
+    def forward(self, x):
+        out = {k: m(x) for k, m in self.heads.items()}
         return out
