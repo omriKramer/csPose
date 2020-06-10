@@ -4,45 +4,7 @@ import parts
 import utils
 from models import layers
 from models.upernet import get_fpn
-
-
-def resize_sample(sample, size, resize_method=ResizeMethod.PAD):
-    img, obj_and_part = sample
-    t = (o.apply_tfms(None, size=size, resize_method=resize_method, padding_mode='zeros')
-         for o in (img, obj_and_part))
-    return tuple(t)
-
-
-class ScaleJitterCollate:
-
-    def __init__(self, sizes):
-        self.sizes = sizes
-
-    def __call__(self, samples):
-        size = random.choice(self.sizes)
-        samples = [resize_sample(s, size) for s in samples]
-        out = data_collate(samples)
-        return out
-
-
-class UperNetAdapter:
-    """imitate upernet ValDataset"""
-
-    def __init__(self):
-        super().__init__()
-        self.mean = [102.9801, 115.9465, 122.7717]
-        self.std = [1., 1., 1.]
-        self.idx = torch.LongTensor([2, 1, 0])
-
-    def __call__(self, batch):
-        img, (yb, orig) = batch
-
-        img = img.index_select(1, self.idx.to(device=img.device))
-        img = img * 255
-        mean = torch.tensor(self.mean, device=img.device)
-        std = torch.tensor(self.std, device=img.device)
-        img = (img - mean[:, None, None]) / std[:, None, None]
-        return img, (yb, orig)
+from utils import UperNetAdapter, ScaleJitterCollate, BnFreeze
 
 
 class LossSplit:
@@ -75,18 +37,6 @@ def get_model(root, tree):
     return model
 
 
-class BnFreeze(Callback):
-    """Freeze moving average statistics in all non-trainable batchnorm layers."""
-
-    def __init__(self, model):
-        super().__init__()
-        self.model = model
-
-    def on_epoch_begin(self, **kwargs: Any) -> None:
-        """Put bn layers in eval mode just after `model.train()`."""
-        set_bn_eval(self.model)
-
-
 def main(args):
     save = args.save
 
@@ -104,11 +54,14 @@ def main(args):
 
     loss = parts.Loss(tree, split_func=LossSplit(tree))
     metrics = partial(parts.BrodenMetricsClbk, obj_tree=tree, restrict=True, split_func=split_func)
-    learn = Learner(data, model, loss_func=loss, callback_fns=metrics, callbacks=BnFreeze(model[0]), train_bn=False)
+    learn = Learner(data, model, loss_func=loss, callback_fns=metrics, train_bn=args.train_bn)
+    if not args.train_bn:
+        learn.callbacks.append(BnFreeze(model[0]))
+
     learn.split((learn.model[1],))
     learn.freeze()
 
-    logger = callbacks.CSVLogger(learn, filename=args.save, )
+    logger = callbacks.CSVLogger(learn, filename=args.save)
     save_clbk = callbacks.SaveModelCallback(learn, monitor='object-P.A.', mode='max', every='epoch', name=save)
     learn.fit_one_cycle(20, 1e-2, pct_start=0.1, callbacks=[logger, save_clbk])
 
@@ -116,4 +69,5 @@ def main(args):
 if __name__ == '__main__':
     parser = utils.basic_train_parser()
     parser.add_argument('--root', default='unifiedparsing/broden_dataset')
+    parser.add_argument('--train_bn', action='store_true')
     main(parser.parse_args())

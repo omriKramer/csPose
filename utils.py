@@ -1,5 +1,7 @@
 import argparse
+import random
 from time import time
+from typing import Any
 
 import fastai
 import fastprogress
@@ -7,7 +9,9 @@ import torch
 import torch.distributed as dist
 import torch.nn.functional as F
 from fastai import callbacks
-from fastai.basic_train import LearnerCallback, add_metrics, Callback
+from fastai.callback import Callback
+from fastai.torch_core import set_bn_eval
+from fastai.vision import Callback, LearnerCallback, add_metrics, ResizeMethod, data_collate
 from fastai.core import master_bar, progress_bar
 from fastprogress.fastprogress import force_console_behavior
 from torch.utils.data import DataLoader
@@ -198,3 +202,54 @@ def basic_train_parser():
     parser.add_argument('--no-one-cycle', action='store_true')
     parser.add_argument('--pretrained', action='store_true')
     return parser
+
+
+class UperNetAdapter:
+    """imitate upernet ValDataset"""
+
+    def __init__(self):
+        super().__init__()
+        self.mean = [102.9801, 115.9465, 122.7717]
+        self.std = [1., 1., 1.]
+        self.idx = torch.LongTensor([2, 1, 0])
+
+    def __call__(self, batch):
+        img, (yb, orig) = batch
+
+        img = img.index_select(1, self.idx.to(device=img.device))
+        img = img * 255
+        mean = torch.tensor(self.mean, device=img.device)
+        std = torch.tensor(self.std, device=img.device)
+        img = (img - mean[:, None, None]) / std[:, None, None]
+        return img, (yb, orig)
+
+
+def resize_sample(sample, size, resize_method=ResizeMethod.PAD):
+    img, obj_and_part = sample
+    t = (o.apply_tfms(None, size=size, resize_method=resize_method, padding_mode='zeros')
+         for o in (img, obj_and_part))
+    return tuple(t)
+
+
+class ScaleJitterCollate:
+
+    def __init__(self, sizes):
+        self.sizes = sizes
+
+    def __call__(self, samples):
+        size = random.choice(self.sizes)
+        samples = [resize_sample(s, size) for s in samples]
+        out = data_collate(samples)
+        return out
+
+
+class BnFreeze(Callback):
+    """Freeze moving average statistics in all non-trainable batchnorm layers."""
+
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+
+    def on_epoch_begin(self, **kwargs: Any) -> None:
+        """Put bn layers in eval mode just after `model.train()`."""
+        set_bn_eval(self.model)
