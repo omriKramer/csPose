@@ -19,7 +19,7 @@ class Instructor(fv.Callback):
     def on_batch_begin(self, train, last_target, **kwargs):
         obj_gt, part_gt = last_target
         if not train:
-            inst = torch.arange(1, self.tree.n_obj)
+            inst = torch.arange(1, self.tree.n_obj, device=obj_gt.device)
             self.inst = inst.expand(len(obj_gt), len(inst)).T
             self.train = False
             return
