@@ -38,7 +38,7 @@ class Instructor(fv.Callback):
         if not self.train:
             return 0
 
-        obj_pred = pred
+        obj_pred = pred.squeeze(dim=1)
         obj_gt = obj_gt.squeeze(dim=1)
         pred_size = obj_pred.shape[-2:]
         obj_gt = utils.resize(obj_gt, pred_size)
@@ -47,7 +47,7 @@ class Instructor(fv.Callback):
         obj_mask = obj_gt == inst[:, None, None]
         obj_target = obj_mask * 1.
         foreground = obj_gt != 0
-        loss = self.obj_loss(pred[foreground], obj_target[foreground])
+        loss = self.obj_loss(obj_pred[foreground], obj_target[foreground])
         return loss
 
 
@@ -71,5 +71,5 @@ class CSHead(nn.Module):
             embedded_features = features * emb_vec[..., None, None]
             out.append(self.td(embedded_features))
 
-        out = torch.stack(out, dim=1)
+        out = torch.cat(out, dim=1)
         return out
