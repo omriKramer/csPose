@@ -28,7 +28,7 @@ class Instructor(fv.Callback):
         inst = []
         for obj_gt_i in obj_gt:
             objects = obj_gt_i.unique()
-            if objects[0] == 0:
+            if objects[0] == 0 and len(objects) > 1:
                 objects = objects[1:]
             inst.append(self.sampler(objects))
         inst = torch.cat(inst).to(obj_gt.device)
