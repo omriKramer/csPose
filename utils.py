@@ -260,7 +260,7 @@ class BalancingSampler:
         self.count = torch.ones(n)
 
     def reset(self):
-        self.count - torch.ones_like(self.count)
+        self.count = torch.ones_like(self.count)
 
     def __call__(self, x):
         weights = 1 / self.count[x.cpu()]

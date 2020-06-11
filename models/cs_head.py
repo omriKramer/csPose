@@ -31,7 +31,7 @@ class Instructor(fv.Callback):
             if objects[0] == 0:
                 objects = objects[1:]
             inst.append(self.sampler(objects))
-        inst = torch.stack(inst).to(obj_gt.device)
+        inst = torch.cat(inst).to(obj_gt.device)
         self.inst = inst[None]
 
     def loss(self, pred, obj_gt, part_gt):
