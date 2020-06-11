@@ -58,8 +58,8 @@ class CSHead(nn.Module):
         self.fpn = get_fpn(tree, weights_encoder=weights_encoder, weights_decoder=weights_decoder)
         fpn_dim = 512
         self.td = nn.Sequential(layers.conv_layer(fpn_dim, fpn_dim),
-                                layers.conv_layer(fpn_dim, fpn_dim / 2),
-                                fv.conv2d(fpn_dim / 2, 1, ks=1, bias=True))
+                                layers.conv_layer(fpn_dim, fpn_dim // 2),
+                                fv.conv2d(fpn_dim // 2, 1, ks=1, bias=True))
         self.embedding = fv.embedding(tree.n_obj, fpn_dim)
         self.instructor = instructor
 
