@@ -3,7 +3,7 @@ from fastai.vision import *
 import parts
 import utils
 from models import CSHead, Instructor
-from parts import upernet_data_pipline
+from parts import upernet_data_pipeline
 
 
 def get_model(root, tree):
@@ -17,7 +17,7 @@ def main(args):
     broden_root = Path(args.root).resolve()
     tree = parts.ObjectTree.from_meta_folder(broden_root / 'meta')
     model, instructor = get_model(broden_root, tree)
-    db = upernet_data_pipline(broden_root)
+    db = upernet_data_pipeline(broden_root)
 
     metrics = partial(parts.BinaryBrodenMetrics, tree, thresh=0.75)
     clbks = [instructor]

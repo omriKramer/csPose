@@ -7,12 +7,12 @@ import fastai
 import fastprogress
 import torch
 import torch.distributed as dist
-import torch.nn.functional as F
 from fastai import callbacks
+from fastai.core import master_bar, progress_bar
 from fastai.torch_core import set_bn_eval
 from fastai.vision import Callback, LearnerCallback, add_metrics, ResizeMethod, data_collate
-from fastai.core import master_bar, progress_bar
 from fastprogress.fastprogress import force_console_behavior
+from torch.nn import functional as F
 from torch.utils.data import DataLoader
 
 
@@ -295,3 +295,23 @@ def upernet_ckpt(root):
     encoder_ckpt = str(ckpt_dir / 'trained/encoder_epoch_40.pth')
     decoder_ckpt = str(ckpt_dir / 'trained/decoder_epoch_40.pth')
     return encoder_ckpt, decoder_ckpt
+
+
+def resize(x, size):
+    if x.shape[-2:] == size:
+        return x
+    three_dim = False
+    if x.ndim == 3:
+        x = x[None]
+        three_dim = True
+
+    if x.dtype == torch.long:
+        x = x.float()
+        out = F.interpolate(x, size, mode='nearest').long()
+    else:
+        out = F.interpolate(x, size, mode='bilinear', align_corners=False)
+
+    if three_dim:
+        out = out.squeeze(dim=0)
+
+    return out

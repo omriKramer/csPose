@@ -5,7 +5,6 @@ from torch import nn
 import utils
 from models import layers
 from models.upernet import get_fpn
-from parts import resize
 
 
 class Instructor(fv.Callback):
@@ -42,7 +41,7 @@ class Instructor(fv.Callback):
         obj_pred = pred
         obj_gt = obj_gt.squeeze(dim=1)
         pred_size = obj_pred.shape[-2:]
-        obj_gt = resize(obj_gt, pred_size)
+        obj_gt = utils.resize(obj_gt, pred_size)
 
         inst = self.inst[0]
         obj_mask = obj_gt == inst[:, None, None]

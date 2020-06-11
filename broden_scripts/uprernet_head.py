@@ -40,7 +40,7 @@ def main(args):
     broden_root = Path(args.root).resolve()
     tree = parts.ObjectTree.from_meta_folder(broden_root / 'meta')
     model = get_model(broden_root, tree)
-    db = parts.upernet_data_pipline(broden_root)
+    db = parts.upernet_data_pipeline(broden_root)
 
     loss = parts.Loss(tree, split_func=LossSplit(tree))
     metrics = partial(parts.BrodenMetricsClbk, obj_tree=tree, restrict=True, split_func=split_func)

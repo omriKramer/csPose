@@ -5,14 +5,12 @@ from pathlib import Path
 import fastai.vision as fv
 import pandas as pd
 import torch
-import torch.nn.functional as F
 from fastai.vision import imagenet_stats
 from torch import nn
 
 import models.cs_v2 as cs
 import utils
 from models import layers
-from utils import UperNetAdapter, ScaleJitterCollate
 
 
 class ObjectTree:
@@ -204,8 +202,8 @@ class ObjectsPartsLabelList(fv.ItemList):
     def analyze_pred(self, pred, scale=4):
         obj, part = pred[:self.tree.n_obj], pred[self.tree.n_obj:]
         size = [s * scale for s in obj.shape[-2:]]
-        obj = resize(obj, size)
-        part = resize(part, size)
+        obj = utils.resize(obj, size)
+        part = utils.resize(part, size)
 
         obj = obj.argmax(dim=0)
         part = self.tree.get_part_pred(part)
@@ -331,7 +329,7 @@ class BrodenMetrics:
         part_gt = self.obj_tree.split_parts_gt(obj_gt, part_gt)
 
         gt_size = obj_gt.shape[-2:]
-        obj_pred = resize(obj_pred, gt_size)
+        obj_pred = utils.resize(obj_pred, gt_size)
 
         obj_pred = obj_pred.argmax(dim=1)
 
@@ -341,7 +339,7 @@ class BrodenMetrics:
         if self.object_only:
             return
 
-        part_pred = resize(part_pred, gt_size)
+        part_pred = utils.resize(part_pred, gt_size)
         part_pred = self.obj_tree.split_parts_pred(part_pred)
         # part_pred shape: (n_obj_with_parts, bs, h, w)
         part_pred = torch.stack([obj_parts.argmax(dim=1) for obj_parts in part_pred], dim=0)
@@ -400,26 +398,6 @@ class BrodenMetricsClbk(utils.LearnerMetrics):
         return fv.add_metrics(last_metrics, results)
 
 
-def resize(x, size):
-    if x.shape[-2:] == size:
-        return x
-    three_dim = False
-    if x.ndim == 3:
-        x = x[None]
-        three_dim = True
-
-    if x.dtype == torch.long:
-        x = x.float()
-        out = F.interpolate(x, size, mode='nearest').long()
-    else:
-        out = F.interpolate(x, size, mode='bilinear', align_corners=False)
-
-    if three_dim:
-        out = out.squeeze(dim=0)
-
-    return out
-
-
 class Loss:
 
     def __init__(self, object_tree: ObjectTree, split_func=None):
@@ -440,8 +418,8 @@ class Loss:
         part_gt = part_gt.squeeze(dim=1)
 
         pred_size = obj_pred.shape[-2:]
-        obj_gt = resize(obj_gt, pred_size)
-        part_gt = resize(part_gt, pred_size)
+        obj_gt = utils.resize(obj_gt, pred_size)
+        part_gt = utils.resize(part_gt, pred_size)
         part_gt = self.object_tree.split_parts_gt(obj_gt, part_gt)
 
         obj_loss = self.obj_ce(obj_pred, obj_gt)
@@ -498,7 +476,7 @@ class BinaryBrodenMetrics(utils.LearnerMetrics):
             part_pred = None
 
         size = obj_gt.shape[-2:]
-        obj_pred = resize(obj_pred, size)
+        obj_pred = utils.resize(obj_pred, size)
         classified = obj_pred.transpose(0, 1).flatten(start_dim=2).sigmoid() > self.thresh
 
         binary_gt = obj_gt == torch.arange(1, self.tree.n_obj, device=obj_gt.device)[:, None, None, None]
@@ -639,10 +617,10 @@ def part_learner(data, arch, obj_tree: ObjectTree,
     return learn
 
 
-def upernet_data_pipline(broden_root):
-    adapter_tfm = UperNetAdapter()
-    train_collate = ScaleJitterCollate([384, 480, 544, 608, 672])
-    val_collate = ScaleJitterCollate([544])
+def upernet_data_pipeline(broden_root):
+    adapter_tfm = utils.UperNetAdapter()
+    train_collate = utils.ScaleJitterCollate([384, 480, 544, 608, 672])
+    val_collate = utils.ScaleJitterCollate([544])
     db = get_data(broden_root, size=None, norm_stats=imagenet_stats,
                   max_rotate=None, max_zoom=1, max_warp=None, max_lighting=None,
                   bs=8, no_check=True, dl_tfms=adapter_tfm)

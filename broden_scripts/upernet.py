@@ -92,8 +92,8 @@ class LossAdapter:
         part_gt = part_gt.squeeze(dim=1)
 
         size = obj_pred.shape[-2:]
-        obj_gt = parts.resize(obj_gt, size)
-        part_gt = parts.resize(part_gt, size)
+        obj_gt = utils.resize(obj_gt, size)
+        part_gt = utils.resize(part_gt, size)
 
         part_gt = self.tree.split_parts_gt(obj_gt, part_gt).transpose(0, 1)
         is_part = part_gt > 0
