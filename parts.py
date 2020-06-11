@@ -460,7 +460,7 @@ class BinaryBrodenMetrics(utils.LearnerMetrics):
         self.metrics = BrodenMetrics(self.tree, object_only=True)
         self.precision = Accuracy(self.tree.n_obj - 1)
         self.recall = Accuracy(self.tree.n_obj - 1)
-        self.overlapping = Accuracy()
+        self.overlap = Accuracy()
         self.no_class = Accuracy()
 
     def on_batch_end(self, last_output, last_target, train, **kwargs):
@@ -486,7 +486,7 @@ class BinaryBrodenMetrics(utils.LearnerMetrics):
 
         num_classes = classified.sum(dim=0)
         overlapping = (num_classes > 1).bool()
-        self.overlapping.update(overlapping.sum(), overlapping.numel())
+        self.overlap.update(overlapping.sum(), overlapping.numel())
         no_class = num_classes < 1
         self.no_class.update(no_class.sum(), no_class.numel())
 
@@ -496,7 +496,7 @@ class BinaryBrodenMetrics(utils.LearnerMetrics):
 
     def on_epoch_end(self, last_metrics, **kwargs):
         results = self.metrics.avg()[:2]
-        results.extend([self.overlapping.accuracy(), self.binary_pa.accuracy()])
+        results.extend(x.accuracy() for x in (self.overlap, self.no_class, self.precision, self.recall))
         return fv.add_metrics(last_metrics, results)
 
 
