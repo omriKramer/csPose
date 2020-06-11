@@ -19,11 +19,11 @@ def main(args):
     model, instructor = get_model(broden_root, tree)
     db = upernet_data_pipeline(broden_root)
 
-    metrics = partial(parts.BinaryBrodenMetrics, tree, thresh=0.75)
+    metrics = partial(parts.BinaryBrodenMetrics, obj_tree=tree, thresh=0.75)
     clbks = [instructor]
     if not args.train_bn:
         clbks.append(utils.BnFreeze(model.fpn))
-    learn = Learner(db, model, loss_func=instructor, callbacks=clbks, callback_fns=metrics, train_bn=args.train_bn)
+    learn = Learner(db, model, loss_func=instructor.loss, callbacks=clbks, callback_fns=metrics, train_bn=args.train_bn)
     learn.split((learn.model.td,))
     learn.freeze()
 
