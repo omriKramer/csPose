@@ -2,68 +2,32 @@ from fastai.vision import *
 
 import parts
 import utils
-from models import layers
-from models.upernet import get_fpn
-from utils import UperNetAdapter, ScaleJitterCollate, BnFreeze
-
-
-class LossSplit:
-
-    def __init__(self, tree):
-        self.tree = tree
-
-    def __call__(self, output):
-        obj_pred, part_pred = output['object'], output['part']
-        part_pred_dict = {}
-        for o, (start, end) in self.tree.obj2part_idx.items():
-            part_pred_dict[o] = part_pred[:, start:end]
-        return obj_pred, part_pred_dict
-
-
-def split_func(last_output):
-    obj_pred = last_output['object']
-    part_pred = last_output['part']
-    return obj_pred, part_pred
+from models import CSHead, Instructor
+from parts import upernet_data_pipline
 
 
 def get_model(root, tree):
-    ckpt_dir = root.parent.resolve() / 'ckpt'
-    encoder_ckpt = str(ckpt_dir / 'trained/encoder_epoch_40.pth')
-    decoder_ckpt = str(ckpt_dir / 'trained/decoder_epoch_40.pth')
-
-    fpn = get_fpn(tree, encoder_ckpt, decoder_ckpt)
-    outputs = {'object': tree.n_obj, 'part': tree.n_parts}
-    model = nn.Sequential(fpn, layers.SplitHead(512, outputs))
-    return model
+    encoder_path, decoder_path = utils.upernet_ckpt(root)
+    instructor = Instructor(tree)
+    model = CSHead(instructor, tree, encoder_path, decoder_path)
+    return model, instructor
 
 
 def main(args):
-    save = args.save
-
     broden_root = Path(args.root).resolve()
     tree = parts.ObjectTree.from_meta_folder(broden_root / 'meta')
-    model = get_model(broden_root, tree)
-    adapter_tfm = UperNetAdapter()
-    train_collate = ScaleJitterCollate([384, 480, 544, 608, 672])
-    val_collate = ScaleJitterCollate([544])
-    data = parts.get_data(broden_root, size=None, norm_stats=imagenet_stats,
-                          max_rotate=None, max_zoom=1, max_warp=None, max_lighting=None,
-                          bs=8, no_check=True, dl_tfms=adapter_tfm)
-    data.train_dl.dl.collate_fn = train_collate
-    data.valid_dl.dl.collate_fn = val_collate
+    model, instructor = get_model(broden_root, tree)
+    db = upernet_data_pipline(broden_root)
 
-    loss = parts.Loss(tree, split_func=LossSplit(tree))
-    metrics = partial(parts.BrodenMetricsClbk, obj_tree=tree, restrict=True, split_func=split_func)
-    learn = Learner(data, model, loss_func=loss, callback_fns=metrics, train_bn=args.train_bn)
+    metrics = partial(parts.BinaryBrodenMetrics, tree, thresh=0.75)
+    clbks = [instructor]
     if not args.train_bn:
-        learn.callbacks.append(BnFreeze(model[0]))
-
-    learn.split((learn.model[1],))
+        clbks.append(utils.BnFreeze(model.fpn))
+    learn = Learner(db, model, loss_func=instructor, callbacks=clbks, callback_fns=metrics, train_bn=args.train_bn)
+    learn.split((learn.model.td,))
     learn.freeze()
 
-    logger = callbacks.CSVLogger(learn, filename=args.save)
-    save_clbk = callbacks.SaveModelCallback(learn, monitor='object-P.A.', mode='max', every='epoch', name=save)
-    learn.fit_one_cycle(20, 1e-2, pct_start=0.1, callbacks=[logger, save_clbk])
+    utils.fit_and_log(learn, 'object-P.A', save=args.save, epochs=20, lr=1e-2)
 
 
 if __name__ == '__main__':

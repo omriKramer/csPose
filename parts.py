@@ -6,11 +6,13 @@ import fastai.vision as fv
 import pandas as pd
 import torch
 import torch.nn.functional as F
+from fastai.vision import imagenet_stats
 from torch import nn
 
 import models.cs_v2 as cs
 import utils
 from models import layers
+from utils import UperNetAdapter, ScaleJitterCollate
 
 
 class ObjectTree:
@@ -277,10 +279,10 @@ class ObjectsPartsItemList(fv.ImageList):
 
 
 def pix_acc(pred, gt):
-    mask = gt > 0
-    correct = (pred == gt) * mask
+    non_bg = gt > 0
+    correct = (pred == gt) * non_bg
     correct = correct.sum()
-    total = mask.sum()
+    total = gt.numel()
     return correct, total
 
 
@@ -316,13 +318,10 @@ class BrodenMetrics:
     def __init__(self, obj_tree: ObjectTree, restrict=True, object_only=False):
         self.obj_tree = obj_tree
         self.restrict = restrict
-        self.reset()
         self.object_only = object_only
 
-    def reset(self):
         self.obj_pa = Accuracy()
         self.obj_iou = Accuracy(self.obj_tree.n_obj - 1)
-
         self.part_pa = Accuracy()
         self.part_iou = [Accuracy(n - 1) for n in self.obj_tree.sections]
 
@@ -373,22 +372,16 @@ class BrodenMetrics:
         return results
 
 
-class BrodenMetricsClbk(fv.LearnerCallback):
-    _order = -20
+class BrodenMetricsClbk(utils.LearnerMetrics):
 
     def __init__(self, learn, obj_tree: ObjectTree, split_func=None, restrict=True):
-        super().__init__(learn)
+        super().__init__(learn, ['object-P.A.', 'object-mIoU', 'part-P.A.', 'part-mIoU(bg)'])
         self.split_func = split_func
-        self.metrics = BrodenMetrics(obj_tree, restrict=restrict)
+        self.obj_tree = obj_tree
+        self.restrict = restrict
 
-    def on_train_begin(self, **kwargs):
-        try:
-            self.learn.recorder.add_metric_names(['object-P.A.', 'object-mIoU', 'part-P.A.', 'part-mIoU(bg)'])
-        except AttributeError:
-            print('Warning: recorder is not initialized for learner')
-
-    def on_epoch_begin(self, **kwargs):
-        self.metrics.reset()
+    def _reset(self):
+        self.metrics = BrodenMetrics(self.obj_tree, restrict=self.restrict)
 
     def on_batch_end(self, last_output, last_target, train, **kwargs):
         if train:
@@ -461,6 +454,72 @@ class Loss:
 
         loss = obj_loss + sum(part_loss)
         return loss
+
+
+def precision_recall(pred, gt):
+    pred = pred.flatten(start_dim=1)
+    gt = gt.flatten(start_dim=1)
+    true = pred == gt
+    false = ~true
+    negative = ~pred
+
+    tp = (true * pred).sum(dim=1)
+    fp = (false * pred).sum(dim=1)
+    tn = (true * negative).sum(dim=1)
+    fn = (false * negative).sum(dim=1)
+    return tp, fp, tn, fn
+
+
+class BinaryBrodenMetrics(utils.LearnerMetrics):
+
+    def __init__(self, learn, obj_tree: ObjectTree, thresh=0.75):
+        names = ['object-P.A.', 'object-mIoU', 'overlap', 'no_class', f'precision@{thresh:.2}', f'recall@{thresh:.2}']
+        super().__init__(learn, names)
+        self.tree = obj_tree
+        self.thresh = thresh
+
+    def _reset(self):
+        self.metrics = BrodenMetrics(self.tree, object_only=True)
+        self.precision = Accuracy(self.tree.n_obj - 1)
+        self.recall = Accuracy(self.tree.n_obj - 1)
+        self.overlapping = Accuracy()
+        self.no_class = Accuracy()
+
+    def on_batch_end(self, last_output, last_target, train, **kwargs):
+        if train:
+            return
+
+        obj_gt, part_gt = last_target
+        obj_gt.squeeze(dim=1)
+        if isinstance(last_output, tuple):
+            obj_pred, part_pred = last_output
+        else:
+            obj_pred = last_output
+            part_pred = None
+
+        size = obj_gt.shape[-2:]
+        obj_pred = resize(obj_pred, size)
+        classified = obj_pred.transpose(0, 1).flatten(start_dim=2).sigmoid() > self.thresh
+
+        binary_gt = obj_gt == torch.arange(1, self.tree.n_obj, device=obj_gt.device)[:, None, None, None]
+        tp, fp, tn, fn = precision_recall(classified, binary_gt)
+        self.precision.update(tp, tp + fp)
+        self.recall.update(tp, tp + fn)
+
+        num_classes = classified.sum(dim=0)
+        overlapping = (num_classes > 1).bool()
+        self.overlapping.update(overlapping.sum(), overlapping.numel())
+        no_class = num_classes < 1
+        self.no_class.update(no_class.sum(), no_class.numel())
+
+        obj_combined = torch.argmax(obj_pred.flatten(start_dim=2), dim=1) + 1
+        obj_combined = obj_combined.reshape(-1, *size)
+        self.metrics.update(obj_gt, part_gt, obj_combined, part_pred)
+
+    def on_epoch_end(self, last_metrics, **kwargs):
+        results = self.metrics.avg()[:2]
+        results.extend([self.overlapping.accuracy(), self.binary_pa.accuracy()])
+        return fv.add_metrics(last_metrics, results)
 
 
 class Labeler:
@@ -578,3 +637,15 @@ def part_learner(data, arch, obj_tree: ObjectTree,
     if pretrained:
         learn.freeze()
     return learn
+
+
+def upernet_data_pipline(broden_root):
+    adapter_tfm = UperNetAdapter()
+    train_collate = ScaleJitterCollate([384, 480, 544, 608, 672])
+    val_collate = ScaleJitterCollate([544])
+    db = get_data(broden_root, size=None, norm_stats=imagenet_stats,
+                  max_rotate=None, max_zoom=1, max_warp=None, max_lighting=None,
+                  bs=8, no_check=True, dl_tfms=adapter_tfm)
+    db.train_dl.dl.collate_fn = train_collate
+    db.valid_dl.dl.collate_fn = val_collate
+    return db

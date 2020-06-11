@@ -9,7 +9,6 @@ import torch
 import torch.distributed as dist
 import torch.nn.functional as F
 from fastai import callbacks
-from fastai.callback import Callback
 from fastai.torch_core import set_bn_eval
 from fastai.vision import Callback, LearnerCallback, add_metrics, ResizeMethod, data_collate
 from fastai.core import master_bar, progress_bar
@@ -177,7 +176,7 @@ def fit_and_log(learn, monitor, save='bestmodel', epochs=40, start_epoch=0, lr=1
         learn.load(load)
 
     logger = callbacks.CSVLogger(learn, filename=save)
-    save_clbk = callbacks.SaveModelCallback(learn, monitor=monitor, mode='max', every='improvement', name=save)
+    save_clbk = callbacks.SaveModelCallback(learn, monitor=monitor, mode='max', every='epoch', name=save)
 
     if no_one_cycle:
         epochs = epochs - start_epoch
@@ -253,3 +252,46 @@ class BnFreeze(Callback):
     def on_epoch_begin(self, **kwargs: Any) -> None:
         """Put bn layers in eval mode just after `model.train()`."""
         set_bn_eval(self.model)
+
+
+class BalancingSampler:
+
+    def __init__(self, n):
+        self.count = torch.ones(n)
+
+    def reset(self):
+        self.count - torch.ones_like(self.count)
+
+    def __call__(self, x):
+        weights = 1 / self.count[x.cpu()]
+        i = torch.multinomial(weights, 1)
+        c = x[i]
+        self.count[c] += 1
+        return c
+
+
+class LearnerMetrics(LearnerCallback):
+    order = -20
+
+    def __init__(self, learn, metrics_names):
+        super().__init__(learn)
+        self.metric_names = metrics_names
+
+    def on_train_begin(self, **kwargs):
+        try:
+            self.learn.recorder.add_metric_names(self.metric_names)
+        except AttributeError:
+            print('Warning: recorder is not initialized for learner')
+
+    def on_epoch_begin(self, **kwargs):
+        self._reset()
+
+    def _reset(self):
+        raise NotImplementedError
+
+
+def upernet_ckpt(root):
+    ckpt_dir = root.parent.resolve() / 'ckpt'
+    encoder_ckpt = str(ckpt_dir / 'trained/encoder_epoch_40.pth')
+    decoder_ckpt = str(ckpt_dir / 'trained/decoder_epoch_40.pth')
+    return encoder_ckpt, decoder_ckpt
