@@ -36,7 +36,7 @@ class Instructor(fv.Callback):
 
     def loss(self, pred, obj_gt, part_gt):
         if not self.train:
-            return 0
+            return torch.zeros(1)
 
         obj_pred = pred.squeeze(dim=1)
         obj_gt = obj_gt.squeeze(dim=1)
