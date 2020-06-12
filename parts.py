@@ -468,7 +468,7 @@ class BinaryBrodenMetrics(utils.LearnerMetrics):
             return
 
         obj_gt, part_gt = last_target
-        obj_gt.squeeze(dim=1)
+        obj_gt = obj_gt.squeeze(dim=1)
         if isinstance(last_output, tuple):
             obj_pred, part_pred = last_output
         else:
@@ -480,7 +480,7 @@ class BinaryBrodenMetrics(utils.LearnerMetrics):
         binary_pred = obj_pred.transpose(0, 1).sigmoid() > self.thresh
 
         objects = torch.arange(1, self.tree.n_obj, device=obj_gt.device)
-        binary_gt = obj_gt[None] == objects[:, None, None, None]
+        binary_gt = obj_gt == objects[:, None, None, None]
         tp, fp, tn, fn = precision_recall(binary_pred, binary_gt)
         self.precision.update(tp, tp + fp)
         self.recall.update(tp, tp + fn)
