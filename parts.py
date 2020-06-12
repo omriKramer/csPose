@@ -477,14 +477,15 @@ class BinaryBrodenMetrics(utils.LearnerMetrics):
 
         size = obj_gt.shape[-2:]
         obj_pred = utils.resize(obj_pred, size)
-        classified = obj_pred.transpose(0, 1).flatten(start_dim=2).sigmoid() > self.thresh
+        binary_pred = obj_pred.transpose(0, 1).sigmoid() > self.thresh
 
-        binary_gt = obj_gt == torch.arange(1, self.tree.n_obj, device=obj_gt.device)[:, None, None, None]
-        tp, fp, tn, fn = precision_recall(classified, binary_gt)
+        objects = torch.arange(1, self.tree.n_obj, device=obj_gt.device)
+        binary_gt = obj_gt[None] == objects[:, None, None, None]
+        tp, fp, tn, fn = precision_recall(binary_pred, binary_gt)
         self.precision.update(tp, tp + fp)
         self.recall.update(tp, tp + fn)
 
-        num_classes = classified.sum(dim=0)
+        num_classes = binary_pred.sum(dim=0)
         overlapping = (num_classes > 1).bool()
         self.overlap.update(overlapping.sum(), overlapping.numel())
         no_class = num_classes < 1
