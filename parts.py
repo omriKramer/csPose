@@ -497,8 +497,7 @@ class BinaryBrodenMetrics(utils.LearnerMetrics):
         no_class = num_classes < 1
         self.no_class.update(no_class.sum(), no_class.numel())
 
-        obj_combined = torch.argmax(obj_pred.flatten(start_dim=2), dim=1) + 1
-        obj_combined = obj_combined.reshape(-1, *size)
+        obj_combined = torch.cat([torch.zeros((len(obj_pred), 1, *size)), obj_pred], dim=1)
         self.metrics.update(obj_gt, part_gt, obj_combined, part_pred)
 
     def on_epoch_end(self, last_metrics, **kwargs):
