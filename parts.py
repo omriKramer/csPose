@@ -296,14 +296,20 @@ def iou(pred, gt, n_classes, mask):
     return intersection, union
 
 
+def to_cpu(x):
+    if torch.is_tensor(x):
+        return x.cpu()
+    return torch.tensor(x, device='cpu')
+
+
 class Accuracy:
     def __init__(self, n=1):
         self.correct = torch.zeros(n)
         self.total = torch.zeros(n)
 
     def update(self, correct, total):
-        self.correct += correct.cpu()
-        self.total += total.cpu()
+        self.correct += to_cpu(correct)
+        self.total += to_cpu(total)
 
     def accuracy(self):
         c = self.correct.float()
