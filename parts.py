@@ -92,12 +92,13 @@ class ObjectTree:
         pred = torch.stack([o.argmax(dim=1) for o in part_pred_list])
         return pred.squeeze()
 
-    def split_parts_gt(self, obj: fv.Tensor, part: fv.Tensor):
+    def split_parts_gt(self, obj: fv.Tensor, part: fv.Tensor, mark_in_obj=True):
         """
         Splits parts gt by objects.
         Args:
             obj: Tensor of shape: (bs, h , w)
             part: Tensor of shape: (bs, h , w)
+            mark_in_obj: bool, non-object pixels will be marked as -1
 
         Returns: Tensor of shape (n_obj_with_parts, bs, h, w)
 
@@ -108,7 +109,7 @@ class ObjectTree:
         classes = torch.tensor(list(self.obj_with_parts), device=obj.device)
         obj_masks = obj == classes[:, None, None, None]
         parts_inside_obj = part[None] * obj_masks
-        gt = torch.full_like(parts_inside_obj, -1)
+        gt = torch.full_like(parts_inside_obj, -1 if mark_in_obj else 0)
         for o in present_obj:
             obj_parts = self.tree[o]
             i = self.obj2idx[o]
@@ -116,6 +117,9 @@ class ObjectTree:
             for part_idx, part in enumerate(obj_parts[1:], start=1):
                 part_mask = inside_obj_i == part
                 gt[i][part_mask] = part_idx
+
+        if not mark_in_obj:
+            return gt
 
         # if an object has parts then label background (non-part) pixels inside the object with 0
         is_part = gt > 0
@@ -332,7 +336,8 @@ class BrodenMetrics:
     def update(self, obj_gt, part_gt, obj_pred, part_pred):
         obj_gt = obj_gt.squeeze(dim=1)
         part_gt = part_gt.squeeze(dim=1)
-        part_gt = self.obj_tree.split_parts_gt(obj_gt, part_gt)
+        if len(part_gt) != self.obj_tree.n_obj_with_parts:
+            part_gt = self.obj_tree.split_parts_gt(obj_gt, part_gt)
 
         gt_size = obj_gt.shape[-2:]
         obj_pred = utils.resize(obj_pred, gt_size)

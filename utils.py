@@ -262,7 +262,7 @@ class BalancingSampler:
     def reset(self):
         self.count = torch.ones_like(self.count)
 
-    def __call__(self, x):
+    def sample(self, x):
         weights = 1 / self.count[x.cpu()]
         i = torch.multinomial(weights, 1)
         c = x[i]
@@ -271,7 +271,7 @@ class BalancingSampler:
 
 
 class LearnerMetrics(LearnerCallback):
-    order = -20
+    _order = -20
 
     def __init__(self, learn, metrics_names):
         super().__init__(learn)
