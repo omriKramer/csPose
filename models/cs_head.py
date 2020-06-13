@@ -93,18 +93,23 @@ class Head2Clbk(fv.Callback):
 
         part_gt = self.tree.split_parts_gt(obj_gt, part_gt, mark_in_obj=False)
         if train:
-            instruction = []
+            objects = []
             has_parts = torch.any(part_gt.transpose(0, 1).flatten(start_dim=2) > 0, dim=-1)
             obj_with_parts = torch.tensor(list(self.tree.obj_with_parts), dtype=torch.long)
             for img_parts in has_parts:
                 present_objects = obj_with_parts[img_parts]
                 if len(present_objects) > 0:
-                    instruction.append(self.sampler.sample(present_objects))
+                    objects.append(self.sampler.sample(present_objects))
+
                 else:
-                    instruction.append(self.tree.n_obj)
+                    objects.append(None)
+            instruction = [self.tree.obj2idx[o] if o else self.tree.n_obj_with_parts for o in objects]
+            instruction = torch.tensor(instruction, dtype=torch.long, device=last_input)
         else:
+            objects = None
             instruction = None
-        return {'last_input': (last_input, instruction), 'last_target': (obj_gt, part_gt)}
+
+        return {'last_input': (last_input, objects, instruction), 'last_target': (obj_gt, part_gt)}
 
 
 class CSHead2(nn.Module):
@@ -122,15 +127,15 @@ class CSHead2(nn.Module):
         self.bu = nn.ModuleList([
             layers.conv_layer(fpn_dim, fpn_dim // 2),
             layers.conv_layer(fpn_dim, fpn_dim)])
-        self.obj_inst = tree.n_obj
+        self.obj_inst = tree.n_obj_with_parts
         self.tree = tree
 
-    def forward(self, img, instruction):
+    def forward(self, img, objects, instruction):
         features = self.fpn(img)
         obj_instruction = torch.tensor(self.obj_inst, dtype=torch.long, device=img.device)
         emb_vec = self.embedding(obj_instruction)
         td = []
-        x = features * emb_vec[None]
+        x = features * emb_vec[None, :, None, None]
         for m in self.td:
             x = m(x)
             td.append(x)
@@ -143,23 +148,22 @@ class CSHead2(nn.Module):
             x = bu_conv(x)
 
         if self.training:
-            part_pred = self.pred_one_part(features, x, instruction)
+            part_pred = self.pred_one_part(features, x, objects, instruction)
         else:
             part_pred = self.pred_all_parts(features, x, obj_pred)
         return obj_pred, part_pred
 
-    def pred_one_part(self, features, bu, instruction):
-        inst_tensor = torch.tensor(instruction, dtype=torch.long, device=features.device)
-        emb_vec = self.embedding(inst_tensor)
+    def pred_one_part(self, features, bu, objects, instruction):
+        emb_vec = self.embedding(instruction)
         x = features * emb_vec + bu
         for m in self.td:
             x = m(x)
         part_pred = []
         for i in range(len(features)):
-            part_inst = instruction[i]
-            if part_inst != self.obj_inst:
-                m_idx = self.tree.obj2idx[part_inst]
-                part_pred.append((part_inst, self.heads[m_idx](x[i][None])))
+            o = objects[i]
+            if o != self.obj_inst:
+                m_idx = self.tree.obj2idx[o]
+                part_pred.append((o, self.heads[m_idx](x[i][None])))
             else:
                 part_pred.append(None)
         return part_pred
@@ -175,7 +179,8 @@ class CSHead2(nn.Module):
         for i, predicted_objects in enumerate(img_objects_with_parts):
             if len(predicted_objects) == 0:
                 continue
-            inst_tensor = torch.tensor(predicted_objects, dtype=torch.long, device=features.device)
+            inst_tensor = torch.tensor([self.tree.obj2idx[o] for o in predicted_objects],
+                                       dtype=torch.long, device=features.device)
             emb_vec = self.embedding(inst_tensor)
             img_features = features[i].repeat(len(inst_tensor), 1, 1, 1)
             img_bu = bu[i].repeat(len(inst_tensor), 1, 1, 1)
@@ -199,6 +204,8 @@ class Head2Loss:
 
     def __call__(self, pred, obj_gt, part_gt):
         obj_pred, part_pred = pred
+        if not isinstance(part_pred, list):
+            return torch.zeros(1)
 
         obj_loss = self.obj_ce(obj_pred, obj_gt)
         part_loss = []
