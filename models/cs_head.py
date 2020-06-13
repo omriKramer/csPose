@@ -94,7 +94,7 @@ class Head2Clbk(fv.Callback):
         part_gt = self.tree.split_parts_gt(obj_gt, part_gt, mark_in_obj=False)
         if train:
             instruction = []
-            has_parts = torch.any(part_gt.transpose(0, 1).flatten(start_dim=2) > 0)
+            has_parts = torch.any(part_gt.transpose(0, 1).flatten(start_dim=2) > 0, dim=-1)
             obj_with_parts = torch.tensor(list(self.tree.obj_with_parts), dtype=torch.long)
             for img_parts in has_parts:
                 present_objects = obj_with_parts[img_parts].tolist()
