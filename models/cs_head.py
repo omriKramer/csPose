@@ -99,12 +99,12 @@ class Head2Clbk(fv.Callback):
             for img_parts in has_parts:
                 present_objects = obj_with_parts[img_parts]
                 if len(present_objects) > 0:
-                    objects.append(self.sampler.sample(present_objects))
+                    objects.append(int(self.sampler.sample(present_objects)))
 
                 else:
                     objects.append(None)
             instruction = [self.tree.obj2idx[o] if o else self.tree.n_obj_with_parts for o in objects]
-            instruction = torch.tensor(instruction, dtype=torch.long, device=last_input)
+            instruction = torch.tensor(instruction, dtype=torch.long, device=last_input.device)
         else:
             objects = None
             instruction = None
@@ -155,13 +155,13 @@ class CSHead2(nn.Module):
 
     def pred_one_part(self, features, bu, objects, instruction):
         emb_vec = self.embedding(instruction)
-        x = features * emb_vec + bu
+        x = features * emb_vec[:, :, None, None] + bu
         for m in self.td:
             x = m(x)
         part_pred = []
         for i in range(len(features)):
             o = objects[i]
-            if o != self.obj_inst:
+            if o is not None:
                 m_idx = self.tree.obj2idx[o]
                 part_pred.append((o, self.heads[m_idx](x[i][None])))
             else:
@@ -216,7 +216,7 @@ class Head2Loss:
             obj_mask = obj_gt[i] == o
             o_part_gt = part_gt[self.tree.obj2idx[o], i]
             o_part_gt = o_part_gt[obj_mask][None]
-            img_part_pred = img_part_pred[:, : obj_mask]
+            img_part_pred = img_part_pred[:, :, obj_mask]
             part_loss.append(self.part_ce(img_part_pred, o_part_gt))
 
         loss = obj_loss + sum(part_loss)
