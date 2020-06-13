@@ -123,6 +123,7 @@ class CSHead2(nn.Module):
             layers.conv_layer(fpn_dim, fpn_dim // 2),
             layers.conv_layer(fpn_dim, fpn_dim)])
         self.obj_inst = tree.n_obj
+        self.tree = tree
 
     def forward(self, img, instruction):
         features = self.fpn(img)
@@ -157,7 +158,8 @@ class CSHead2(nn.Module):
         for i in range(len(features)):
             part_inst = instruction[i]
             if part_inst != self.obj_inst:
-                part_pred.append((part_inst, self.heads[part_inst](x[i][None])))
+                m_idx = self.tree.obj2idx[part_inst]
+                part_pred.append((part_inst, self.heads[m_idx](x[i][None])))
             else:
                 part_pred.append(None)
         return part_pred
@@ -182,7 +184,8 @@ class CSHead2(nn.Module):
                 x = m(x)
             for o, x_o in zip(predicted_objects, x):
                 start, end = self.tree.obj2part_idx[o]
-                part_pred[i, start:end].copy_(self.heads[o](x_o[None]))
+                m_idx = self.tree.obj2idx[o]
+                part_pred[i, start:end].copy_(self.heads[m_idx](x_o[None]))
 
         return part_pred
 
