@@ -97,11 +97,11 @@ class Head2Clbk(fv.Callback):
             has_parts = torch.any(part_gt.transpose(0, 1).flatten(start_dim=2) > 0, dim=-1)
             obj_with_parts = torch.tensor(list(self.tree.obj_with_parts), dtype=torch.long)
             for img_parts in has_parts:
-                present_objects = obj_with_parts[img_parts].tolist()
-                if not present_objects:
-                    instruction.append(self.tree.n_obj)
-                else:
+                present_objects = obj_with_parts[img_parts]
+                if len(present_objects) > 0:
                     instruction.append(self.sampler.sample(present_objects))
+                else:
+                    instruction.append(self.tree.n_obj)
         else:
             instruction = None
         return {'last_input': (last_input, instruction), 'last_target': (obj_gt, part_gt)}
