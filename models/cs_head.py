@@ -189,7 +189,7 @@ class CSHead2(nn.Module):
             for o, x_o in zip(predicted_objects, x):
                 start, end = self.tree.obj2part_idx[o]
                 m_idx = self.tree.obj2idx[o]
-                part_pred[i, start:end].copy_(self.heads[m_idx](x_o[None]))
+                part_pred[i, start:end].copy_(self.heads[m_idx](x_o[None])[0])
 
         return part_pred
 
