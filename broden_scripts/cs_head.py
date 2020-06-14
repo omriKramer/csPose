@@ -27,7 +27,7 @@ def main(args):
     learn.split((learn.model.td,))
     learn.freeze()
 
-    utils.fit_and_log(learn, 'object-P.A', save=args.save, epochs=20, lr=1e-2)
+    utils.fit_and_log(learn, 'object-P.A', save=args.save, epochs=20, lr=1e-2, pct_start=args.pct_start)
 
 
 if __name__ == '__main__':
