@@ -284,7 +284,7 @@ def pix_acc(pred, gt):
     non_bg = gt > 0
     correct = (pred == gt) * non_bg
     correct = correct.sum()
-    total = gt.numel()
+    total = non_bg.sum()
     return correct, total
 
 
