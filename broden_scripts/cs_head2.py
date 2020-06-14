@@ -30,5 +30,5 @@ if __name__ == '__main__':
     parser = utils.basic_train_parser()
     parser.add_argument('--root', default='unifiedparsing/broden_dataset')
     parser.add_argument('--train_bn', action='store_true')
-    parser.add_argument('--hiddem', default=2, type=int)
+    parser.add_argument('--hidden', default=2, type=int)
     main(parser.parse_args())
