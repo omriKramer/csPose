@@ -184,7 +184,7 @@ class CSHead2(nn.Module):
             emb_vec = self.embedding(inst_tensor)
             img_features = features[i].repeat(len(inst_tensor), 1, 1, 1)
             img_bu = bu[i].repeat(len(inst_tensor), 1, 1, 1)
-            x = img_features * emb_vec + img_bu
+            x = img_features * emb_vec[:, :, None, None] + img_bu
             for m in self.td:
                 x = m(x)
             for o, x_o in zip(predicted_objects, x):
