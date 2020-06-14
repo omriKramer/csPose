@@ -200,7 +200,7 @@ def basic_train_parser():
     parser.add_argument('-l', '--load', default=None, type=str)
     parser.add_argument('--no-one-cycle', action='store_true')
     parser.add_argument('--pretrained', action='store_true')
-    parser.add_argument('--pct_start', default=0.3, type=float)
+    parser.add_argument('--pct-start', default=0.3, type=float)
     return parser
 
 
