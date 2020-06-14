@@ -100,7 +100,6 @@ class Head2Clbk(fv.Callback):
                 present_objects = obj_with_parts[img_parts]
                 if len(present_objects) > 0:
                     objects.append(int(self.sampler.sample(present_objects)))
-
                 else:
                     objects.append(None)
             instruction = [self.tree.obj2idx[o] if o else self.tree.n_obj_with_parts for o in objects]
@@ -140,10 +139,9 @@ class CSHead2(nn.Module):
             x = m(x)
             td.append(x)
 
-        x = self.heads[-1](x)
-        obj_pred = x
-        x = self.bu_start[-1](x)
-        for lateral, bu_conv, td_out in zip(self.bu_lateral, self.bu, td):
+        obj_pred = self.heads[-1](x)
+        x = self.bu_start[-1](obj_pred)
+        for lateral, bu_conv, td_out in zip(self.bu_lateral, self.bu, reversed(td)):
             x = torch.cat([x, lateral(td_out)], dim=1)
             x = bu_conv(x)
 
