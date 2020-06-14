@@ -53,7 +53,7 @@ class Instructor(fv.Callback):
 
 class CSHead(nn.Module):
 
-    def __init__(self, instructor, tree, weights_encoder='', weights_decoder=''):
+    def __init__(self, instructor, tree, weights_encoder='', weights_decoder='', emb_op=torch.mul):
         super().__init__()
         self.fpn = get_fpn(tree, weights_encoder=weights_encoder, weights_decoder=weights_decoder)
         fpn_dim = 512
@@ -62,13 +62,14 @@ class CSHead(nn.Module):
                                 fv.conv2d(fpn_dim // 8, 1, ks=1, bias=True))
         self.embedding = fv.embedding(tree.n_obj, fpn_dim)
         self.instructor = instructor
+        self.emb_op = emb_op
 
     def forward(self, img):
         features = self.fpn(img)
         out = []
         for inst in self.instructor.inst:
             emb_vec = self.embedding(inst)
-            embedded_features = features * emb_vec[..., None, None]
+            embedded_features = self.emb_op(features, emb_vec[..., None, None])
             out.append(self.td(embedded_features))
 
         out = torch.cat(out, dim=1)
@@ -113,19 +114,19 @@ class Head2Clbk(fv.Callback):
 
 class CSHead2(nn.Module):
 
-    def __init__(self, tree, weights_encoder='', weights_decoder=''):
+    def __init__(self, tree, weights_encoder='', weights_decoder='', hidden=2):
         super().__init__()
         self.fpn = get_fpn(tree, weights_encoder=weights_encoder, weights_decoder=weights_decoder)
         fpn_dim = 512
         self.embedding = fv.embedding(tree.n_obj_with_parts + 1, fpn_dim)
-        self.td = nn.ModuleList([layers.conv_layer(fpn_dim, fpn_dim), layers.conv_layer(fpn_dim, fpn_dim)])
+        self.td = nn.ModuleList([layers.conv_layer(fpn_dim, fpn_dim) for _ in range(hidden)])
         dims = tree.sections + [tree.n_obj]
         self.heads = nn.ModuleList([fv.conv2d(fpn_dim, dim, ks=1, bias=True) for dim in dims])
         self.bu_start = nn.ModuleList([fv.conv2d(dim, fpn_dim // 2) for dim in dims])
-        self.bu_lateral = nn.ModuleList([layers.conv_layer(fpn_dim, fpn_dim // 2) for _ in range(2)])
-        self.bu = nn.ModuleList([
-            layers.conv_layer(fpn_dim, fpn_dim // 2),
-            layers.conv_layer(fpn_dim, fpn_dim)])
+        self.bu_lateral = nn.ModuleList([layers.conv_layer(fpn_dim, fpn_dim // 2) for _ in range(hidden)])
+        self.bu = nn.ModuleList(
+            [layers.conv_layer(fpn_dim, fpn_dim // 2) for _ in range(hidden - 1)]
+            + [layers.conv_layer(fpn_dim, fpn_dim)])
         self.obj_inst = tree.n_obj_with_parts
         self.tree = tree
 
@@ -169,8 +170,8 @@ class CSHead2(nn.Module):
     def pred_all_parts(self, features, bu, obj_pred):
         objects = obj_pred.argmax(dim=1)
         img_objects = [o.unique().tolist() for o in objects]
-        obj_wit_parts = set(self.tree.obj_with_parts)
-        img_objects_with_parts = [list(obj_wit_parts.intersection(o)) for o in img_objects]
+        obj_with_parts = set(self.tree.obj_with_parts)
+        img_objects_with_parts = [list(obj_with_parts.intersection(o)) for o in img_objects]
 
         bs, _, h, w = features.shape
         part_pred = torch.zeros((bs, self.tree.n_parts, h, w), device=features.device)

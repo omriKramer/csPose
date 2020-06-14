@@ -171,7 +171,7 @@ class AddTargetClbk(Callback):
 
 
 def fit_and_log(learn, monitor, save='bestmodel', epochs=40, start_epoch=0, lr=1e-2, wd=None, load=None,
-                no_one_cycle=False):
+                no_one_cycle=False, pct_start=0.3):
     if load:
         learn.load(load)
 
@@ -182,7 +182,7 @@ def fit_and_log(learn, monitor, save='bestmodel', epochs=40, start_epoch=0, lr=1
         epochs = epochs - start_epoch
         learn.fit(epochs, lr, wd=wd, callbacks=[logger, save_clbk])
     else:
-        learn.fit_one_cycle(epochs, lr, wd=wd, start_epoch=start_epoch,
+        learn.fit_one_cycle(epochs, lr, wd=wd, start_epoch=start_epoch, pct_start=pct_start,
                             callbacks=[logger, save_clbk])
 
 
@@ -200,6 +200,7 @@ def basic_train_parser():
     parser.add_argument('-l', '--load', default=None, type=str)
     parser.add_argument('--no-one-cycle', action='store_true')
     parser.add_argument('--pretrained', action='store_true')
+    parser.add_argument('--pct_start', default=0.3, type=float)
     return parser
 
 
