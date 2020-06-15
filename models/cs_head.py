@@ -9,8 +9,8 @@ from models.upernet import get_fpn
 
 class Instructor(fv.Callback):
 
-    def __init__(self, object_tree):
-        self.tree = object_tree
+    def __init__(self, tree):
+        self.tree = tree
         self.obj_loss = nn.BCEWithLogitsLoss()
         self.sampler = utils.BalancingSampler(self.tree.n_obj)
         self.inst = None
