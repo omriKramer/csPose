@@ -206,11 +206,11 @@ def basic_train_parser():
 
 class UperNetAdapter:
     """imitate upernet ValDataset"""
+    mean = [102.9801, 115.9465, 122.7717]
+    std = [1., 1., 1.]
 
     def __init__(self):
         super().__init__()
-        self.mean = [102.9801, 115.9465, 122.7717]
-        self.std = [1., 1., 1.]
         self.idx = torch.LongTensor([2, 1, 0])
 
     def __call__(self, batch):
