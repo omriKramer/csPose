@@ -6,17 +6,23 @@ from models import CSHead, Instructor
 from parts import upernet_data_pipeline
 
 
-def get_model(root, tree):
+def get_model(root, tree, op):
     encoder_path, decoder_path = utils.upernet_ckpt(root)
     instructor = Instructor(tree)
-    model = CSHead(instructor, tree, encoder_path, decoder_path)
+    model = CSHead(instructor, tree, encoder_path, decoder_path, emb_op=op)
     return model, instructor
+
+
+ops = {
+    'mul': torch.mul,
+    'add': torch.add,
+}
 
 
 def main(args):
     broden_root = Path(args.root).resolve()
     tree = parts.ObjectTree.from_meta_folder(broden_root / 'meta')
-    model, instructor = get_model(broden_root, tree)
+    model, instructor = get_model(broden_root, tree, ops[args.op])
     db = upernet_data_pipeline(broden_root)
 
     metrics = partial(parts.BinaryBrodenMetrics, obj_tree=tree, thresh=0.75)
@@ -34,4 +40,5 @@ if __name__ == '__main__':
     parser = utils.basic_train_parser()
     parser.add_argument('--root', default='unifiedparsing/broden_dataset')
     parser.add_argument('--train_bn', action='store_true')
+    parser.add_argument('--op', choices=('mul', 'add'), default='mul')
     main(parser.parse_args())
