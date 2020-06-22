@@ -366,7 +366,7 @@ class UPerNet(nn.Module):
         return output_dict
 
 
-def get_upernet(tree, weights_encoder='', weights_decoder=''):
+def get_upernet(tree, weights_encoder='', weights_decoder='', replace_bn=True):
     fc_dim = 2048
     builder = ModelBuilder()
     net_encoder = builder.build_encoder(
@@ -381,7 +381,24 @@ def get_upernet(tree, weights_encoder='', weights_decoder=''):
         use_softmax=True)
 
     segmentation_module = SegmentationModule(net_encoder, net_decoder, tree)
+    if replace_bn:
+        segmentation_module.apply(replace_sync_bn)
     return segmentation_module
+
+
+def replace_sync_bn(m):
+    replace = {name: regular_bn(module) for name, module in m.named_children()
+               if isinstance(module, SynchronizedBatchNorm2d)}
+    for name, bn in replace.items():
+        setattr(m, name, bn)
+
+
+def regular_bn(sync_bn):
+    bn = nn.BatchNorm2d(sync_bn.num_features, eps=sync_bn.eps, momentum=sync_bn.momentum)
+    state = sync_bn.state_dict()
+    state = {key: state[key] for key in ('weight', 'bias', 'running_mean', 'running_var', 'num_batches_tracked')}
+    bn.load_state_dict(state)
+    return bn
 
 
 class FpnTD(nn.Module):
