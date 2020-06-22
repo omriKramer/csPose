@@ -401,32 +401,45 @@ def regular_bn(sync_bn):
     return bn
 
 
-class FpnTD(nn.Module):
+class PPM(nn.Module):
 
-    def __init__(self, ppm_pooling, ppm_conv, ppm_last_conv, fpn_in, fpn_out, conv_fusion):
+    def __init__(self, ppm_pooling, ppm_conv, ppm_last_conv):
         super().__init__()
-        self.conv_fusion = conv_fusion
-        self.fpn_out = fpn_out
-        self.fpn_in = fpn_in
         self.ppm_last_conv = ppm_last_conv
         self.ppm_conv = ppm_conv
         self.ppm_pooling = ppm_pooling
 
-    def forward(self, conv_out):
-        conv5 = conv_out[-1]
-        input_size = conv5.size()
+    def forward(self, x):
+        input_size = x.size()
         roi = []  # fake rois, just used for pooling
         for i in range(input_size[0]):  # batch size
             roi.append(torch.Tensor([i, 0, 0, input_size[3], input_size[2]]).view(1, -1))  # b, x0, y0, x1, y1
-        roi = torch.cat(roi, dim=0).type_as(conv5)
-        ppm_out = [conv5]
+        roi = torch.cat(roi, dim=0).type_as(x)
+        out = [x]
         for pool_scale, pool_conv in zip(self.ppm_pooling, self.ppm_conv):
-            ppm_out.append(pool_conv(F.interpolate(
-                pool_scale(conv5, roi.detach()),
+            out.append(pool_conv(F.interpolate(
+                pool_scale(x, roi.detach()),
                 (input_size[2], input_size[3]),
                 mode='bilinear', align_corners=False)))
-        ppm_out = torch.cat(ppm_out, 1)
-        f = self.ppm_last_conv(ppm_out)
+        out = torch.cat(out, 1)
+        out = self.ppm_last_conv(out)
+        return out
+
+
+class FpnTD(nn.Module):
+
+    def __init__(self, ppm, fpn_in, fpn_out, conv_fusion):
+        super().__init__()
+        self.conv_fusion = conv_fusion
+        self.fpn_out = fpn_out
+        self.fpn_in = fpn_in
+        self.ppm = ppm
+
+    def forward(self, conv_out, vecs=None):
+        conv5 = conv_out[-1]
+        if vecs:
+            conv5 = conv5 * vecs[0]
+        f = self.ppm(conv5)
 
         fpn_feature_list = [f]
         for i in reversed(range(len(conv_out) - 1)):
@@ -436,6 +449,8 @@ class FpnTD(nn.Module):
             f = F.interpolate(
                 f, size=conv_x.size()[2:], mode='bilinear', align_corners=False)  # top-down branch
             f = conv_x + f
+            if vecs:
+                f = f * vecs[len(conv_out) - 1 - i]
 
             fpn_feature_list.append(self.fpn_out[i](f))
         fpn_feature_list.reverse()  # [P2 - P5]
@@ -459,22 +474,51 @@ class FPN(nn.Module):
         self.encoder = encoder
         self.decoder = decoder
 
-    def forward(self, img):
-        out = self.encoder(img, return_feature_maps=True)
-        out = self.decoder(out)
+    def forward(self, img, vecs=None):
+        encoder_vecs, decoder_vecs = None, None
+        if vecs:
+            encoder_vecs = vecs[:4]
+            decoder_vecs = vecs[4:]
+        out = self.encoder(img, return_feature_maps=True, vecs=encoder_vecs)
+        out = self.decoder(out, vecs=decoder_vecs)
         return out
 
 
-def extract_fpn(seg_model: SegmentationModule):
+def extract_fpn(seg_model: SegmentationModule, task_modulation=False):
     encoder = seg_model.encoder
+    if task_modulation:
+        head = nn.Sequential(encoder.conv1, encoder.bn1, encoder.relu1,
+                             encoder.conv2, encoder.bn2, encoder.relu2,
+                             encoder.conv3, encoder.bn3, encoder.relu3,
+                             encoder.maxpool)
+        layers = nn.ModuleList([encoder.layer1, encoder.layer2, encoder.layer3, encoder.layer4])
+        encoder = ModulationEncoder(head, layers)
+
     decoder = seg_model.decoder
-    decoder = FpnTD(decoder.ppm_pooling, decoder.ppm_conv, decoder.ppm_last_conv, decoder.fpn_in, decoder.fpn_out,
-                    decoder.conv_fusion)
+    ppm = PPM(decoder.ppm_pooling, decoder.ppm_conv, decoder.ppm_last_conv)
+    decoder = FpnTD(ppm, decoder.fpn_in, decoder.fpn_out, decoder.conv_fusion)
     fpn = FPN(encoder, decoder)
     return fpn
 
 
-def get_fpn(tree, weights_encoder='', weights_decoder=''):
+def get_fpn(tree, weights_encoder='', weights_decoder='', task_modulation=False):
     seg_model = get_upernet(tree, weights_encoder=weights_encoder, weights_decoder=weights_decoder)
-    fpn = extract_fpn(seg_model)
+    fpn = extract_fpn(seg_model, task_modulation=task_modulation)
     return fpn
+
+
+class ModulationEncoder(nn.Module):
+
+    def __init__(self, head, layers):
+        super().__init__()
+        self.head = head
+        self.layers = layers
+
+    def forward(self, x, vecs=None):
+        x = self.head(x)
+        out = []
+        for layer, v in zip(vecs, self.layers):
+            x = x * v[:, :, None, None]
+            x = layer(x)
+            out.append(x)
+        return out
