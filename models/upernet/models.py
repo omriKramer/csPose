@@ -514,7 +514,7 @@ class ModulationEncoder(nn.Module):
         self.head = head
         self.layers = layers
 
-    def forward(self, x, vecs=None):
+    def forward(self, x, vecs=None, **kwargs):
         x = self.head(x)
         out = []
         for layer, v in zip(vecs, self.layers):
