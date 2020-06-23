@@ -13,7 +13,7 @@ class TaskMod(nn.Module):
         super().__init__()
         self.fpn = fpn
         self.dims = dims
-        self.embeddings = nn.ModuleList([embedding(instructor.n_inst, d) for d in dims])
+        self.embeddings = nn.ModuleList([embedding(instructor.tree.n_obj, d) for d in dims])
         self.classifier = nn.Sequential(layers.conv_layer(fpn_dim, fpn_dim), conv2d(fpn_dim, 1, ks=1, bias=True))
         self.instructor = instructor
 
