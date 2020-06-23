@@ -438,7 +438,7 @@ class FpnTD(nn.Module):
     def forward(self, conv_out, vecs=None):
         conv5 = conv_out[-1]
         if vecs:
-            conv5 = conv5 * vecs[0]
+            conv5 = conv5 * vecs[0][:, :, None, None]
         f = self.ppm(conv5)
 
         fpn_feature_list = [f]
@@ -450,7 +450,7 @@ class FpnTD(nn.Module):
                 f, size=conv_x.size()[2:], mode='bilinear', align_corners=False)  # top-down branch
             f = conv_x + f
             if vecs:
-                f = f * vecs[len(conv_out) - 1 - i]
+                f = f * vecs[len(conv_out) - 1 - i][:, :, None, None]
 
             fpn_feature_list.append(self.fpn_out[i](f))
         fpn_feature_list.reverse()  # [P2 - P5]
