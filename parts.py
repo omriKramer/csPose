@@ -537,14 +537,15 @@ class Labeler:
         return obj_seg, part_seg
 
 
-def get_data(broden_root, tree=None, size=256, norm_stats=fv.imagenet_stats, padding_mode='zeros',
+def get_data(broden_root, csv_file='trainval.csv', tree=None,
+             size=256, norm_stats=fv.imagenet_stats, padding_mode='zeros',
              do_flip=True, max_rotate=10., max_zoom=1.1, max_lighting=0.2, max_warp=0.2,
              p_affine=0.75, p_lighting=0.75, **databunch_kwargs):
     labeler = Labeler(broden_root / 'reindexed2')
     tfms = fv.get_transforms(do_flip=do_flip, max_rotate=max_rotate, max_zoom=max_zoom, max_lighting=max_lighting,
                              max_warp=max_warp, p_affine=p_affine, p_lighting=p_lighting)
 
-    data = (ObjectsPartsItemList.from_csv(broden_root, 'trainval.csv')
+    data = (ObjectsPartsItemList.from_csv(broden_root, csv_file)
             .split_from_df(col='is_valid')
             .label_from_func(labeler, tree=tree)
             .transform(tfms, tfm_y=True, size=size, resize_method=fv.ResizeMethod.PAD, padding_mode=padding_mode)
@@ -639,11 +640,11 @@ def part_learner(data, arch, obj_tree: ObjectTree,
     return learn
 
 
-def upernet_data_pipeline(broden_root, norm_stats=None):
+def upernet_data_pipeline(broden_root, norm_stats=None, csv_file='trainval.csv'):
     adapter_tfm = utils.UperNetAdapter()
     train_collate = utils.ScaleJitterCollate([384, 480, 544, 608, 672])
     val_collate = utils.ScaleJitterCollate([544])
-    db = get_data(broden_root, size=None, norm_stats=norm_stats,
+    db = get_data(broden_root, csv_file=csv_file, size=None, norm_stats=norm_stats,
                   max_rotate=None, max_zoom=1, max_warp=None, max_lighting=None,
                   bs=8, no_check=True, dl_tfms=adapter_tfm)
     db.train_dl.dl.collate_fn = train_collate
