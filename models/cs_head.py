@@ -20,7 +20,7 @@ class Instructor(fv.Callback):
     def on_batch_begin(self, train, last_target, **kwargs):
         obj_gt, part_gt = last_target
         if not train:
-            inst = torch.tensor(self.obj_classes, device=obj_gt.device)
+            inst = torch.tensor(list(self.obj_classes), device=obj_gt.device)
             self.inst = inst.expand(len(obj_gt), len(inst)).T
             self.train = False
             return
