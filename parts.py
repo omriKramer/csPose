@@ -5,7 +5,6 @@ from pathlib import Path
 import fastai.vision as fv
 import pandas as pd
 import torch
-from fastai.vision import imagenet_stats
 from torch import nn
 
 import models.cs_v2 as cs
@@ -288,10 +287,10 @@ def pix_acc(pred, gt):
     return correct, total
 
 
-def iou(pred, gt, n_classes, mask):
+def iou(pred, gt, classes, mask):
     # ignore pixels outside mask (gt is already inside mask)
     pred = pred * mask
-    classes = torch.arange(1, n_classes, device=pred.device)[:, None, None, None]
+    classes = torch.tensor(classes, device=pred.device)[:, None, None, None]
     # {pred\gt}_i shape: (n_classes-1, bs, h, w)
     pred_i = pred == classes
     gt_i = gt == classes
@@ -323,13 +322,14 @@ class Accuracy:
 
 
 class BrodenMetrics:
-    def __init__(self, obj_tree: ObjectTree, restrict=True, object_only=False):
+    def __init__(self, obj_tree: ObjectTree, restrict=True, object_only=False, obj_classes=None):
         self.obj_tree = obj_tree
         self.restrict = restrict
         self.object_only = object_only
+        self.obj_classes = obj_classes if obj_classes else list(range(1, self.obj_tree.n_obj))
 
         self.obj_pa = Accuracy()
-        self.obj_iou = Accuracy(self.obj_tree.n_obj - 1)
+        self.obj_iou = Accuracy(len(self.obj_classes))
         self.part_pa = Accuracy()
         self.part_iou = [Accuracy(n - 1) for n in self.obj_tree.sections]
 
@@ -341,11 +341,12 @@ class BrodenMetrics:
 
         gt_size = obj_gt.shape[-2:]
         obj_pred = utils.resize(obj_pred, gt_size)
-
         obj_pred = obj_pred.argmax(dim=1)
+        if len(self.obj_classes) != self.obj_tree.n_obj - 1:
+            obj_pred, obj_gt = self.filter_classes(obj_pred, obj_gt)
 
         self.obj_pa.update(*pix_acc(obj_pred, obj_gt))
-        self.obj_iou.update(*iou(obj_pred, obj_gt, self.obj_tree.n_obj, obj_gt > 0))
+        self.obj_iou.update(*iou(obj_pred, obj_gt, self.obj_classes, obj_gt > 0))
 
         if self.object_only:
             return
@@ -379,6 +380,15 @@ class BrodenMetrics:
             parts_iou
         ]
         return results
+
+    def filter_classes(self, obj_pred, obj_gt):
+        objs = torch.tensor(self.obj_classes, device=obj_pred.device)
+        obj_pred = objs[obj_pred]
+
+        is_obj = obj_gt == objs[:, None, None, None]
+        keep = is_obj.sum(dim=0, dtype=torch.bool)
+        obj_gt = obj_gt * keep
+        return obj_pred, obj_gt
 
 
 class BrodenMetricsClbk(utils.LearnerMetrics):
@@ -461,14 +471,15 @@ def precision_recall(pred, gt):
 
 class BinaryBrodenMetrics(utils.LearnerMetrics):
 
-    def __init__(self, learn, obj_tree: ObjectTree, thresh=0.75):
+    def __init__(self, learn, obj_tree: ObjectTree, thresh=0.5, obj_classes=None):
         names = ['object-P.A.', 'object-mIoU', 'overlap', 'no_class', f'precision@{thresh:.2}', f'recall@{thresh:.2}']
         super().__init__(learn, names)
         self.tree = obj_tree
         self.thresh = thresh
+        self.obj_classes = obj_classes if obj_classes else range(1, obj_tree.n_obj)
 
     def _reset(self):
-        self.metrics = BrodenMetrics(self.tree, object_only=True)
+        self.metrics = BrodenMetrics(self.tree, object_only=True, obj_classes=self.obj_classes)
         self.precision = Accuracy(self.tree.n_obj - 1)
         self.recall = Accuracy(self.tree.n_obj - 1)
         self.overlap = Accuracy()

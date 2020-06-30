@@ -5,6 +5,7 @@ from typing import Any
 
 import fastai
 import fastprogress
+import numpy as np
 import torch
 import torch.distributed as dist
 from fastai import callbacks
@@ -258,15 +259,14 @@ class BnFreeze(Callback):
 class BalancingSampler:
 
     def __init__(self, n):
-        self.count = torch.ones(n)
+        self.count = np.ones(n)
 
     def reset(self):
-        self.count = torch.ones_like(self.count)
+        self.count = np.ones_like(self.count)
 
     def sample(self, x):
-        weights = 1 / self.count[x.cpu()]
-        i = torch.multinomial(weights, 1)
-        c = x[i]
+        weights = 1 / self.count[x]
+        c = int(np.random.choice(x, p=weights))
         self.count[c] += 1
         return c
 

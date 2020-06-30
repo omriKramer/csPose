@@ -9,17 +9,18 @@ from models.upernet import get_fpn
 
 class Instructor(fv.Callback):
 
-    def __init__(self, tree):
+    def __init__(self, tree, obj_classes=None):
         self.tree = tree
         self.obj_loss = nn.BCEWithLogitsLoss()
         self.sampler = utils.BalancingSampler(self.tree.n_obj)
         self.inst = None
         self.train = True
+        self.obj_classes = set(obj_classes) if obj_classes else set(range(1, self.tree.n_obj))
 
     def on_batch_begin(self, train, last_target, **kwargs):
         obj_gt, part_gt = last_target
         if not train:
-            inst = torch.arange(1, self.tree.n_obj, device=obj_gt.device)
+            inst = torch.tensor(self.obj_classes, device=obj_gt.device)
             self.inst = inst.expand(len(obj_gt), len(inst)).T
             self.train = False
             return
@@ -27,10 +28,13 @@ class Instructor(fv.Callback):
         self.train = True
         inst = []
         for obj_gt_i in obj_gt:
-            objects = obj_gt_i.unique()
-            if objects[0] == 0 and len(objects) > 1:
-                objects = objects[1:]
-            inst.append(self.sampler.sample(objects))
+            objects = obj_gt_i.unique().cpu().tolist()
+            objects = self.obj_classes.intersection(objects)
+            if objects:
+                c = self.sampler.sample(list(objects))
+            else:
+                c = 0
+            inst.append(c)
         inst = torch.cat(inst).to(obj_gt.device)
         self.inst = inst[None]
 
@@ -45,9 +49,9 @@ class Instructor(fv.Callback):
 
         inst = self.inst[0]
         obj_mask = obj_gt == inst[:, None, None]
-        obj_target = obj_mask * 1.
-        foreground = obj_gt != 0
-        loss = self.obj_loss(obj_pred[foreground], obj_target[foreground])
+        obj_target = obj_mask.float()
+        has_objs = inst != 0
+        loss = self.obj_loss(obj_pred[has_objs], obj_target[has_objs])
         return loss
 
 
