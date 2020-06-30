@@ -266,7 +266,7 @@ class BalancingSampler:
 
     def sample(self, x):
         weights = 1 / self.count[x]
-        c = int(np.random.choice(x, p=weights))
+        c = int(np.random.choice(x, p=weights / weights.sum()))
         self.count[c] += 1
         return c
 
