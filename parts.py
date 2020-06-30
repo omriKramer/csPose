@@ -476,7 +476,7 @@ class BinaryBrodenMetrics(utils.LearnerMetrics):
         super().__init__(learn, names)
         self.tree = obj_tree
         self.thresh = thresh
-        self.obj_classes = obj_classes if obj_classes else range(1, obj_tree.n_obj)
+        self.obj_classes = obj_classes if obj_classes else list(range(1, obj_tree.n_obj))
 
     def _reset(self):
         self.metrics = BrodenMetrics(self.tree, object_only=True, obj_classes=self.obj_classes)
@@ -501,7 +501,7 @@ class BinaryBrodenMetrics(utils.LearnerMetrics):
         obj_pred = utils.resize(obj_pred, size)
         binary_pred = obj_pred.transpose(0, 1).sigmoid() > self.thresh
 
-        objects = torch.arange(1, self.tree.n_obj, device=obj_gt.device)
+        objects = torch.tensor(self.obj_classes, device=obj_gt.device)
         binary_gt = obj_gt == objects[:, None, None, None]
         tp, fp, tn, fn = precision_recall(binary_pred, binary_gt)
         self.precision.update(tp, tp + fp)
