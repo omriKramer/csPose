@@ -35,7 +35,7 @@ class Instructor(fv.Callback):
             else:
                 c = 0
             inst.append(c)
-        inst = torch.cat(inst).to(obj_gt.device)
+        inst = torch.tensor(inst, device=obj_gt.device)
         self.inst = inst[None]
 
     def loss(self, pred, obj_gt, part_gt):
