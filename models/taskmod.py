@@ -30,7 +30,7 @@ class TaskMod(nn.Module):
             p = self.classifier(f)
             if self.inst2idx:
                 idx = [self.inst2idx[i] for i in inst.cpu().tolist()]
-                p = p[:, idx]
+                p = p[range(len(p)), idx]
                 p = p[:, None]
             out.append(p)
 
