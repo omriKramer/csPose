@@ -11,7 +11,7 @@ def main(args):
     db10 = parts.upernet_data_pipeline(broden_root, csv_file='broden10.csv')
     cls10 = ['building', 'person', 'table', 'bicycle', 'chair', 'car', 'door', 'dog', 'cat', 'bird']
     obj10 = [i for i, name in enumerate(tree.obj_names) if name in cls10]
-    model, instructor = taskmod(broden_root, tree, obj_classes=obj10)
+    model, instructor = taskmod(broden_root, tree, obj_classes=obj10, full_head=args.full_head)
     metrics = partial(parts.BinaryBrodenMetrics, obj_tree=tree, thresh=0.5, obj_classes=obj10)
 
     learn = Learner(db10, model, loss_func=instructor.loss, callbacks=[instructor], callback_fns=metrics)
@@ -22,4 +22,5 @@ def main(args):
 
 if __name__ == '__main__':
     parser = utils.basic_broden_parser()
+    parser.add_argument('--full-head', action='store_true')
     main(parser.parse_args())

@@ -15,12 +15,12 @@ class Instructor(fv.Callback):
         self.sampler = utils.BalancingSampler(self.tree.n_obj)
         self.inst = None
         self.train = True
-        self.obj_classes = set(obj_classes) if obj_classes else set(range(1, self.tree.n_obj))
+        self.obj_classes = obj_classes if obj_classes else list(range(1, self.tree.n_obj))
 
     def on_batch_begin(self, train, last_target, **kwargs):
         obj_gt, part_gt = last_target
         if not train:
-            inst = torch.tensor(list(self.obj_classes), device=obj_gt.device)
+            inst = torch.tensor(self.obj_classes, device=obj_gt.device)
             self.inst = inst.expand(len(obj_gt), len(inst)).T
             self.train = False
             return
@@ -29,7 +29,7 @@ class Instructor(fv.Callback):
         inst = []
         for obj_gt_i in obj_gt:
             objects = obj_gt_i.unique().cpu().tolist()
-            objects = self.obj_classes.intersection(objects)
+            objects = set(self.obj_classes).intersection(objects)
             if objects:
                 c = self.sampler.sample(list(objects))
             else:
