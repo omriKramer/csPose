@@ -480,8 +480,8 @@ class BinaryBrodenMetrics(utils.LearnerMetrics):
 
     def _reset(self):
         self.metrics = BrodenMetrics(self.tree, object_only=True, obj_classes=self.obj_classes)
-        self.precision = Accuracy(self.tree.n_obj - 1)
-        self.recall = Accuracy(self.tree.n_obj - 1)
+        self.precision = Accuracy(len(self.obj_classes))
+        self.recall = Accuracy(len(self.obj_classes))
         self.overlap = Accuracy()
         self.no_class = Accuracy()
 
