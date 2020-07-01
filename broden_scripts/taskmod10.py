@@ -17,7 +17,7 @@ def main(args):
     learn = Learner(db10, model, loss_func=instructor.loss, callbacks=[instructor], callback_fns=metrics)
     learn.split((learn.model.embeddings,))
     learn.freeze()
-    utils.fit_and_log(learn, 'object-P.A', save=args.save, epochs=20, lr=1e-3, pct_start=args.pct_start)
+    utils.fit_and_log(learn, 'object-P.A', save=args.save, epochs=20, lr=args.lr, pct_start=args.pct_start)
 
 
 if __name__ == '__main__':
