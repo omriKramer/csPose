@@ -205,6 +205,12 @@ def basic_train_parser():
     return parser
 
 
+def basic_broden_parser():
+    parser = basic_train_parser()
+    parser.add_argument('--root', default='unifiedparsing/broden_dataset')
+    return parser
+
+
 class UperNetAdapter:
     """imitate upernet ValDataset"""
     mean = [102.9801, 115.9465, 122.7717]
