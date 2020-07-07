@@ -320,6 +320,10 @@ class Accuracy:
         t = self.total.float() + 1e-10
         return torch.mean(c / t).item()
 
+    def reset(self):
+        self.correct.zero_()
+        self.total.zero_()
+
 
 class BrodenMetrics:
     def __init__(self, obj_tree: ObjectTree, restrict=True, object_only=False, obj_classes=None):
@@ -343,7 +347,7 @@ class BrodenMetrics:
         obj_pred = utils.resize(obj_pred, gt_size)
         obj_pred = obj_pred.argmax(dim=1)
         if len(self.obj_classes) != self.obj_tree.n_obj - 1:
-            obj_pred, obj_gt = self.filter_classes(obj_pred, obj_gt)
+            obj_gt = self.filter_classes(obj_gt)
 
         self.obj_pa.update(*pix_acc(obj_pred, obj_gt))
         self.obj_iou.update(*iou(obj_pred, obj_gt, self.obj_classes, obj_gt > 0))
@@ -381,26 +385,32 @@ class BrodenMetrics:
         ]
         return results
 
-    def filter_classes(self, obj_pred, obj_gt):
-        objs = torch.tensor(self.obj_classes, device=obj_pred.device)
-        obj_pred = objs[obj_pred]
-
+    def filter_classes(self, obj_gt):
+        objs = torch.tensor(self.obj_classes, device=obj_gt.device)
         is_obj = obj_gt == objs[:, None, None, None]
         keep = is_obj.sum(dim=0, dtype=torch.bool)
         obj_gt = obj_gt * keep
-        return obj_pred, obj_gt
+        return obj_gt
+
+    def reset(self):
+        self.obj_pa.reset()
+        self.obj_iou.reset()
+        self.part_pa.reset()
+        for p_iou in self.part_iou:
+            p_iou.reset()
 
 
 class BrodenMetricsClbk(utils.LearnerMetrics):
 
-    def __init__(self, learn, obj_tree: ObjectTree, split_func=None, restrict=True):
+    def __init__(self, learn, obj_tree: ObjectTree, split_func=None, restrict=True,
+                 object_only=False, obj_classes=None):
         super().__init__(learn, ['object-P.A.', 'object-mIoU', 'part-P.A.', 'part-mIoU(bg)'])
         self.split_func = split_func
         self.obj_tree = obj_tree
-        self.restrict = restrict
+        self.metrics = BrodenMetrics(self.obj_tree, restrict=restrict, object_only=object_only, obj_classes=obj_classes)
 
     def _reset(self):
-        self.metrics = BrodenMetrics(self.obj_tree, restrict=self.restrict)
+        self.metrics.reset()
 
     def on_batch_end(self, last_output, last_target, train, **kwargs):
         if train:
