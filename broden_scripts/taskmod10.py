@@ -5,6 +5,10 @@ import utils
 from models.taskmod import taskmod
 
 
+def init_ones(m):
+    if type(m) == nn.Embedding:
+        nn.init.ones_(m.weight)
+
 
 def main(args):
     broden_root = Path(args.root).resolve()
@@ -14,7 +18,7 @@ def main(args):
     obj10 = [i for i, name in enumerate(tree.obj_names) if name in cls10]
     model, instructor = taskmod(broden_root, tree, obj_classes=obj10, full_head=args.full_head)
     if args.fill_ones:
-        model.embeddings.apply(lambda m: nn.init.ones_(m.weight))
+        model.embeddings.apply(init_ones)
 
     metrics = partial(parts.BinaryBrodenMetrics, obj_tree=tree, thresh=0.5, obj_classes=obj10)
     learn = Learner(db10, model, loss_func=instructor.loss, callbacks=[instructor], callback_fns=metrics)
