@@ -343,9 +343,6 @@ class BrodenMetrics:
         if len(part_gt) != self.obj_tree.n_obj_with_parts:
             part_gt = self.obj_tree.split_parts_gt(obj_gt, part_gt)
 
-        gt_size = obj_gt.shape[-2:]
-        obj_pred = utils.resize(obj_pred, gt_size)
-        obj_pred = obj_pred.argmax(dim=1)
         if len(self.obj_classes) != self.obj_tree.n_obj - 1:
             obj_gt = self.filter_classes(obj_gt)
 
@@ -355,6 +352,7 @@ class BrodenMetrics:
         if self.object_only:
             return
 
+        gt_size = obj_gt.shape[-2:]
         part_pred = utils.resize(part_pred, gt_size)
         part_pred = self.obj_tree.split_parts_pred(part_pred)
         # part_pred shape: (n_obj_with_parts, bs, h, w)
@@ -523,12 +521,23 @@ class BinaryBrodenMetrics(utils.LearnerMetrics):
         no_class = num_classes < 1
         self.no_class.update(no_class.sum(), no_class.numel())
 
+        gt_size = part_gt.shape[-2:]
+        obj_pred = utils.resize(obj_pred, gt_size)
+        obj_pred = obj_pred.argmax(dim=1)
+        if self.obj_classes:
+            obj_pred = self.translate_pred(obj_pred)
+
         self.metrics.update(obj_gt, part_gt, obj_pred, part_pred)
 
     def on_epoch_end(self, last_metrics, **kwargs):
         results = self.metrics.avg()[:2]
         results.extend(x.accuracy() for x in (self.overlap, self.no_class, self.precision, self.recall))
         return fv.add_metrics(last_metrics, results)
+
+    def translate_pred(self, obj_pred):
+        classes = torch.tensor(self.obj_classes, device=obj_pred.device)
+        obj_pred = classes[obj_pred]
+        return obj_pred
 
 
 class Labeler:
