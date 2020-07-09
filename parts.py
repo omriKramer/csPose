@@ -400,10 +400,10 @@ class BrodenMetrics:
 
 class BrodenMetricsClbk(utils.LearnerMetrics):
 
-    def __init__(self, learn, obj_tree: ObjectTree, split_func=None, restrict=True,
+    def __init__(self, learn, obj_tree: ObjectTree, pred_func=None, restrict=True,
                  object_only=False, obj_classes=None):
         super().__init__(learn, ['object-P.A.', 'object-mIoU', 'part-P.A.', 'part-mIoU(bg)'])
-        self.split_func = split_func
+        self.pred_func = pred_func
         self.obj_tree = obj_tree
         self.metrics = BrodenMetrics(self.obj_tree, restrict=restrict, object_only=object_only, obj_classes=obj_classes)
 
@@ -415,11 +415,7 @@ class BrodenMetricsClbk(utils.LearnerMetrics):
             return
 
         obj_gt, part_gt = last_target
-        if self.split_func:
-            obj_pred, part_pred = self.split_func(last_output)
-        else:
-            obj_pred, part_pred = last_output[:, :self.obj_tree.n_obj], last_output[:, self.obj_tree.n_obj:]
-
+        obj_pred, part_pred = self.pred_func(last_output, obj_gt.shape[-2:])
         self.metrics.update(obj_gt, part_gt, obj_pred, part_pred)
 
     def on_epoch_end(self, last_metrics, **kwargs):
