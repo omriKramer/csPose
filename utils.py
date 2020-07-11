@@ -221,6 +221,7 @@ class UperNetAdapter:
 
     def __call__(self, batch):
         img, yb = batch
+
         img = img.index_select(1, self.idx.to(device=img.device))
         img = img * 255
         mean = torch.tensor(self.mean, device=img.device)

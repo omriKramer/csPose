@@ -658,7 +658,7 @@ def upernet_data_pipeline(broden_root, **kwargs):
     adapter_tfm = utils.UperNetAdapter()
     train_collate = utils.ScaleJitterCollate([384, 480, 544, 608, 672])
     val_collate = utils.ScaleJitterCollate([544])
-    db = get_data(broden_root, dl_tfms=adapter_tfm, **kwargs)
+    db = get_data(broden_root, norm_stats=None, dl_tfms=adapter_tfm, **kwargs)
     db.train_dl.dl.collate_fn = train_collate
     db.valid_dl.dl.collate_fn = val_collate
     return db
