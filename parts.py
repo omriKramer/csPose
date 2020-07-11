@@ -654,13 +654,11 @@ def part_learner(data, arch, obj_tree: ObjectTree,
     return learn
 
 
-def upernet_data_pipeline(broden_root, norm_stats=None, csv_file='trainval.csv'):
+def upernet_data_pipeline(broden_root, **kwargs):
     adapter_tfm = utils.UperNetAdapter()
     train_collate = utils.ScaleJitterCollate([384, 480, 544, 608, 672])
     val_collate = utils.ScaleJitterCollate([544])
-    db = get_data(broden_root, csv_file=csv_file, size=None, norm_stats=norm_stats,
-                  max_rotate=None, max_zoom=1, max_warp=None, max_lighting=None,
-                  bs=8, no_check=True, dl_tfms=adapter_tfm)
+    db = get_data(broden_root, dl_tfms=adapter_tfm, **kwargs)
     db.train_dl.dl.collate_fn = train_collate
     db.valid_dl.dl.collate_fn = val_collate
     return db

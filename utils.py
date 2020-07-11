@@ -220,14 +220,13 @@ class UperNetAdapter:
         self.idx = torch.LongTensor([2, 1, 0])
 
     def __call__(self, batch):
-        img, (yb, orig) = batch
-
+        img, yb = batch
         img = img.index_select(1, self.idx.to(device=img.device))
         img = img * 255
         mean = torch.tensor(self.mean, device=img.device)
         std = torch.tensor(self.std, device=img.device)
         img = (img - mean[:, None, None]) / std[:, None, None]
-        return img, (yb, orig)
+        return img, yb
 
 
 def resize_sample(sample, size, resize_method=ResizeMethod.PAD):
