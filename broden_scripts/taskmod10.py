@@ -14,8 +14,8 @@ def main(args):
     broden_root = Path(args.root).resolve()
     tree = parts.ObjectTree.from_meta_folder(broden_root / 'meta')
     db10 = parts.upernet_data_pipeline(broden_root, csv_file='broden10.csv')
-    cls10 = ['building', 'person', 'table', 'bicycle', 'chair', 'car', 'door', 'dog', 'cat', 'bird']
-    obj10 = [i for i, name in enumerate(tree.obj_names) if name in cls10]
+    cls10 = ['building', 'person', 'table', 'chair', 'car', 'door', 'dog', 'cat', 'bicycle', 'bird']
+    obj10 = [tree.obj_names.index(name) for name in cls10]
     model, instructor = taskmod(broden_root, tree, obj_classes=obj10, full_head=args.full_head)
     if args.fill_ones:
         model.embeddings.apply(init_ones)
