@@ -517,8 +517,6 @@ class BinaryBrodenMetrics(utils.LearnerMetrics):
         no_class = num_classes < 1
         self.no_class.update(no_class.sum(), no_class.numel())
 
-        gt_size = part_gt.shape[-2:]
-        obj_pred = utils.resize(obj_pred, gt_size)
         obj_pred = obj_pred.argmax(dim=1)
         if self.obj_classes:
             obj_pred = self.translate_pred(obj_pred)
