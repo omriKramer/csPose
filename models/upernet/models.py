@@ -467,7 +467,7 @@ class FpnTD(nn.Module):
         return x
 
 
-class FPN(nn.Module):
+class ModFPN(nn.Module):
 
     def __init__(self, encoder, decoder):
         super().__init__()
@@ -484,6 +484,19 @@ class FPN(nn.Module):
         return out
 
 
+class FPN(nn.Module):
+
+    def __init__(self, encoder, decoder):
+        super().__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+
+    def forward(self, img):
+        out = self.encoder(img, return_feature_maps=True)
+        out = self.decoder(out)
+        return out
+
+
 def extract_fpn(seg_model: SegmentationModule, task_modulation=False):
     encoder = seg_model.encoder
     if task_modulation:
@@ -497,7 +510,8 @@ def extract_fpn(seg_model: SegmentationModule, task_modulation=False):
     decoder = seg_model.decoder
     ppm = PPM(decoder.ppm_pooling, decoder.ppm_conv, decoder.ppm_last_conv)
     decoder = FpnTD(ppm, decoder.fpn_in, decoder.fpn_out, decoder.conv_fusion)
-    fpn = FPN(encoder, decoder)
+    cls = ModFPN if task_modulation else FPN
+    fpn = cls(encoder, decoder)
     return fpn
 
 
