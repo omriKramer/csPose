@@ -321,3 +321,38 @@ def resize(x, size):
         out = out.squeeze(dim=0)
 
     return out
+
+
+def round2nearest_multiple(x, p):
+    return ((x - 1) // p + 1) * p
+
+
+class UperNetValResize:
+    """imitate upernet ValDataset"""
+
+    def __init__(self, padding_constant=32):
+        super().__init__()
+        self.padding_constant = padding_constant
+        self.this_short_size = 450
+        self.imgMaxSize = 1000
+
+    def resize(self, img):
+        ori_height, ori_width = img.shape[-2:]
+
+        # calculate target height and width
+        scale = min(self.this_short_size / float(min(ori_height, ori_width)),
+                    self.imgMaxSize / float(max(ori_height, ori_width)))
+        target_height, target_width = int(ori_height * scale), int(ori_width * scale)
+
+        # to avoid rounding in network
+        target_height = round2nearest_multiple(target_height, self.padding_constant)
+        target_width = round2nearest_multiple(target_width, self.padding_constant)
+
+        # resize
+        img_resized = F.interpolate(img, size=(target_height, target_width), mode='bilinear', align_corners=False)
+        return img_resized
+
+    def __call__(self, samples):
+        xb, yb = data_collate(samples)
+        xb = self.resize(xb)
+        return xb, yb
