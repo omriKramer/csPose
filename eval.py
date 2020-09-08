@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 from torch import nn
 from torch.nn import functional as F
 
-import models.layers
+import models.nnlayers
 
 
 def heatmap_to_preds(heatmap, add_visibility=True, offset=False):
@@ -118,7 +118,7 @@ class KLLoss(nn.Module):
 
     def __init__(self):
         super(KLLoss, self).__init__()
-        self.smooth = models.layers.GaussianSmoothing(0.5)
+        self.smooth = models.nnlayers.GaussianSmoothing(0.5)
         self.kl_div_loss = nn.KLDivLoss(reduction='batchmean')
         self.log_softmax = nn.LogSoftmax(dim=2)
 

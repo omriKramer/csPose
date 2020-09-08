@@ -7,9 +7,7 @@ import pandas as pd
 import torch
 from torch import nn
 
-import models.cs_v2 as cs
 import utils
-from models import layers
 
 
 class ObjectTree:
@@ -375,12 +373,9 @@ class BrodenMetrics:
     def avg(self):
         parts_iou = [c.accuracy() for c in self.part_iou]
         parts_iou = sum(parts_iou) / len(parts_iou)
-        results = [
-            self.obj_pa.accuracy(),
-            self.obj_iou.accuracy(),
-            self.part_pa.accuracy(),
-            parts_iou
-        ]
+        results = [self.obj_pa.accuracy(), self.obj_iou.accuracy()]
+        if not self.object_only:
+            results += [self.part_pa.accuracy(), parts_iou]
         return results
 
     def filter_classes(self, obj_gt):
@@ -401,8 +396,13 @@ class BrodenMetrics:
 class BrodenMetricsClbk(utils.LearnerMetrics):
 
     def __init__(self, learn, obj_tree: ObjectTree, pred_func=None, restrict=True,
-                 object_only=False, obj_classes=None):
-        super().__init__(learn, ['object-P.A.', 'object-mIoU', 'part-P.A.', 'part-mIoU(bg)'])
+                 object_only=False, obj_classes=None, name=None):
+        names = ['object-P.A.', 'object-mIoU']
+        if not object_only:
+            names += ['part-P.A.', 'part-mIoU(bg)']
+        if name:
+            names = [f'{o}-{name}' for o in names]
+        super().__init__(learn, names)
         self.pred_func = pred_func
         self.obj_tree = obj_tree
         self.metrics = BrodenMetrics(self.obj_tree, restrict=restrict, object_only=object_only, obj_classes=obj_classes)
@@ -420,7 +420,8 @@ class BrodenMetricsClbk(utils.LearnerMetrics):
 
     def on_epoch_end(self, last_metrics, **kwargs):
         results = self.metrics.avg()
-        return fv.add_metrics(last_metrics, results)
+        metrics = fv.add_metrics(last_metrics, results)
+        return metrics
 
 
 class Loss:
@@ -571,7 +572,7 @@ class TDHead(nn.Module):
 
     def __init__(self, in_channels, n_objects, parts_sections):
         super().__init__()
-        self.conv = layers.conv_layer(in_channels, in_channels)
+        self.conv = nnlayers.conv_layer(in_channels, in_channels)
         module_list = [fv.conv2d(in_channels, n_parts, ks=1, bias=True) for n_parts in parts_sections]
         module_list.append(fv.conv2d(in_channels, n_objects, ks=1, bias=True))
         self.classifier = nn.ModuleList(module_list)
@@ -655,8 +656,7 @@ def part_learner(data, arch, obj_tree: ObjectTree,
 def upernet_data_pipeline(broden_root, **kwargs):
     adapter_tfm = utils.UperNetAdapter()
     train_collate = utils.ScaleJitterCollate([384, 480, 544, 608, 672])
-    db = get_data(broden_root, norm_stats=None, dl_tfms=adapter_tfm, **kwargs)
+    db = get_data(broden_root, norm_stats=None, dl_tfms=adapter_tfm, size=None, no_check=True, **kwargs)
     db.train_dl.dl.collate_fn = train_collate
     db.valid_dl = db.valid_dl.new(batch_size=1)
-    db.valid_dl.dl.collate_fn = utils.UperNetValResize()
     return db

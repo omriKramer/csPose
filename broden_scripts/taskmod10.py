@@ -10,11 +10,20 @@ def init_ones(m):
         nn.init.ones_(m.weight)
 
 
+confid = {
+    easy
+}
+obj_sets = {
+    'easy': ['building', 'person', 'table', 'chair', 'car', 'door', 'dog', 'cat', 'bicycle', 'bird'],
+    'hard': ['table', 'light', 'sofa', 'bottle', 'stove', 'refrigerator', 'microwave', 'dishwasher', 'oven', 'kettle'],
+}
+
+
 def main(args):
     broden_root = Path(args.root).resolve()
     tree = parts.ObjectTree.from_meta_folder(broden_root / 'meta')
     db10 = parts.upernet_data_pipeline(broden_root, csv_file='broden10.csv')
-    cls10 = ['building', 'person', 'table', 'chair', 'car', 'door', 'dog', 'cat', 'bicycle', 'bird']
+    cls10 = obj_sets[args.obj_set]
     obj10 = [tree.obj_names.index(name) for name in cls10]
     model, instructor = taskmod(broden_root, tree, obj_classes=obj10, full_head=args.full_head)
     if args.fill_ones:
@@ -32,4 +41,5 @@ if __name__ == '__main__':
     parser = utils.basic_broden_parser()
     parser.add_argument('--full-head', action='store_true')
     parser.add_argument('--fill-ones', action='store_true')
+    parser.add_argument('--obj-set', choices=('easy', 'hard'), default='easy')
     main(parser.parse_args())

@@ -1,31 +1,64 @@
+import random
+
 import fastai.vision as fv
 import torch
 from torch import nn
+import torch.nn.functional as F
 
 import utils
-from models import layers
+from models import nnlayers
 from models.upernet import get_fpn
+
+
+class BCEObjectLoss(nn.Module):
+
+    def __init__(self, instructor, pos_weight=None, softmax=False):
+        super().__init__()
+        self.instructor = instructor
+        self.obj_loss = F.binary_cross_entropy if softmax else F.binary_cross_entropy_with_logits
+        self.pos_weight = pos_weight
+        self.softmax = softmax
+
+    def forward(self, pred, obj_gt, part_gt):
+        if not self.instructor.train:
+            return torch.zeros(1)
+
+        return self.loss(pred[0], obj_gt, self.instructor.inst[0])
+
+    def loss(self, pred, gt, inst):
+        pred = pred.squeeze(dim=1)
+        gt = gt.squeeze(dim=1)
+        pred_size = pred.shape[-2:]
+        gt = utils.resize(gt, pred_size)
+
+        if self.softmax:
+            pred = F.softmax(pred, dim=1)
+
+        obj_mask = gt == inst[:, None, None]
+        obj_target = obj_mask.float()
+        pred = pred[range(len(pred)), inst]
+        has_objs = inst != 0
+        obj_target = obj_target[has_objs]
+        pred = pred[has_objs]
+
+        pred_flat = pred[has_objs].reshape(-1)[None]
+        target_flat = obj_target[has_objs].reshape(-1)[None]
+        weight = target_flat * self.pos_weight if self.pos_weight else None
+        loss = self.obj_loss(pred_flat, target_flat, weight=weight)
+        return loss
 
 
 class Instructor(fv.Callback):
 
     def __init__(self, tree, obj_classes=None):
         self.tree = tree
-        self.obj_loss = nn.BCEWithLogitsLoss()
+
         self.sampler = utils.BalancingSampler(self.tree.n_obj)
         self.inst = None
         self.train = True
         self.obj_classes = obj_classes if obj_classes else list(range(1, self.tree.n_obj))
 
-    def on_batch_begin(self, train, last_target, **kwargs):
-        obj_gt, part_gt = last_target
-        if not train:
-            inst = torch.tensor(self.obj_classes, device=obj_gt.device)
-            self.inst = inst.expand(len(obj_gt), len(inst)).T
-            self.train = False
-            return
-
-        self.train = True
+    def sample_train_inst(self, obj_gt):
         inst = []
         for obj_gt_i in obj_gt:
             objects = obj_gt_i.unique().cpu().tolist()
@@ -38,21 +71,50 @@ class Instructor(fv.Callback):
         inst = torch.tensor(inst, device=obj_gt.device)
         self.inst = inst[None]
 
-    def loss(self, pred, obj_gt, part_gt):
-        if not self.train:
-            return torch.zeros(1)
+    def on_batch_begin(self, train, last_target, **kwargs):
+        obj_gt, part_gt = last_target
+        if not train:
+            inst = self.create_val_inst(obj_gt)
+            self.inst = inst.expand(len(obj_gt), len(inst)).T
+            self.train = False
+            return
 
-        obj_pred = pred.squeeze(dim=1)
-        obj_gt = obj_gt.squeeze(dim=1)
-        pred_size = obj_pred.shape[-2:]
-        obj_gt = utils.resize(obj_gt, pred_size)
+        self.train = True
+        self.sample_train_inst(obj_gt)
 
-        inst = self.inst[0]
-        obj_mask = obj_gt == inst[:, None, None]
-        obj_target = obj_mask.float()
-        has_objs = inst != 0
-        loss = self.obj_loss(obj_pred[has_objs], obj_target[has_objs])
-        return loss
+    def create_val_inst(self, obj_gt):
+        inst = torch.tensor(self.obj_classes, device=obj_gt.device)
+        return inst
+
+
+class FullHeadInstructor(Instructor):
+
+    def __init__(self, tree, obj_classes=None, sample_train=True):
+        super().__init__(tree, obj_classes)
+        self.sample_train = sample_train
+
+    def sample_train_inst(self, obj_gt):
+        if not self.sample_train:
+            inst = torch.tensor(self.obj_classes, device=obj_gt.device)
+            self.inst = inst.expand(len(obj_gt), len(inst)).T
+            return
+
+        inst = []
+        for obj_gt_i in obj_gt:
+            objects = obj_gt_i.unique().cpu().tolist()
+            objects = set(self.obj_classes).intersection(objects)
+            if objects:
+                c = self.sampler.sample(list(objects))
+            else:
+                c = random.choice(self.obj_classes)
+            inst.append(c)
+        inst = torch.tensor(inst, device=obj_gt.device)
+        self.inst = inst[None]
+
+    def create_val_inst(self, obj_gt):
+        obj_classes = [0] + self.obj_classes
+        inst = torch.tensor(obj_classes, device=obj_gt.device)
+        return inst
 
 
 class CSHead(nn.Module):
@@ -61,8 +123,8 @@ class CSHead(nn.Module):
         super().__init__()
         self.fpn = get_fpn(tree, weights_encoder=weights_encoder, weights_decoder=weights_decoder)
         fpn_dim = 512
-        self.td = nn.Sequential(layers.conv_layer(fpn_dim, fpn_dim // 4),
-                                layers.conv_layer(fpn_dim // 4, fpn_dim // 8),
+        self.td = nn.Sequential(nnlayers.conv_layer(fpn_dim, fpn_dim // 4),
+                                nnlayers.conv_layer(fpn_dim // 4, fpn_dim // 8),
                                 fv.conv2d(fpn_dim // 8, 1, ks=1, bias=True))
         self.embedding = fv.embedding(tree.n_obj, fpn_dim)
         self.instructor = instructor
@@ -123,14 +185,14 @@ class CSHead2(nn.Module):
         self.fpn = get_fpn(tree, weights_encoder=weights_encoder, weights_decoder=weights_decoder)
         fpn_dim = 512
         self.embedding = fv.embedding(tree.n_obj_with_parts + 1, fpn_dim)
-        self.td = nn.ModuleList([layers.conv_layer(fpn_dim, fpn_dim) for _ in range(hidden)])
+        self.td = nn.ModuleList([nnlayers.conv_layer(fpn_dim, fpn_dim) for _ in range(hidden)])
         dims = tree.sections + [tree.n_obj]
         self.heads = nn.ModuleList([fv.conv2d(fpn_dim, dim, ks=1, bias=True) for dim in dims])
         self.bu_start = nn.ModuleList([fv.conv2d(dim, fpn_dim // 2) for dim in dims])
-        self.bu_lateral = nn.ModuleList([layers.conv_layer(fpn_dim, fpn_dim // 2) for _ in range(hidden)])
+        self.bu_lateral = nn.ModuleList([nnlayers.conv_layer(fpn_dim, fpn_dim // 2) for _ in range(hidden)])
         self.bu = nn.ModuleList(
-            [layers.conv_layer(fpn_dim, fpn_dim // 2) for _ in range(hidden - 1)]
-            + [layers.conv_layer(fpn_dim, fpn_dim)])
+            [nnlayers.conv_layer(fpn_dim, fpn_dim // 2) for _ in range(hidden - 1)]
+            + [nnlayers.conv_layer(fpn_dim, fpn_dim)])
         self.obj_inst = tree.n_obj_with_parts
         self.tree = tree
 

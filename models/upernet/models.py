@@ -366,7 +366,7 @@ class UPerNet(nn.Module):
         return output_dict
 
 
-def get_upernet(tree, weights_encoder='', weights_decoder='', replace_bn=True):
+def get_upernet(tree, weights_encoder='', weights_decoder='', replace_bn=True) -> SegmentationModule:
     fc_dim = 2048
     builder = ModelBuilder()
     net_encoder = builder.build_encoder(
@@ -467,23 +467,6 @@ class FpnTD(nn.Module):
         return x
 
 
-class ModFPN(nn.Module):
-
-    def __init__(self, encoder, decoder):
-        super().__init__()
-        self.encoder = encoder
-        self.decoder = decoder
-
-    def forward(self, img, vecs=None):
-        encoder_vecs, decoder_vecs = None, None
-        if vecs:
-            encoder_vecs = vecs[:4]
-            decoder_vecs = vecs[4:]
-        out = self.encoder(img, return_feature_maps=True, vecs=encoder_vecs)
-        out = self.decoder(out, vecs=decoder_vecs)
-        return out
-
-
 class FPN(nn.Module):
 
     def __init__(self, encoder, decoder):
@@ -497,42 +480,16 @@ class FPN(nn.Module):
         return out
 
 
-def extract_fpn(seg_model: SegmentationModule, task_modulation=False):
+def extract_fpn(seg_model: SegmentationModule):
     encoder = seg_model.encoder
-    if task_modulation:
-        head = nn.Sequential(encoder.conv1, encoder.bn1, encoder.relu1,
-                             encoder.conv2, encoder.bn2, encoder.relu2,
-                             encoder.conv3, encoder.bn3, encoder.relu3,
-                             encoder.maxpool)
-        layers = nn.ModuleList([encoder.layer1, encoder.layer2, encoder.layer3, encoder.layer4])
-        encoder = ModulationEncoder(head, layers)
-
     decoder = seg_model.decoder
     ppm = PPM(decoder.ppm_pooling, decoder.ppm_conv, decoder.ppm_last_conv)
     decoder = FpnTD(ppm, decoder.fpn_in, decoder.fpn_out, decoder.conv_fusion)
-    cls = ModFPN if task_modulation else FPN
-    fpn = cls(encoder, decoder)
+    fpn = FPN(encoder, decoder)
     return fpn
 
 
-def get_fpn(tree, weights_encoder='', weights_decoder='', task_modulation=False):
+def get_fpn(tree, weights_encoder='', weights_decoder=''):
     seg_model = get_upernet(tree, weights_encoder=weights_encoder, weights_decoder=weights_decoder)
-    fpn = extract_fpn(seg_model, task_modulation=task_modulation)
+    fpn = extract_fpn(seg_model)
     return fpn
-
-
-class ModulationEncoder(nn.Module):
-
-    def __init__(self, head, layers):
-        super().__init__()
-        self.head = head
-        self.layers = layers
-
-    def forward(self, x, vecs=None, **kwargs):
-        x = self.head(x)
-        out = []
-        for v, layer in zip(vecs, self.layers):
-            x = x * v[:, :, None, None]
-            x = layer(x)
-            out.append(x)
-        return out

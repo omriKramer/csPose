@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import torchvision
 from torch import nn
 
-from . import laterals, layers
+from . import laterals, nnlayers
 
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
@@ -120,7 +120,7 @@ class TDBottleNeck(TDBlock):
 
 class TDHead(nn.Sequential):
     def __init__(self, ni, nf):
-        super().__init__(layers.conv_layer(ni, ni),
+        super().__init__(nnlayers.conv_layer(ni, ni),
                          fv.conv2d(ni, nf, ks=1, bias=True))
 
 
@@ -165,8 +165,8 @@ class DoubleUnet(nn.Module):
         szs = fv.learner.model_sizes(bu_flat, img_size)
         ni = szs[-1][1]
         self.middle_conv = nn.Sequential(
-            layers.conv_layer(ni, ni * 2),
-            layers.conv_layer(ni * 2, ni)
+            nnlayers.conv_layer(ni, ni * 2),
+            nnlayers.conv_layer(ni * 2, ni)
         )
 
         szs.reverse()
@@ -183,7 +183,7 @@ class DoubleUnet(nn.Module):
         self.td = nn.Sequential(*_group_td(td, self.bu))
         c = szs[-1][1]
         self.td_head = nn.Sequential(
-            layers.conv_layer(c, c),
+            nnlayers.conv_layer(c, c),
             conv1x1(c, td_c)
         )
 
@@ -254,7 +254,7 @@ class Fuse(nn.Module):
     def __init__(self, m, channels, out_c):
         super().__init__()
         self.hooks = fv.callbacks.hook_outputs(m, detach=False)
-        self.fuse_conv = layers.conv_layer(sum(channels), out_c)
+        self.fuse_conv = nnlayers.conv_layer(sum(channels), out_c)
 
     def forward(self, x):
         size = x.shape[-2:]

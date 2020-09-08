@@ -2,7 +2,7 @@ from fastai.vision import *
 
 import parts
 import utils
-from models import layers
+from models import nnlayers
 from models.upernet import get_fpn
 from parts import upernet_data_pipeline
 
@@ -43,12 +43,12 @@ class Head3(nn.Module):
         super().__init__()
         self.fpn = get_fpn(tree, weights_encoder=weights_encoder, weights_decoder=weights_decoder)
         fpn_dim = 512
-        self.obj_branch = nn.ModuleList([layers.conv_layer(fpn_dim, fpn_dim),
+        self.obj_branch = nn.ModuleList([nnlayers.conv_layer(fpn_dim, fpn_dim),
                                          conv2d(fpn_dim, tree.n_obj, ks=1, bias=True)])
-        self.bu = nn.ModuleList([layers.conv_layer(tree.n_obj, fpn_dim // 2), layers.conv_layer(fpn_dim, fpn_dim)])
-        self.part_branch = nn.Sequential(layers.conv_layer(fpn_dim, fpn_dim),
+        self.bu = nn.ModuleList([nnlayers.conv_layer(tree.n_obj, fpn_dim // 2), nnlayers.conv_layer(fpn_dim, fpn_dim)])
+        self.part_branch = nn.Sequential(nnlayers.conv_layer(fpn_dim, fpn_dim),
                                          conv2d(fpn_dim, tree.n_parts, ks=1, bias=True))
-        self.lateral = layers.conv_layer(fpn_dim, fpn_dim // 2)
+        self.lateral = nnlayers.conv_layer(fpn_dim, fpn_dim // 2)
 
     def forward(self, img):
         features = self.fpn(img)

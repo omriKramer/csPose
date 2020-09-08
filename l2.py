@@ -3,7 +3,7 @@ from fastai.vision import *
 import models.cs_v2 as cs
 import pose
 import utils
-from models.layers import GaussianSmoothing
+from models.nnlayers import GaussianSmoothing
 
 
 class RecurrentInstructor(cs.BaseInstructor):

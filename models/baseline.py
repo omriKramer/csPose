@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 from .cs_resnet import resnet18
-from .layers import TDHead
+from .nnlayers import TDHead
 
 
 class CSBaseline(nn.Module):

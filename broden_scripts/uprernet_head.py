@@ -2,7 +2,7 @@ from fastai.vision import *
 
 import parts
 import utils
-from models import layers
+from models import nnlayers
 from models.upernet import get_fpn
 from utils import UperNetAdapter, ScaleJitterCollate, BnFreeze
 
@@ -30,7 +30,7 @@ def get_model(root, tree):
     encoder_ckpt, decoder_ckpt = utils.upernet_ckpt(root)
     fpn = get_fpn(tree, encoder_ckpt, decoder_ckpt)
     outputs = {'object': tree.n_obj, 'part': tree.n_parts}
-    model = nn.Sequential(fpn, layers.SplitHead(512, outputs))
+    model = nn.Sequential(fpn, nnlayers.SplitHead(512, outputs))
     return model
 
 

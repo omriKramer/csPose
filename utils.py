@@ -218,9 +218,13 @@ class UperNetAdapter:
     def __init__(self):
         super().__init__()
         self.idx = torch.LongTensor([2, 1, 0])
+        self.val_resize = UperNetValResize()
 
     def __call__(self, batch):
         img, yb = batch
+        if len(img) == 1:
+            # assume validation
+            img = self.val_resize.resize(img)
 
         img = img.index_select(1, self.idx.to(device=img.device))
         img = img * 255
@@ -356,3 +360,56 @@ class UperNetValResize:
         xb, yb = data_collate(samples)
         xb = self.resize(xb)
         return xb, yb
+
+
+class ConfusionMatrix:
+
+    def __init__(self, n_classes):
+        self.matrix = np.zeros((n_classes, n_classes))
+
+    def update(self, pred, target):
+        pred = pred.view(-1).cpu().numpy()
+        target = target.view(-1).cpu().numpy()
+        np.add.at(self.matrix, (target, pred), 1)
+
+    def reset(self):
+        self.matrix = np.zeros_like(self.matrix)
+
+
+def cm_pred_func(func):
+    def inner(last_output, last_target):
+        return func(last_output, last_target[0].shape[-2:])[0]
+
+    return inner
+
+
+def cm_target_func(last_target):
+    return last_target[0]
+
+
+class ConfusionMatrixClbk(Callback):
+
+    def __init__(self, n_classes, pred_func, target_func=None):
+        super().__init__()
+        self.target_func = target_func if target_func else cm_target_func
+        self.pred_func = pred_func
+        self.cm = ConfusionMatrix(n_classes)
+
+    def on_epoch_begin(self, **kwargs):
+        self.cm.reset()
+
+    def on_batch_end(self, last_output, last_target, **kwargs):
+        pred = self.pred_func(last_output, last_target)
+        target = self.target_func(last_target)
+        self.cm.update(pred, target)
+
+    @property
+    def matrix(self):
+        return self.cm.matrix
+
+
+def binary_score(x, o):
+    assert x.ndim == 4
+    pos = x[:, o]
+    diff = 2 * pos - x.sum(dim=1)
+    return diff

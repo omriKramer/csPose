@@ -3,7 +3,7 @@ from fastai import vision as fv
 from torch import nn
 from torch.nn import functional as F
 
-from models.layers import conv_layer, conv1d
+from models.nnlayers import conv_layer, conv1d
 
 
 class Lateral(nn.Module):

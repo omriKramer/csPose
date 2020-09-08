@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from fastai.callbacks import model_sizes
 from fastai.layers import conv2d, embedding
 
-from models import layers
+from models import nnlayers
 
 
 class BottomUp(nn.ModuleList):
@@ -23,7 +23,7 @@ class BottomUpWithLaterals(nn.Module):
     def __init__(self, modules, channels_out, channels_in):
         super().__init__()
         self.bb = nn.ModuleList(modules)
-        laterals = [layers.conv_layer(c_in, c_out) for c_in, c_out in zip(channels_in, channels_out)]
+        laterals = [nnlayers.conv_layer(c_in, c_out) for c_in, c_out in zip(channels_in, channels_out)]
         self.laterals = nn.ModuleList(laterals)
 
     def _layer_forward(self, x, i, laterals_in):
@@ -46,8 +46,8 @@ class TopDown(nn.Module):
         super().__init__()
         td_in, td_out = [], []
         for c in reversed(channels):
-            td_in.append(layers.conv_layer(c, dim, ks=1))
-            td_out.append(layers.conv_layer(dim, dim, ks=3))
+            td_in.append(nnlayers.conv_layer(c, dim, ks=1))
+            td_out.append(nnlayers.conv_layer(dim, dim, ks=3))
         self.td_in = nn.ModuleList(td_in)
         self.td_out = nn.ModuleList(td_out)
 
@@ -69,7 +69,7 @@ class Fusion(nn.Module):
 
     def __init__(self, n, dim):
         super().__init__()
-        self.conv = layers.conv_layer(n * dim, dim, ks=3)
+        self.conv = nnlayers.conv_layer(n * dim, dim, ks=3)
 
     def forward(self, x):
         out_size = x[0].shape[-2:]
@@ -106,7 +106,7 @@ class FPN(nn.Module):
     def __init__(self, body, out_dims, fpn_dim=256):
         super().__init__()
         self.ifn, self.bu, self.td, self.fusion, _ = build_fpn(body, fpn_dim)
-        self.td_head = layers.SplitHead(fpn_dim, out_dims)
+        self.td_head = nnlayers.SplitHead(fpn_dim, out_dims)
 
     def forward(self, images):
         features = self.ifn(images)
@@ -158,7 +158,7 @@ class ApplyEmbedding(nn.Module):
 
 def resolve_embedding(emb_type, keys, dim):
     if emb_type == 'conv':
-        emb = {k: nn.Sequential(layers.conv_layer(dim, 2 * dim), layers.conv_layer(2 * dim, dim))
+        emb = {k: nn.Sequential(nnlayers.conv_layer(dim, 2 * dim), nnlayers.conv_layer(2 * dim, dim))
                for k in keys}
         emb = ApplyModuleDict(emb)
     elif emb_type == 'emb-add':
@@ -176,7 +176,7 @@ class TwoIterFPN(nn.Module):
         self.ifn, self.bu, self.td, self.fusion, ch = build_fpn(body, fpn_dim, bu_in_lateral=True,
                                                                 out_dim=out_dims['object'])
         self.embedding = resolve_embedding(emb_type, out_dims.keys(), ch[-1])
-        head = {key: nn.Sequential(layers.conv_layer(fpn_dim, fpn_dim), conv2d(fpn_dim, fn, ks=1, bias=True))
+        head = {key: nn.Sequential(nnlayers.conv_layer(fpn_dim, fpn_dim), conv2d(fpn_dim, fn, ks=1, bias=True))
                 for key, fn in out_dims.items()}
         self.head = nn.ModuleDict(head)
 
